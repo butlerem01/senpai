@@ -63,3 +63,8 @@ near/far en passant, Champion/Wizard legality, malformed positions, draw
 material, evaluator symmetry and structure, official mate-in-two positions,
 and native depth-5 search. Native and companion opening perft agree at 40,
 1,600, and 67,202 nodes through depths 1-3.
+
+An evaluator-independent exact endgame foundation lives in `tools/omega_tb`.
+It provides verified dense KRKC indexing plus full KRK/KCK three-man WDL
+dependencies. It is offline-only: no tablebase score heuristic, runtime loader,
+or search probe is enabled in this branch.

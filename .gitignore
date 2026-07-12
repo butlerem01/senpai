@@ -31,3 +31,7 @@
 # Local Omega/MSVC build directories
 build-msvc/
 .build-*/
+
+# Python tablebase tooling caches
+__pycache__/
+*.pyc
