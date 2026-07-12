@@ -115,5 +115,9 @@ void search (Search_Output & so, const Pos & pos, const Search_Input & si);
 Move  quick_move  (const Pos & pos);
 Score quick_score (const Pos & pos);
 
+// Omega-only opening classification used to keep genuine first development
+// and castling moves in the full-width search.  Exposed for regression tests.
+bool omega_is_development (Move mv, const Pos & pos);
+
 #endif // !defined SEARCH_HPP
 

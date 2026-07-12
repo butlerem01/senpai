@@ -481,6 +481,35 @@ Score quick_score(const Pos & pos) {
    return score::None;
 }
 
+bool omega_is_development(Move mv, const Pos & pos) {
+   if (!variant_is_omega()) return false;
+   if (move::is_tactical(mv, pos)) return false;
+   if (move::is_castling(mv)) return pos::phase(pos) <= 0.25;
+
+   Piece pc = move::piece(mv, pos);
+   if (pc != Knight && pc != Bishop && pc != Champion && pc != Wizard) {
+      return false;
+   }
+
+   if (pos::phase(pos) > 0.25) return false;
+
+   Side sd = move::side(mv, pos);
+   Square from = move::from(mv);
+   Square to = move::to(mv);
+
+   if (pc == Wizard) {
+      return square_is_corner(from) && !square_is_corner(to);
+   }
+
+   if (pc == Knight || pc == Bishop || pc == Champion) {
+      return !square_is_corner(from)
+          && square_rank(from, sd) == Rank_1
+          && (square_is_corner(to) || square_rank(to, sd) != Rank_1);
+   }
+
+   return false;
+}
+
 static double alloc_moves(const Pos & pos) {
    return lerp(30.0, 10.0, pos::phase(pos));
 }
@@ -1869,6 +1898,7 @@ bool Search_Local::move_is_dangerous(Move mv, const Node & node) {
        || node.in_check
        || move::is_check(mv, pos)
        || advanced_omega_pawn
+       || omega_is_development(mv, pos)
        ;
 }
 
