@@ -235,13 +235,16 @@ void eval_pieces(Eval_Score & score, const Pos & pos, const Attack_Maps & maps,
          for (Bit b = pieces; b != 0; b = bit::rest(b)) {
             Square sq = bit::first(b);
             Bit mobility = maps.piece_attacks[sq] & ~pos.pieces(sd);
-            Bit safe = mobility & ~maps.pawn_attacks[xd];
+            Bit safe = mobility & ~maps.attacks[xd];
+            Bit non_pawn_contested = mobility
+                                   & maps.attacks[xd]
+                                   & ~maps.pawn_attacks[xd];
             int safe_count = bit::count(safe);
-            int unsafe_count = bit::count(mobility) - safe_count;
+            int non_pawn_contested_count = bit::count(non_pawn_contested);
 
             score.add(sd,
-               MG_Mobility[pc] * safe_count + MG_Mobility[pc] * unsafe_count / 2,
-               EG_Mobility[pc] * safe_count + EG_Mobility[pc] * unsafe_count / 2
+               MG_Mobility[pc] * (safe_count * 4 + non_pawn_contested_count) / 4,
+               EG_Mobility[pc] * (safe_count * 4 + non_pawn_contested_count) / 4
             );
 
             int centre = centre_score(sq);

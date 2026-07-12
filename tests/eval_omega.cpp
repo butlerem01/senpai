@@ -173,6 +173,50 @@ void test_mobility() {
           "opening a long-range piece must improve the evaluation");
 }
 
+Ofen_Position mobility_context(const char * queen, const char * pawn) {
+   Ofen_Position pos = bare_omega();
+   put(pos, Queen, Black, queen);
+   put(pos, Pawn, Black, pawn);
+   return pos;
+}
+
+int knight_gain(const Ofen_Position & context) {
+   Ofen_Position with_knight = context;
+   put(with_knight, Knight, White, "e4");
+   return white_score(with_knight) - white_score(context);
+}
+
+int mirrored_knight_gain(const Ofen_Position & context) {
+   Ofen_Position with_knight = context;
+   put(with_knight, Knight, White, "e4");
+   return white_score(colour_rank_mirror(context))
+        - white_score(colour_rank_mirror(with_knight));
+}
+
+void test_mobility_safety_tiers() {
+   // From e4 the Knight has eight empty destinations.  In the safe context
+   // neither h9's Queen nor a7's Pawn attacks one.  The Queen on a1 contests
+   // c3 and f6, while the Pawn on e3 attacks d2 and f2.  None of the three
+   // attackers attacks the Knight itself, and the Knight attacks none of them.
+   Ofen_Position safe = mobility_context("h9", "a7");
+   Ofen_Position non_pawn_contested = mobility_context("a1", "a7");
+   Ofen_Position pawn_attacked = mobility_context("h9", "e3");
+
+   int safe_gain = knight_gain(safe);
+   int non_pawn_gain = knight_gain(non_pawn_contested);
+   int pawn_gain = knight_gain(pawn_attacked);
+
+   expect(safe_gain > non_pawn_gain,
+          "safe mobility must score above non-Pawn-contested mobility");
+   expect(non_pawn_gain > pawn_gain,
+          "non-Pawn-contested mobility must score above Pawn-attacked mobility");
+
+   expect(safe_gain == mirrored_knight_gain(safe)
+       && non_pawn_gain == mirrored_knight_gain(non_pawn_contested)
+       && pawn_gain == mirrored_knight_gain(pawn_attacked),
+          "mobility safety tiers must be colour symmetric");
+}
+
 void test_pawns() {
    Ofen_Position starting = bare_omega();
    put(starting, Pawn, White, "e1");
@@ -308,6 +352,7 @@ int main() {
    test_colour_symmetry();
    test_material_ordering();
    test_mobility();
+   test_mobility_safety_tiers();
    test_pawns();
    test_king_safety_and_castling();
    test_corner_wizard_development();
