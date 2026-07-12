@@ -27,3 +27,7 @@
 *.exe
 *.out
 *.app
+
+# Local Omega/MSVC build directories
+build-msvc/
+.build-*/

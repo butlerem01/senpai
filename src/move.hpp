@@ -40,6 +40,7 @@ bool is_conversion (Move mv, const Pos & pos);
 
 Square castling_king_to (Move mv);
 Square castling_rook_to (Move mv);
+Square en_passant_capture_square (Move mv, const Pos & pos);
 
 Piece piece   (Move mv, const Pos & pos);
 Piece capture (Move mv, const Pos & pos);

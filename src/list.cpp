@@ -28,17 +28,17 @@ void List::add_move(Square from, Square to, Piece prom) {
 
 void List::add(Move mv) {
    assert(!(list::has(*this, mv)));
-   p_pair.add(Move_Score(mv));
+   p_pair.push_back(Move_Score(mv));
 }
 
 void List::add(Move mv, int sc) {
    assert(!(list::has(*this, mv)));
-   p_pair.add(Move_Score(mv, sc));
+   p_pair.push_back(Move_Score(mv, sc));
 }
 
 void List::set_size(int size) {
    assert(size <= this->size());
-   p_pair.set_size(size);
+   p_pair.resize(size);
 }
 
 void List::set_score(int i, int sc) {
@@ -70,7 +70,7 @@ void List::sort() {
 
    // insert sort (stable)
 
-   p_pair.add(Move_Score(move::Null, -((1 << 15) - 1))); // HACK: sentinel
+   p_pair.push_back(Move_Score(move::Null, -((1 << 15) - 1))); // HACK: sentinel
 
    for (int i = size - 2; i >= 0; i--) {
 
@@ -86,11 +86,11 @@ void List::sort() {
       p_pair[j] = pair;
    }
 
-   p_pair.remove(); // sentinel
+   p_pair.pop_back(); // sentinel
 }
 
 int List::size() const {
-   return p_pair.size();
+   return int(p_pair.size());
 }
 
 Move List::move(int i) const {
@@ -134,23 +134,23 @@ Move_Score::Move_Score(Move mv) : Move_Score(mv, 0) {
 Move_Score::Move_Score(Move mv, int sc) {
 
    assert(mv != move::None);
-   assert(int(mv) >= 0 && int(mv) < (1 << 15));
+   assert(int(mv) >= 0 && int(mv) < (1 << 24));
    assert(std::abs(sc) < (1 << 15));
 
-   p_pair = (sc << 16) | int(mv);
+   p_pair = (int64(sc) << 32) | uint32(mv);
 }
 
 void Move_Score::set_score(int sc) {
    assert(std::abs(sc) < (1 << 15));
-   p_pair = (sc << 16) | uint16(p_pair);
+   p_pair = (int64(sc) << 32) | uint32(p_pair);
 }
 
 Move Move_Score::move() const {
-   return Move(uint16(p_pair));
+   return Move(uint32(p_pair));
 }
 
 int Move_Score::score() const {
-   return p_pair >> 16;
+   return int(p_pair >> 32);
 }
 
 bool operator<(Move_Score m0, Move_Score m1) {

@@ -12,9 +12,10 @@ namespace hash {
 // variables
 
 static Key Key_Turn;
-static Key Key_Piece[Side_Size][Piece_Size_2][Square_Size];
-static Key Key_Castling[Side_Size][File_Size];
-static Key Key_En_Passant[File_Size];
+static Key Key_Piece[Side_Size][Piece_Size_2][Square_Capacity];
+static Key Key_Castling[Side_Size][File_Capacity];
+static Key Key_En_Passant[File_Capacity];
+static Key Key_En_Passant_Square[Square_Capacity];
 
 // functions
 
@@ -24,7 +25,13 @@ void init() {
 
    Key_Turn = Key(ml::rand_int_64());
 
-   for (int pc = 0; pc < Piece_Size; pc++) {
+   // Generate the original 6 x 2 x 64 keys and eight file keys in the
+   // original order.  Besides keeping standard-chess hashes stable, this
+   // avoids needlessly perturbing transposition-table behaviour.
+
+   const int Chess_Piece_Size { 6 };
+
+   for (int pc = 0; pc < Chess_Piece_Size; pc++) {
       for (int sd = 0; sd < Side_Size; sd++) {
          for (int sq = 0; sq < Square_Size; sq++) {
             Key_Piece[sd][pc][sq] = Key(ml::rand_int_64());
@@ -38,6 +45,36 @@ void init() {
       Key_Castling[Black][fl] = Key(ml::rand_int_64());
 
       Key_En_Passant[fl] = Key(ml::rand_int_64());
+   }
+
+   // Omega-only piece/square and file keys follow the legacy sequence.
+
+   for (int pc = 0; pc < Chess_Piece_Size; pc++) {
+      for (int sd = 0; sd < Side_Size; sd++) {
+         for (int sq = Square_Size; sq < Square_Capacity; sq++) {
+            Key_Piece[sd][pc][sq] = Key(ml::rand_int_64());
+         }
+      }
+   }
+
+   for (int pc = Chess_Piece_Size; pc < Piece_Size; pc++) {
+      for (int sd = 0; sd < Side_Size; sd++) {
+         for (int sq = 0; sq < Square_Capacity; sq++) {
+            Key_Piece[sd][pc][sq] = Key(ml::rand_int_64());
+         }
+      }
+   }
+
+   for (int fl = File_Size; fl < File_Capacity; fl++) {
+
+      Key_Castling[White][fl] = Key(ml::rand_int_64());
+      Key_Castling[Black][fl] = Key(ml::rand_int_64());
+
+      Key_En_Passant[fl] = Key(ml::rand_int_64());
+   }
+
+   for (int sq = 0; sq < Square_Capacity; sq++) {
+      Key_En_Passant_Square[sq] = Key(ml::rand_int_64());
    }
 }
 
@@ -104,7 +141,9 @@ Key key_full(const Pos & pos) {
 
    // en passant
 
-   if (pos.ep_sq() != Square_None) key ^= hash::key_en_passant(square_file(pos.ep_sq()));
+   for (Bit b = pos.ep_squares(); b != 0; b = bit::rest(b)) {
+      key ^= hash::key_en_passant(bit::first(b));
+   }
 
    return key;
 }
@@ -136,6 +175,13 @@ Key key_castling(Side sd, Bit rooks) {
 
 Key key_en_passant(File fl) {
    return Key_En_Passant[fl];
+}
+
+Key key_en_passant(Square sq) {
+   assert(square_is_ok(sq));
+   assert(!square_is_corner(sq));
+   return variant_is_omega() ? Key_En_Passant_Square[sq]
+                             : key_en_passant(square_file(sq));
 }
 
 int index(Key key, int mask) {

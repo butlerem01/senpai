@@ -15,7 +15,7 @@ class Attack_Info {
 
 private :
 
-   Bit p_piece_attacks[Square_Size];
+   Bit p_piece_attacks[Square_Capacity];
 
    Bit p_attacks[Side_Size];
    Bit p_support[Side_Size];

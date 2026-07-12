@@ -33,6 +33,10 @@ public :
 
    Side turn () const;
 
+   Bit ep_squares () const;
+   int halfmove_clock () const;
+   int fullmove_number () const;
+
    const Pos & pos () const;
 };
 

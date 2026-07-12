@@ -10,29 +10,41 @@
 
 // constants
 
+// The legacy constants remain the dimensions of standard chess.  Code that is
+// shared by both variants should use file_size(), rank_size(), and square_size()
+// instead.  Capacity constants are safe for fixed-size storage.
 const int File_Size { 8 };
 const int Rank_Size { 8 };
 const int Square_Size { File_Size * Rank_Size };
 
-const int Vector_File_Size { File_Size * 2 - 1 };
-const int Vector_Rank_Size { Rank_Size * 2 - 1 };
+const int File_Capacity { 10 };
+const int Rank_Capacity { 10 };
+const int Regular_Square_Capacity { File_Capacity * Rank_Capacity };
+const int Corner_Size { 4 };
+const int Square_Capacity { Regular_Square_Capacity + Corner_Size };
+
+const int Vector_File_Size { File_Capacity * 2 - 1 };
+const int Vector_Rank_Size { Rank_Capacity * 2 - 1 };
 
 const int Side_Size { 2 };
-const int Piece_Size { 6 };
+const int Piece_Size { 8 };
 const int Piece_Size_2 { 1 << 3 }; // for array index
 const int Piece_Side_Size { Piece_Size * Side_Size }; // excludes Empty #
 
-const int Move_Index_Size { 1 << 10 };
+const int Move_Index_Size { 1 << 12 };
 
 const int Stage_Size { 24 };
 
 // types
 
-enum Square : int { Square_None = -1 };
-enum File   : int { File_A, File_B, File_C, File_D, File_E, File_F, File_G, File_H };
-enum Rank   : int { Rank_1, Rank_2, Rank_3, Rank_4, Rank_5, Rank_6, Rank_7, Rank_8 };
+enum Variant : int { Chess, Omega };
 
-enum Vec : int { Vector_Max = (Rank_Size - 1) * Vector_File_Size + (File_Size - 1) };
+enum Square : int { Square_None = -1 };
+enum File   : int { File_A, File_B, File_C, File_D, File_E, File_F, File_G, File_H, File_I, File_J };
+enum Rank   : int { Rank_1, Rank_2, Rank_3, Rank_4, Rank_5, Rank_6, Rank_7, Rank_8, Rank_9, Rank_10 };
+enum Corner : int { Corner_SW, Corner_SE, Corner_NE, Corner_NW, Corner_None = -1 };
+
+enum Vec : int { Vector_Max = (Rank_Capacity - 1) * Vector_File_Size + (File_Capacity - 1) };
 
 enum Inc : int {
    Inc_N  = 1,
@@ -42,7 +54,7 @@ enum Inc : int {
 };
 
 enum Side  : int { White, Black };
-enum Piece : int { Pawn, Knight, Bishop, Rook, Queen, King, Piece_None };
+enum Piece : int { Pawn, Knight, Bishop, Rook, Queen, King, Champion, Wizard, Piece_None };
 
 enum Piece_Side : int { Empty = Piece_Side_Size };
 
@@ -66,21 +78,28 @@ class Bit {
 
 private :
 
-   uint64 p_bit;
+   uint64 p_lo;
+   uint64 p_hi;
 
 public :
 
    Bit ();
    explicit Bit (uint64 bit);
+   Bit (uint64 lo, uint64 hi);
 
    operator uint64 () const;
+   uint64 lo () const;
+   uint64 hi () const;
+   bool empty () const;
 
    void operator |= (Bit b);
-   void operator &= (uint64 b);
+   void operator &= (Bit b);
    void operator ^= (Bit b);
 };
 
 // operators
+
+int square_size ();
 
 inline File operator + (File fl, int inc) { return File(int(fl) + inc); }
 inline File operator - (File fl, int inc) { return File(int(fl) - inc); }
@@ -117,19 +136,54 @@ inline Flag operator | (Flag f0, Flag f1) { return Flag(int(f0) | int(f1)); }
 
 inline void operator |= (Flag & f0, Flag f1) { f0 = f0 | f1; }
 
-inline Bit  operator ~ (Bit b) { return Bit(~uint64(b)); }
-
-inline Bit  operator | (Bit b0, Bit    b1) { return Bit(uint64(b0) | uint64(b1)); }
-inline Bit  operator & (Bit b0, uint64 b1) { return Bit(uint64(b0) & b1); }
-inline Bit  operator ^ (Bit b0, Bit    b1) { return Bit(uint64(b0) ^ uint64(b1)); }
+inline Bit operator ~ (Bit b) {
+   int size = square_size();
+   uint64 lo_mask = size >= 64 ? ~uint64(0) : (uint64(1) << size) - 1;
+   int high_size = size > 64 ? size - 64 : 0;
+   uint64 hi_mask = high_size == 0 ? uint64(0) : (uint64(1) << high_size) - 1;
+   return Bit(~b.lo() & lo_mask, ~b.hi() & hi_mask);
+}
+inline Bit operator | (Bit a, Bit b) { return Bit(a.lo() | b.lo(), a.hi() | b.hi()); }
+inline Bit operator & (Bit a, Bit b) { return Bit(a.lo() & b.lo(), a.hi() & b.hi()); }
+inline Bit operator ^ (Bit a, Bit b) { return Bit(a.lo() ^ b.lo(), a.hi() ^ b.hi()); }
+inline Bit operator << (Bit b, int n) {
+   if (n <= 0) return b;
+   if (n >= 128) return Bit(0);
+   if (n >= 64) return Bit(0, b.lo() << (n - 64));
+   return Bit(b.lo() << n, (b.hi() << n) | (b.lo() >> (64 - n)));
+}
+inline Bit operator >> (Bit b, int n) {
+   if (n <= 0) return b;
+   if (n >= 128) return Bit(0);
+   if (n >= 64) return Bit(b.hi() >> (n - 64), 0);
+   return Bit((b.lo() >> n) | (b.hi() << (64 - n)), b.hi() >> n);
+}
+inline bool operator == (Bit b, int n) { (void)n; assert(n == 0); return b.empty(); }
+inline bool operator != (Bit b, int n) { return !(b == n); }
+inline bool operator == (Bit a, Bit b) { return a.lo() == b.lo() && a.hi() == b.hi(); }
+inline bool operator != (Bit a, Bit b) { return !(a == b); }
 
 // functions
+
+void    variant_set      (Variant variant);
+Variant variant          ();
+bool    variant_is_omega ();
+
+int file_size           ();
+int rank_size           ();
+int regular_square_size ();
+int square_size         ();
 
 bool   square_is_ok (int fl, int rk);
 bool   square_is_ok (int sq);
 Square square_make  (int fl, int rk);
 Square square_make  (int fl, int rk, Side sd);
 Square square_make  (int sq);
+
+Square square_from_coordinates (int fl, int rk);
+bool   square_is_corner        (Square sq);
+Corner square_corner           (Square sq);
+Square square_from_corner      (Corner corner);
 
 File square_file (Square sq);
 Rank square_rank (Square sq);

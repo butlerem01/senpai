@@ -26,7 +26,8 @@ TT G_TT;
 
 // functions
 
-TT::TT() {
+TT::TT() : p_size(0), p_mask(0), p_date(0) {
+   for (int date = 0; date < Date_Size; date++) p_age[date] = 0;
 }
 
 void TT::set_size(int size) {
@@ -45,7 +46,7 @@ void TT::clear() {
 
    assert(sizeof(Entry) == 16);
 
-   Entry entry { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+   Entry entry { 0, 0, 0, 0, 0, 0, 0, 0 };
 
    entry.move = int(move::None);
    entry.score = score::None;
@@ -87,8 +88,10 @@ int TT::age(int date) const {
 
 void TT::store(Key key, const Info & info) {
 
+   if (p_size == 0) return;
+
    assert(info.move != move::Null);
-   assert(int(info.move) > -(1 << 15) && int(info.move) < +(1 << 15));
+   assert(int(info.move) > -(1 << 30) && int(info.move) < +(1 << 30));
    assert(info.score != score::None);
    assert(info.score > -(1 << 15) && info.score < +(1 << 15));
    assert(info.depth > Depth_Min && info.depth < (1 << 7));
@@ -159,6 +162,8 @@ void TT::store(Key key, const Info & info) {
 bool TT::probe(Key key, Info & info) {
 
    // init
+
+   if (p_size == 0) return false;
 
    // probe
 

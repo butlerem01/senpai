@@ -19,35 +19,35 @@ namespace move {
 // functions
 
 Move make(Square from, Square to, Piece prom) {
-   return Move((prom << 12) | (from << 6) | (to << 0));
+   return Move((prom << 14) | (from << 7) | (to << 0));
 }
 
 Square from(Move mv) {
    assert(mv != None);
    assert(mv != Null);
-   return Square((int(mv) >> 6) & 077);
+   return Square((int(mv) >> 7) & 0x7F);
 }
 
 Square to(Move mv) {
    assert(mv != None);
    assert(mv != Null);
-   return Square((int(mv) >> 0) & 077);
+   return Square((int(mv) >> 0) & 0x7F);
 }
 
 Piece prom(Move mv) {
    assert(mv != None);
    assert(mv != Null);
-   return Piece((int(mv) >> 12) & 7);
+   return Piece((int(mv) >> 14) & 0xF);
 }
 
 bool is_promotion(Move mv) {
    Piece prom = move::prom(mv);
-   return prom >= Knight && prom <= Queen;
+   return (prom >= Knight && prom <= Queen) || prom == Champion || prom == Wizard;
 }
 
 bool is_underpromotion(Move mv) {
    Piece prom = move::prom(mv);
-   return prom >= Knight && prom <= Rook;
+   return (prom >= Knight && prom <= Rook) || prom == Champion || prom == Wizard;
 }
 
 bool is_castling(Move mv) {
@@ -68,7 +68,7 @@ bool is_capture(Move mv, const Pos & pos) {
 }
 
 bool is_recapture(Move mv, const Pos & pos) {
-   return to(mv) == pos.cap_sq() && move_is_win(mv, pos);
+   return to(mv) == pos.cap_to() && move_is_win(mv, pos);
 }
 
 bool is_conversion(Move mv, const Pos & pos) {
@@ -82,9 +82,15 @@ Square castling_king_to(Move mv) {
    Square from = move::from(mv);
    Square to   = move::to(mv);
 
-   return (square_file(to) > square_file(from))
-        ? square_make(File_G, square_rank(to))
-        : square_make(File_C, square_rank(to));
+   File file;
+
+   if (variant_is_omega()) {
+      file = square_file(to) > square_file(from) ? File_H : File_D;
+   } else {
+      file = square_file(to) > square_file(from) ? File_G : File_C;
+   }
+
+   return square_make(file, square_rank(to));
 }
 
 Square castling_rook_to(Move mv) {
@@ -94,9 +100,52 @@ Square castling_rook_to(Move mv) {
    Square from = move::from(mv);
    Square to   = move::to(mv);
 
-   return (square_file(to) > square_file(from))
-        ? square_make(File_F, square_rank(to))
-        : square_make(File_D, square_rank(to));
+   File file;
+
+   if (variant_is_omega()) {
+      file = square_file(to) > square_file(from) ? File_G : File_E;
+   } else {
+      file = square_file(to) > square_file(from) ? File_F : File_D;
+   }
+
+   return square_make(file, square_rank(to));
+}
+
+Square en_passant_capture_square(Move mv, const Pos & pos) {
+
+   assert(is_en_passant(mv));
+
+   Square from = move::from(mv);
+   Square to = move::to(mv);
+
+   if (!pos.is_piece(from, Pawn) || !pos.has_ep(to) || !pos.is_empty(to)) {
+      return Square_None;
+   }
+
+   Side sd = pos.side(from);
+   Side xd = side_opp(sd);
+
+   if (square_is_corner(to)) return Square_None;
+
+   Square capture = square_from_coordinates(
+      square_file(to), square_rank(to) - square_inc(sd)
+   );
+
+   if (capture != Square_None && pos.is_piece(capture, Pawn) && pos.is_side(capture, xd)) {
+      return capture;
+   }
+
+   if (variant_is_omega() && capture != Square_None && !square_is_corner(capture)) {
+      capture = square_from_coordinates(
+         square_file(capture), square_rank(capture) - square_inc(sd)
+      );
+
+      if (capture != Square_None && pos.is_piece(capture, Pawn) && pos.is_side(capture, xd)) {
+         return capture;
+      }
+   }
+
+   return Square_None;
 }
 
 Piece piece(Move mv, const Pos & pos) {
@@ -130,7 +179,7 @@ Move_Index index(Move mv, const Pos & pos) {
    Piece pc = piece(mv, pos);
    Side  sd = pos.turn();
 
-   return Move_Index((sd << 9) | (pc << 6) | (to(mv) << 0));
+   return Move_Index((sd << 10) | (pc << 7) | (to(mv) << 0));
 }
 
 Move_Index index_last_move(const Pos & pos) {
@@ -141,7 +190,7 @@ Move_Index index_last_move(const Pos & pos) {
    Piece pc = move::is_castling(mv) ? King : pos.piece(to(mv));
    Side  sd = side_opp(pos.turn());
 
-   return Move_Index((sd << 9) | (pc << 6) | (to(mv) << 0));
+   return Move_Index((sd << 10) | (pc << 7) | (to(mv) << 0));
 }
 
 bool pseudo_is_legal(Move mv, const Pos & pos) {
@@ -179,7 +228,8 @@ bool pseudo_is_legal(Move mv, const Pos & pos) {
 
    if (is_en_passant(mv)) {
 
-      Square sq = square_rear(to, sd);
+      Square sq = en_passant_capture_square(mv, pos);
+      if (sq == Square_None) return false;
 
       bit::clear(pieces, sq);
       beyond |= bit::beyond(king, sq);
@@ -233,7 +283,8 @@ bool is_check(Move mv, const Pos & pos) {
 
    if (is_en_passant(mv)) {
 
-      Square sq = square_rear(to, sd);
+      Square sq = en_passant_capture_square(mv, pos);
+      if (sq == Square_None) return false;
 
       bit::clear(pieces, sq);
       beyond |= bit::beyond(king, sq);
@@ -256,7 +307,7 @@ std::string to_uci(Move mv, const Pos & /* pos */) {
    if (mv == Null) return "0000";
 
    Square from = move::from(mv);
-   Square to   = !var::Chess_960 && is_castling(mv)
+   Square to   = (!var::Chess_960 || variant_is_omega()) && is_castling(mv)
                ? castling_king_to(mv)
                : move::to(mv);
 
@@ -280,7 +331,17 @@ Move from_uci(const std::string & s, const Pos & pos) {
    Piece prom = Piece_None;
    if (s.size() == 5) prom = piece_from_char(std::toupper(s[4]));
 
-   if (!var::Chess_960 && pos.is_piece(from, King) && square_dist(from, to) > 1) {
+   if (variant_is_omega()
+    && pos.is_piece(from, King)
+    && square_file(from) == File_F
+    && square_rank(from) == rank_side(Rank_1, pos.side(from))
+    && square_rank(to) == square_rank(from)
+    && (square_file(to) == File_H || square_file(to) == File_D)) {
+
+      to = square_make(square_file(to) == File_H ? File_I : File_B, square_rank(to));
+      prom = King;
+
+   } else if (!variant_is_omega() && !var::Chess_960 && pos.is_piece(from, King) && square_dist(from, to) > 1) {
       if (square_file(to) == File_G) to = square_make(File_H, square_rank(to));
       if (square_file(to) == File_C) to = square_make(File_A, square_rank(to));
       prom = King;
@@ -288,7 +349,7 @@ Move from_uci(const std::string & s, const Pos & pos) {
       assert(pos.is_piece(from, King));
       assert(pos.is_piece(to,   Rook));
       prom = King;
-   } else if (pos.is_piece(from, Pawn) && to == pos.ep_sq()) {
+   } else if (pos.is_piece(from, Pawn) && pos.has_ep(to)) {
       prom = Pawn;
    }
 

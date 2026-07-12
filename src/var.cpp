@@ -19,6 +19,7 @@ bool SMP;
 int  Threads;
 int  Hash;
 bool Chess_960;
+Variant UCI_Variant;
 
 static std::map<std::string, std::string> Var;
 
@@ -30,6 +31,7 @@ void init() {
    set("Threads", "1");
    set("Hash", "64");
    set("UCI_Chess960", "false");
+   set("UCI_Variant", "chess");
 
    update();
 }
@@ -41,6 +43,9 @@ void update() {
    SMP       = Threads > 1;
    Hash      = 1 << ml::log_2(get_int("Hash"));
    Chess_960 = get_bool("UCI_Chess960");
+   UCI_Variant = variant_from_string(get("UCI_Variant"));
+
+   variant_set(UCI_Variant);
 }
 
 std::string get(const std::string & name) {
@@ -74,6 +79,28 @@ bool get_bool(const std::string & name) {
 
 int get_int(const std::string & name) {
    return std::stoi(get(name));
+}
+
+bool variant_is_ok(const std::string & value) {
+   return value == "chess" || value == "omega";
+}
+
+Variant variant_from_string(const std::string & value) {
+
+   if (value == "chess") return Chess;
+   if (value == "omega") return Omega;
+
+   std::cerr << "unknown UCI variant: \"" << value << "\"" << std::endl;
+   std::exit(EXIT_FAILURE);
+}
+
+std::string variant_to_string(Variant value) {
+
+   if (value == Chess) return "chess";
+   if (value == Omega) return "omega";
+
+   std::cerr << "invalid UCI variant" << std::endl;
+   std::exit(EXIT_FAILURE);
 }
 
 }

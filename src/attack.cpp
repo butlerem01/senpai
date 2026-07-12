@@ -88,7 +88,14 @@ Bit checks(const Pos & pos) {
    // discovered check?
 
    Bit beyond = bit::beyond(king, from);
-   if (move::is_en_passant(mv)) beyond |= bit::beyond(king, square_rear(to, sd));
+   if (move::is_castling(mv)) beyond |= bit::beyond(king, move::to(mv));
+   if (move::is_en_passant(mv)) {
+      // A three-square Omega pawn move can be captured on either passed
+      // square, so the removed pawn is not necessarily one square behind the
+      // destination.  Pos records the actual capture square for both cases.
+      assert(pos.cap_sq() != Square_None);
+      beyond |= bit::beyond(king, pos.cap_sq());
+   }
 
    for (Bit b = pos.sliders(sd) & beyond; b != 0; b = bit::rest(b)) {
 
@@ -103,7 +110,7 @@ Bit checks(const Pos & pos) {
 
 bool move_is_safe(Move mv, const Pos & pos) {
 
-   if (move::is_underpromotion(mv)) return false;
+   if (move::is_underpromotion(mv) && !variant_is_omega()) return false;
 
    Piece pc = move::piece(mv, pos);
 
@@ -117,7 +124,7 @@ bool move_is_win(Move mv, const Pos & pos) {
 
    assert(move::is_tactical(mv, pos));
 
-   if (move::is_underpromotion(mv)) return false;
+   if (move::is_underpromotion(mv) && !variant_is_omega()) return false;
 
    Piece pc = move::piece(mv, pos);
 
@@ -144,7 +151,15 @@ Score see(Move mv, const Pos & pos) {
       sc += piece_mat(pc) - piece_mat(Pawn);
    }
 
-   sc -= see_rec(pos, side_opp(sd), to, bit::remove(pos.pieces(), from), pc);
+   Bit pieces = bit::remove(pos.pieces(), from);
+
+   if (move::is_en_passant(mv)) {
+      Square capture = move::en_passant_capture_square(mv, pos);
+      assert(capture != Square_None);
+      bit::clear(pieces, capture);
+   }
+
+   sc -= see_rec(pos, side_opp(sd), to, pieces, pc);
 
    return sc;
 }
@@ -188,7 +203,8 @@ bool has_attack(const Pos & pos, Side sd, Square to, Bit pieces) {
 
    for (Bit b = pseudo_attacks_to(pos, sd, to); b != 0; b = bit::rest(b)) {
       Square from = bit::first(b);
-      if (bit::line_is_empty(from, to, pieces)) return true;
+      Piece pc = pos.piece(from);
+      if (bit::piece_attack(pc, sd, from, to, pieces)) return true;
    }
 
    return false;
@@ -200,7 +216,8 @@ Bit attacks_to(const Pos & pos, Side sd, Square to, Bit pieces) {
 
    for (Bit b = pseudo_attacks_to(pos, sd, to); b != 0; b = bit::rest(b)) {
       Square from = bit::first(b);
-      if (bit::line_is_empty(from, to, pieces)) bit::set(froms, from);
+      Piece pc = pos.piece(from);
+      if (bit::piece_attack(pc, sd, from, to, pieces)) bit::set(froms, from);
    }
 
    return froms;
@@ -277,14 +294,21 @@ static Bit slider_attacks_to(const Pos & pos, Side sd, Square to) {
 
 static Square pick_lva(const Pos & pos, Side sd, Square to, Bit pieces) {
 
+   // Enum order preserves the original six chess pieces, but Champion and
+   // Wizard are worth less than a rook.  SEE must visit actual material order
+   // or it can prune a sound Omega capture after selecting the wrong attacker.
+   const Piece order[Piece_Size] {
+      Pawn, Knight, Wizard, Champion, Bishop, Rook, Queen, King,
+   };
+
    for (int p = 0; p < Piece_Size; p++) {
 
-      Piece pc = piece_make(p);
+      Piece pc = order[p];
       Bit froms = pos.pieces(pc, sd) & pieces & bit::piece_attacks_to(pc, sd, to);
 
       for (Bit b = froms; b != 0; b = bit::rest(b)) {
          Square from = bit::first(b);
-         if (bit::line_is_empty(from, to, pieces)) return from;
+         if (bit::piece_attack(pc, sd, from, to, pieces)) return from;
       }
    }
 
@@ -410,6 +434,25 @@ void Attack_Info::init(const Pos & pos) {
          p_le_attacks[sd][pc] |= tos;
          p_support[sd] |= tos & p_attacks[sd];
          p_attacks[sd] |= tos;
+      }
+
+      // Omega leapers. They are initialized for both variants so that the
+      // shared storage remains deterministic; orthodox positions contain none.
+      for (int p = int(Champion); p <= int(Wizard); p++) {
+         pc = Piece(p);
+         froms = pos.pieces(pc, sd);
+
+         p_le_pieces [sd][pc] = p_le_pieces [sd][pc - 1] | froms;
+         p_le_attacks[sd][pc] = p_le_attacks[sd][pc - 1];
+
+         for (Bit b = froms; b != 0; b = bit::rest(b)) {
+            Square from = bit::first(b);
+            Bit tos = bit::piece_attacks(pc, from);
+            p_piece_attacks[from] = tos;
+            p_le_attacks[sd][pc] |= tos;
+            p_support[sd] |= tos & p_attacks[sd];
+            p_attacks[sd] |= tos;
+         }
       }
 
       // wrap up

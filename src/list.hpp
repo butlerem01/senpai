@@ -6,6 +6,7 @@
 
 #include "common.hpp"
 #include "libmy.hpp"
+#include <vector>
 
 class Pos;
 
@@ -15,7 +16,7 @@ class Move_Score {
 
 private :
 
-   int p_pair;
+   int64 p_pair;
 
 public :
 
@@ -35,9 +36,7 @@ class List {
 
 private :
 
-   static const int Size = 256;
-
-   ml::Array<Move_Score, Size> p_pair;
+   std::vector<Move_Score> p_pair;
 
 public :
 

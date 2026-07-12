@@ -29,10 +29,9 @@ private :
 
    struct Entry { // 16 bytes
       uint32 lock;
-      int16 move;
+      int32 move;
       int16 score;
       int16 eval;
-      uint16 pad_2; // #
       int8 depth;
       uint8 date;
       uint8 flag;

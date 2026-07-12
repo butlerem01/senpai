@@ -20,27 +20,28 @@ const int  Rook_Size   { 1 << Rook_Bits };
 
 // variables
 
+Bit Board_Squares;
 Bit Pawn_Squares;
 Bit Promotion_Squares;
 Bit Colour_Squares[2];
 
-static Bit File_[File_Size];
-static Bit Rank_[Rank_Size];
+static Bit File_[File_Capacity];
+static Bit Rank_[Rank_Capacity];
 
-static Bit Pawn_Moves   [Side_Size][Square_Size];
-static Bit Pawn_Attacks [Side_Size][Square_Size];
-static Bit Piece_Attacks[Side_Size][Piece_Size_2][Square_Size];
+static Bit Pawn_Moves   [Side_Size][Square_Capacity];
+static Bit Pawn_Attacks [Side_Size][Square_Capacity];
+static Bit Piece_Attacks[Side_Size][Piece_Size_2][Square_Capacity];
 
 #if BMI
-static Bit Bishop_Attacks[Square_Size][Bishop_Size];
-static Bit Rook_Attacks  [Square_Size][Rook_Size];
+static Bit Bishop_Attacks[Square_Capacity][Bishop_Size];
+static Bit Rook_Attacks  [Square_Capacity][Rook_Size];
 #endif
 
-static Bit Blocker[Square_Size];
+static Bit Blocker[Square_Capacity];
 
-static Bit Ray    [Square_Size][Square_Size];
-static Bit Beyond [Square_Size][Square_Size];
-static Bit Between[Square_Size][Square_Size];
+static Bit Ray    [Square_Capacity][Square_Capacity];
+static Bit Beyond [Square_Capacity][Square_Capacity];
+static Bit Between[Square_Capacity][Square_Capacity];
 
 // prototypes
 
@@ -54,20 +55,55 @@ static Bit piece_attacks (Square from, Bit tos, Bit pieces);
 
 void init() {
 
+   // init can be called again after a UCI variant change
+
+   Board_Squares = Bit(0);
+   Pawn_Squares = Bit(0);
+   Promotion_Squares = Bit(0);
+
+   for (int colour = 0; colour < 2; colour++) Colour_Squares[colour] = Bit(0);
+   for (int fl = 0; fl < File_Capacity; fl++) File_[fl] = Bit(0);
+   for (int rk = 0; rk < Rank_Capacity; rk++) Rank_[rk] = Bit(0);
+
+   for (int sd = 0; sd < Side_Size; sd++) {
+      for (int pc = 0; pc < Piece_Size_2; pc++) {
+         for (int sq = 0; sq < Square_Capacity; sq++) {
+            Piece_Attacks[sd][pc][sq] = Bit(0);
+         }
+      }
+      for (int sq = 0; sq < Square_Capacity; sq++) {
+         Pawn_Moves[sd][sq] = Bit(0);
+         Pawn_Attacks[sd][sq] = Bit(0);
+      }
+   }
+
+   for (int from = 0; from < Square_Capacity; from++) {
+      Blocker[from] = Bit(0);
+      for (int to = 0; to < Square_Capacity; to++) {
+         Ray[from][to] = Bit(0);
+         Beyond[from][to] = Bit(0);
+         Between[from][to] = Bit(0);
+      }
+   }
+
    // files and ranks
 
-   for (int s = 0; s < Square_Size; s++) {
+   for (int s = 0; s < square_size(); s++) {
 
       Square sq = square_make(s);
 
-      set(File_[square_file(sq)], sq);
-      set(Rank_[square_rank(sq)], sq);
+      set(Board_Squares, sq);
+
+      if (!square_is_corner(sq)) {
+         set(File_[square_file(sq)], sq);
+         set(Rank_[square_rank(sq)], sq);
+      }
 
       set(Colour_Squares[square_colour(sq)], sq);
    }
 
-   Pawn_Squares      = rect(0, 1, File_Size, Rank_Size - 1);
-   Promotion_Squares = ~Pawn_Squares;
+   Pawn_Squares      = rect(0, 1, file_size(), rank_size() - 1);
+   Promotion_Squares = rank(Rank_1) | rank(Rank(rank_size() - 1));
 
    // piece init
 
@@ -97,9 +133,21 @@ void init() {
       vec_nnw, vec_nne, vec_nww, vec_nee, vec_sww, vec_see, vec_ssw, vec_sse,
    };
 
+   const int Champion_Delta[12][2] {
+      {+1, 0}, {-1, 0}, {0, +1}, {0, -1},
+      {+2, 0}, {-2, 0}, {0, +2}, {0, -2},
+      {+2, +2}, {+2, -2}, {-2, +2}, {-2, -2},
+   };
+
+   const int Wizard_Delta[12][2] {
+      {+1, +1}, {+1, -1}, {-1, +1}, {-1, -1},
+      {+1, +3}, {+1, -3}, {-1, +3}, {-1, -3},
+      {+3, +1}, {+3, -1}, {-3, +1}, {-3, -1},
+   };
+
    // piece attacks
 
-   for (int f = 0; f < Square_Size; f++) {
+   for (int f = 0; f < square_size(); f++) {
 
       Square from = square_make(f);
 
@@ -107,6 +155,8 @@ void init() {
       Bit bishop = Bit(0);
       Bit rook = Bit(0);
       Bit king = Bit(0);
+      Bit champion = Bit(0);
+      Bit wizard = Bit(0);
 
       for (int dir = 0; dir < 8; dir++) {
          Vec vec = Knight_Vec[dir];
@@ -128,14 +178,30 @@ void init() {
          king |= ray_1(from, vec);
       }
 
-      Pawn_Moves[White][from] = ray_1(from, vec_n);
-      Pawn_Moves[Black][from] = ray_1(from, vec_s);
+      for (int i = 0; i < 12; i++) {
+         champion |= ray_1(from, vector_make(Champion_Delta[i][0], Champion_Delta[i][1]));
+         wizard   |= ray_1(from, vector_make(Wizard_Delta[i][0], Wizard_Delta[i][1]));
+      }
 
-      if (square_rank(from, White) == Rank_2) Pawn_Moves[White][from] |= ray_1(square_front(from, White), vec_n);
-      if (square_rank(from, Black) == Rank_2) Pawn_Moves[Black][from] |= ray_1(square_front(from, Black), vec_s);
+      if (!square_is_corner(from)) {
+         Pawn_Moves[White][from] = ray_1(from, vec_n);
+         Pawn_Moves[Black][from] = ray_1(from, vec_s);
 
-      Pawn_Attacks[White][from] = ray_1(from, vec_nw) | ray_1(from, vec_ne);
-      Pawn_Attacks[Black][from] = ray_1(from, vec_sw) | ray_1(from, vec_se);
+         if (square_rank(from, White) == Rank_2) {
+            Square front = square_front(from, White);
+            Pawn_Moves[White][from] |= ray_1(front, vec_n);
+            if (variant_is_omega()) Pawn_Moves[White][from] |= ray_1(square_front(front, White), vec_n);
+         }
+
+         if (square_rank(from, Black) == Rank_2) {
+            Square front = square_front(from, Black);
+            Pawn_Moves[Black][from] |= ray_1(front, vec_s);
+            if (variant_is_omega()) Pawn_Moves[Black][from] |= ray_1(square_front(front, Black), vec_s);
+         }
+
+         Pawn_Attacks[White][from] = ray_1(from, vec_nw) | ray_1(from, vec_ne);
+         Pawn_Attacks[Black][from] = ray_1(from, vec_sw) | ray_1(from, vec_se);
+      }
 
       Piece_Attacks[White][Pawn][from] = Pawn_Attacks[White][from];
       Piece_Attacks[Black][Pawn][from] = Pawn_Attacks[Black][from];
@@ -154,11 +220,17 @@ void init() {
 
       Piece_Attacks[White][King][from] = king;
       Piece_Attacks[Black][King][from] = king;
+
+      Piece_Attacks[White][Champion][from] = champion;
+      Piece_Attacks[Black][Champion][from] = champion;
+
+      Piece_Attacks[White][Wizard][from] = wizard;
+      Piece_Attacks[Black][Wizard][from] = wizard;
    }
 
    // range attacks
 
-   for (int f = 0; f < Square_Size; f++) {
+   for (int f = 0; f < square_size(); f++) {
 
       Square from = square_make(f);
 
@@ -183,7 +255,7 @@ void init() {
 
 #if BMI
 
-   for (int f = 0; f < Square_Size; f++) {
+   if (!variant_is_omega()) for (int f = 0; f < square_size(); f++) {
 
       Square from = square_make(f);
 
@@ -213,6 +285,11 @@ void init() {
    }
 
 #endif
+}
+
+void init(Variant value) {
+   variant_set(value);
+   init();
 }
 
 static Bit ray_1(Square from, Vec vec) {
@@ -248,7 +325,8 @@ static Bit ray(Square from, Vec vec) {
 }
 
 Bit bit(Square sq) {
-   return Bit(ml::bit(sq));
+   assert(square_is_ok(sq));
+   return sq < 64 ? Bit(ml::bit(sq), 0) : Bit(0, ml::bit(sq - 64));
 }
 
 bool has(Bit b, Square sq) {
@@ -256,7 +334,7 @@ bool has(Bit b, Square sq) {
 }
 
 int bit(Bit b, Square sq) {
-   return (b >> sq) & 1;
+   return has(b, sq) ? 1 : 0;
 }
 
 bool is_single(Bit b) {
@@ -291,23 +369,26 @@ Bit remove(Bit b, Square sq) {
 
 Square first(Bit b) {
    assert(b != 0);
-   return Square(ml::bit_first(b));
+   return b.lo() != 0 ? Square(ml::bit_first(b.lo())) : Square(64 + ml::bit_first(b.hi()));
 }
 
 Bit rest(Bit b) {
    assert(b != 0);
-   return b & (b - 1);
+   if (b.lo() != 0) return Bit(b.lo() & (b.lo() - 1), b.hi());
+   return Bit(0, b.hi() & (b.hi() - 1));
 }
 
 int count(Bit b) {
-   return ml::bit_count(b);
+   return ml::bit_count(b.lo()) + ml::bit_count(b.hi());
 }
 
 Bit file(File fl) {
+   assert(file_is_ok(fl));
    return File_[fl];
 }
 
 Bit rank(Rank rk) {
+   assert(rank_is_ok(rk));
    return Rank_[rk];
 }
 
@@ -320,11 +401,11 @@ Bit rect(int left, int bottom, int right, int top) {
    if (left   < 0) left   = 0;
    if (bottom < 0) bottom = 0;
 
-   if (right > File_Size) right = File_Size;
-   if (top   > Rank_Size) top   = Rank_Size;
+   if (right > file_size()) right = file_size();
+   if (top   > rank_size()) top   = rank_size();
 
-   assert(0 <= left   && left   <= right && right <= File_Size);
-   assert(0 <= bottom && bottom <= top   && top   <= Rank_Size);
+   assert(0 <= left   && left   <= right && right <= file_size());
+   assert(0 <= bottom && bottom <= top   && top   <= rank_size());
 
    Bit files = Bit(0);
    Bit ranks = Bit(0);
@@ -363,19 +444,38 @@ Bit line(Square from, Square to) {
 
 Bit pawn_moves(Side sd, Bit froms) {
 
+   if (variant_is_omega()) {
+      Bit tos = Bit(0);
+      for (Bit b = froms & Pawn_Squares; b != 0; b = rest(b)) {
+         Square from = first(b);
+         Square to = square_from_coordinates(square_file(from), square_rank(from) + square_inc(sd));
+         if (to != Square_None) set(tos, to);
+      }
+      return tos;
+   }
+
    if (sd == White) {
-      return Bit(froms << Inc_N);
+      return Bit(froms << Inc_N) & Board_Squares;
    } else {
-      return Bit(froms >> Inc_N);
+      return Bit(froms >> Inc_N) & Board_Squares;
    }
 }
 
 Bit pawn_attacks(Side sd, Bit froms) {
 
+   if (variant_is_omega()) {
+      Bit tos = Bit(0);
+      for (Bit b = froms; b != 0; b = rest(b)) {
+         Square from = first(b);
+         if (square_is_ok(from)) tos |= Pawn_Attacks[sd][from];
+      }
+      return tos;
+   }
+
    if (sd == White) {
-      return Bit(froms >> Inc_SW) | Bit(froms << Inc_NW);
+      return (Bit(froms >> Inc_SW) | Bit(froms << Inc_NW)) & Board_Squares;
    } else {
-      return Bit(froms << Inc_SW) | Bit(froms >> Inc_NW);
+      return (Bit(froms << Inc_SW) | Bit(froms >> Inc_NW)) & Board_Squares;
    }
 }
 
@@ -410,6 +510,9 @@ Bit piece_attacks(Piece pc, Side sd, Square from) {
 Bit piece_attacks(Piece pc, Square from, Bit pieces) {
 
    assert(pc != Pawn);
+
+   if (pc == Knight || pc == King || pc == Champion || pc == Wizard)
+      return piece_attacks(pc, from);
 
 #if BMI
 
@@ -451,7 +554,9 @@ bool piece_attack(Piece pc, Side sd, Square from, Square to) {
 }
 
 bool piece_attack(Piece pc, Side sd, Square from, Square to, Bit pieces) {
-   return piece_attack(pc, sd, from, to) && line_is_empty(from, to, pieces);
+   if (!piece_attack(pc, sd, from, to)) return false;
+   if (pc == Knight || pc == King || pc == Champion || pc == Wizard) return true;
+   return line_is_empty(from, to, pieces);
 }
 
 bool line_is_empty(Square from, Square to, Bit pieces) {
@@ -463,6 +568,10 @@ Bit knight_attacks(Square from) {
 }
 
 Bit bishop_attacks(Square from, Bit pieces) {
+
+   if (variant_is_omega()) {
+      return piece_attacks(from, piece_attacks(Bishop, from), pieces);
+   }
 
 #if BMI
 
@@ -480,6 +589,10 @@ Bit bishop_attacks(Square from, Bit pieces) {
 
 Bit rook_attacks(Square from, Bit pieces) {
 
+   if (variant_is_omega()) {
+      return piece_attacks(from, piece_attacks(Rook, from), pieces);
+   }
+
 #if BMI
 
    Bit mask  = Piece_Attacks[White][Rook][from] & Blocker[from];
@@ -495,6 +608,10 @@ Bit rook_attacks(Square from, Bit pieces) {
 }
 
 Bit queen_attacks(Square from, Bit pieces) {
+
+   if (variant_is_omega()) {
+      return piece_attacks(from, piece_attacks(Queen, from), pieces);
+   }
 
 #if BMI
    return bishop_attacks(from, pieces) | rook_attacks(from, pieces);

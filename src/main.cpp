@@ -71,6 +71,7 @@ static void uci_loop() {
    si.init();
 
    bool init_done = false;
+   bool position_valid = true;
 
    while (true) {
 
@@ -97,6 +98,7 @@ static void uci_loop() {
          std::cout << "option name " << "Ponder" << " type check default " << var::get("Ponder") << std::endl;
          std::cout << "option name " << "Threads" << " type spin default " << var::get("Threads") << " min 1 max 16" << std::endl;
          std::cout << "option name " << "UCI_Chess960" << " type check default " << var::get("UCI_Chess960") << std::endl;
+         std::cout << "option name " << "UCI_Variant" << " type combo default chess var chess var omega" << std::endl;
 
          std::cout << "option name " << "Clear Hash" << " type button" << std::endl;
 
@@ -158,9 +160,32 @@ static void uci_loop() {
 
          if (name == "Clear Hash") {
             tt::G_TT.clear();
+         } else if (name == "UCI_Variant" && !var::variant_is_ok(value)) {
+            std::cout << "info string Unsupported UCI variant " << value << std::endl;
+         } else if (name == "UCI_Chess960" && value == "true" && var::UCI_Variant == Omega) {
+            std::cout << "info string UCI_Chess960 is unavailable for omega" << std::endl;
          } else {
+
+            Variant previous_variant = var::UCI_Variant;
+
+            if (name == "UCI_Variant" && value == "omega") {
+               var::set("UCI_Chess960", "false");
+            }
+
             var::set(name, value);
             var::update();
+
+            if (var::UCI_Variant != previous_variant) {
+               // Attack, ray, and pawn-evaluation tables depend on the active
+               // board geometry.  Rebuild them atomically when a GUI changes
+               // variants; merely changing the enum leaves an 8x8 table set
+               // behind and makes a subsequent OFEN position unusable.
+               bit::init(var::UCI_Variant);
+               pawn::init();
+               clear_pawn_table();
+               tt::G_TT.clear();
+               position_valid = false;
+            }
          }
 
       } else if (command == "ucinewgame") {
@@ -169,7 +194,7 @@ static void uci_loop() {
 
       } else if (command == "position") {
 
-         std::string fen = Start_FEN;
+         std::string fen = start_fen(var::UCI_Variant);
          std::string moves;
 
          bool parsing_fen   = false;
@@ -183,7 +208,7 @@ static void uci_loop() {
 
             } else if (arg == "startpos") {
 
-               fen = Start_FEN;
+               fen = start_fen(var::UCI_Variant);
 
                parsing_fen   = false;
                parsing_moves = false;
@@ -214,17 +239,50 @@ static void uci_loop() {
             }
          }
 
-         game.init(pos_from_fen(fen));
+         if (!fen_variant_supported(var::UCI_Variant)) {
+            position_valid = false;
+            std::cout << "info string Position format is unavailable for the selected variant" << std::endl;
+         } else {
 
-         std::stringstream ss(moves);
+            try {
 
-         while (ss >> arg) {
-            game.add_move(move::from_uci(arg, game.pos()));
+               game.init(pos_from_fen(fen, var::UCI_Variant));
+
+               std::stringstream move_stream(moves);
+
+               while (move_stream >> arg) {
+                  Move mv = move::from_uci(arg, game.pos());
+                  List legal;
+                  gen_legals(legal, game.pos());
+                  if (!list::has(legal, mv)) throw Bad_Input();
+                  game.add_move(mv);
+               }
+
+               position_valid = true;
+
+            } catch (const Bad_Input &) {
+               position_valid = false;
+               std::cout << "info string Invalid position" << std::endl;
+            }
          }
 
          si.init(); // reset level
 
       } else if (command == "go") {
+
+         if (!fen_variant_supported(var::UCI_Variant)) {
+            std::cout << "info string Search is unavailable for the selected variant" << std::endl;
+            std::cout << "bestmove 0000" << std::endl;
+            si.init();
+            continue;
+         }
+
+         if (!position_valid) {
+            std::cout << "info string No valid position" << std::endl;
+            std::cout << "bestmove 0000" << std::endl;
+            si.init();
+            continue;
+         }
 
          int depth = -1;
          double move_time = -1.0;

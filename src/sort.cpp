@@ -3,6 +3,7 @@
 
 #include "attack.hpp"
 #include "common.hpp"
+#include "eval.hpp"
 #include "gen.hpp"
 #include "libmy.hpp"
 #include "list.hpp"
@@ -173,13 +174,22 @@ static int capture_score(Move mv, const Pos & pos) { // MVV/LVA
 
    if (move::is_en_passant(mv)) cp = Pawn;
 
-   const int pc_score[Piece_Size]     { 5, 4, 3, 2, 1, 0 };
-   const int cp_score[Piece_Size + 1] { 2, 3, 4, 5, 6, 7, 0 };
+   const int chess_pc_score[Piece_Size]     { 5, 4, 3, 2, 1, 0, 3, 3 };
+   const int chess_cp_score[Piece_Size + 1] { 2, 3, 4, 5, 6, 7, 4, 4, 0 };
+   const int omega_pc_score[Piece_Size]     { 7, 6, 3, 2, 1, 0, 4, 5 };
+   const int omega_cp_score[Piece_Size + 1] { 1, 2, 5, 6, 7, 7, 4, 3, 0 };
+
+   const int * pc_score = variant_is_omega() ? omega_pc_score : chess_pc_score;
+   const int * cp_score = variant_is_omega() ? omega_cp_score : chess_cp_score;
 
    int sc = cp_score[cp] * 8 + pc_score[pc];
    assert(sc >= 0 && sc < 8 * 8);
 
-   if (move::is_promotion(mv)) sc += 8; // cp++
+   if (move::is_promotion(mv)) {
+      sc += variant_is_omega() ? int(piece_mat(move::prom(mv))) / 25 : 8;
+   }
+
+   assert(sc >= 0 && sc < 128);
 
    return sc;
 }

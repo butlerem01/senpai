@@ -89,6 +89,7 @@ void gen_evasions(List & list, const Pos & pos, Bit checks) {
    list.clear();
 
    Side sd = pos.turn();
+   Side xd = side_opp(sd);
 
    Bit kings = pos.pieces(King, sd);
    Square king = bit::first(kings);
@@ -106,7 +107,12 @@ void gen_evasions(List & list, const Pos & pos, Bit checks) {
 
       // interpositions
 
-      Bit tos = bit::between(king, check);
+      // Only a sliding check can be blocked.  A Champion's two-square
+      // orthogonal/diagonal attack is a jump and may geometrically have a
+      // non-empty `between` ray, but placing a piece there is not an evasion.
+      Bit tos = bit::has(pos.sliders(xd), check)
+              ? bit::between(king, check)
+              : Bit(0);
 
       if (tos != 0) {
          add_pawn_moves (list, pos, sd, pos.pawns(sd), tos);
@@ -204,7 +210,9 @@ void add_checks(List & list, const Pos & pos) {
 
       for (Bit bt = bit::piece_attacks(pc, sd, from) & tos; bt != 0; bt = bit::rest(bt)) {
          Square to = bit::first(bt);
-         if (bit::line_is_empty(to, king, pieces)) add_move(list, pos, from, to);
+         Bit after = bit::remove(pieces, from);
+         bit::set(after, to);
+         if (bit::piece_attack(pc, sd, to, king, after)) add_move(list, pos, from, to);
       }
    }
 }
@@ -219,17 +227,18 @@ static void add_castling(List & list, const Pos & pos) {
       Square kf = pos.king(sd);
       Square rf = bit::first(b);
 
-      Square kt, rt;
-
       Rank rk = rank_side(Rank_1, sd);
 
-      if (square_file(rf) > square_file(kf)) {
-         kt = square_make(File_G, rk);
-         rt = square_make(File_F, rk);
-      } else {
-         kt = square_make(File_C, rk);
-         rt = square_make(File_D, rk);
+      if (variant_is_omega()) {
+         if (square_file(kf) != File_F || square_rank(kf) != rk) continue;
+         if (square_rank(rf) != rk) continue;
+         if (square_file(rf) != File_B && square_file(rf) != File_I) continue;
+         if (!pos.is_piece(rf, Rook)) continue;
       }
+
+      Move castle = move::make(kf, rf, King);
+      Square kt = move::castling_king_to(castle);
+      Square rt = move::castling_rook_to(castle);
 
       // conditions
 
@@ -246,20 +255,16 @@ static void add_castling(List & list, const Pos & pos) {
       }
 
       assert(bit::line_is_empty(kf, rf, pieces));
-      list.add_move(kf, rf, King); // fake promotion to king
+      list.add(castle); // fake promotion to king
 
       cont : ;
    }
 }
 
 static void add_en_passant(List & list, const Pos & pos) {
-
-   Square to = pos.ep_sq();
-
-   if (to != Square_None) {
-
-      Side sd = pos.turn();
-
+   Side sd = pos.turn();
+   for (Bit targets = pos.ep_squares(); targets != 0; targets = bit::rest(targets)) {
+      Square to = bit::first(targets);
       for (Bit b = pos.pawns(sd) & bit::piece_attacks_to(Pawn, sd, to); b != 0; b = bit::rest(b)) {
          Square from = bit::first(b);
          list.add_move(from, to, Pawn); // fake promotion to pawn
@@ -268,6 +273,22 @@ static void add_en_passant(List & list, const Pos & pos) {
 }
 
 static void add_pawn_moves(List & list, const Pos & pos, Side sd, Bit froms, Bit tos) {
+
+   if (variant_is_omega()) {
+      for (Bit b = froms; b != 0; b = bit::rest(b)) {
+         Square from = bit::first(b);
+         int fl = int(square_file(from));
+         int rk = int(square_rank(from));
+         int step = sd == White ? +1 : -1;
+         int max = square_rank(from, sd) == Rank_2 ? 3 : 1;
+         for (int distance = 1; distance <= max; distance++) {
+            Square to = square_from_coordinates(fl, rk + step * distance);
+            if (to == Square_None || !pos.is_empty(to)) break;
+            if (bit::has(tos, to)) add_pawn_move(list, from, to);
+         }
+      }
+      return;
+   }
 
    if (sd == White) {
       add_moves_from(list, froms & bit::rank(Rank_2, sd) & (pos.empties() >> Inc_N) & (tos >> Inc_2N), +Inc_2N);
@@ -278,7 +299,16 @@ static void add_pawn_moves(List & list, const Pos & pos, Side sd, Bit froms, Bit
    }
 }
 
-static void add_pawn_captures(List & list, const Pos & /* pos */, Side sd, Bit froms, Bit tos) {
+static void add_pawn_captures(List & list, const Pos & pos, Side sd, Bit froms, Bit tos) {
+
+   if (variant_is_omega()) {
+      for (Bit b = froms; b != 0; b = bit::rest(b)) {
+         Square from = bit::first(b);
+         for (Bit bt = bit::pawn_attacks(sd, from) & tos; bt != 0; bt = bit::rest(bt))
+            add_pawn_move(list, from, bit::first(bt));
+      }
+      return;
+   }
 
    if (sd == White) {
       add_moves_from(list, froms & (tos << Inc_SW), -Inc_SW);
@@ -357,7 +387,10 @@ static void add_move(List & list, const Pos & pos, Square from, Square to) {
 
 static void add_piece_move(List & list, const Pos & pos, Square from, Square to) {
 
-   if (bit::line_is_empty(from, to, pos.pieces())) {
+   Piece pc = pos.piece(from);
+   Side sd = pos.side(from);
+
+   if (bit::piece_attack(pc, sd, from, to, pos.pieces())) {
       list.add_move(from, to);
    }
 }
@@ -379,5 +412,9 @@ static void add_promotion(List & list, Square from, Square to) {
    list.add_move(from, to, Knight);
    list.add_move(from, to, Rook);
    list.add_move(from, to, Bishop);
+   if (variant_is_omega()) {
+      list.add_move(from, to, Champion);
+      list.add_move(from, to, Wizard);
+   }
 }
 

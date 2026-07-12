@@ -3,6 +3,9 @@ Senpai 2.0 Copyright (C) 2014-2017 Fabien Letouzey.
 This program is distributed under the GNU General Public License version 3.
 See licence.txt for more details.
 
+This fork also supports Omega Chess through `UCI_Variant=omega`.  See OMEGA.md
+for the position format, build commands, coverage, and current limitations.
+
 ---
 
 Today is 2017-11-10.
@@ -38,5 +41,8 @@ In case of a portability problem, intrinsics are defined in libmy.hpp
 
 Known issues
 
-The halfmove-clock part of FEN is ignored.  This doesn't affect game playing, but will appear if you analyse a new position that is close to a fifty-move draw.
+The Omega evaluator uses research-backed material ordering plus tapered safe
+mobility, pawn structure, king safety, threats, development, and endgame
+scaling.  Its weights remain hand-tuned.  Standard chess continues to use
+Senpai's original trained evaluator.
 

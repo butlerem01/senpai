@@ -11,6 +11,7 @@ namespace bit {
 
 // variables
 
+extern Bit Board_Squares;
 extern Bit Pawn_Squares;
 extern Bit Promotion_Squares;
 extern Bit Colour_Squares[2];
@@ -18,6 +19,7 @@ extern Bit Colour_Squares[2];
 // functions
 
 void init ();
+void init (Variant variant);
 
 Bit  bit (Square sq);
 

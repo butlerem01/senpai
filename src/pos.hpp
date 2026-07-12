@@ -21,12 +21,13 @@ private :
    Bit p_all;
    Side p_turn;
 
-   Square p_ep_sq;
+   Bit p_ep_squares;
    Bit p_castling_rooks;
-   int p_ply;
+   int p_halfmove_clock;
+   int p_fullmove_number;
    int p_rep;
 
-   int8 p_pc[Square_Size];
+   int8 p_pc[Square_Capacity];
 
    Move p_last_move;
    Square p_cap_sq;
@@ -38,13 +39,15 @@ public :
 
    Pos ();
    Pos (Side turn, Bit piece_side[], Bit castling_rooks);
+   Pos (Side turn, Bit piece_side[], Bit castling_rooks, Bit ep_squares,
+        int halfmove_clock, int fullmove_number);
 
    Pos  succ (Move mv) const;
    Pos  null ()        const;
 
    Side turn () const { return p_turn; }
 
-   Bit  empties ()                  const { return ~p_all; }
+   Bit  empties ()                  const { return (~p_all) & bit::Board_Squares; }
    Bit  pieces  ()                  const { return p_all; }
    Bit  pieces  (Piece pc)          const { return p_piece[pc]; }
    Bit  pieces  (Side sd)           const { return p_side[sd]; }
@@ -66,14 +69,19 @@ public :
    Side  side  (Square sq) const { return side_make(bit::bit(pieces(Black), sq)); }
 
    Bit    castling_rooks (Side sd) const { return p_castling_rooks & pieces(sd); }
-   Square ep_sq          ()        const { return p_ep_sq; }
+   Bit    ep_squares     ()        const { return p_ep_squares; }
+   Square ep_sq          ()        const { return p_ep_squares == 0 ? Square_None : bit::first(p_ep_squares); }
+   bool   has_ep         (Square sq) const { return bit::has(p_ep_squares, sq); }
 
    Move   last_move () const { return p_last_move; }
    Square cap_sq    () const { return p_cap_sq; }
+   Square cap_to    () const;
    Key    key       () const { return p_key_full; }
    Key    key_pawn  () const { return p_key_pawn; }
 
-   int  ply () const { return p_ply; }
+   int halfmove_clock () const { return p_halfmove_clock; }
+   int fullmove_number () const { return p_fullmove_number; }
+   int ply             () const { return p_halfmove_clock; } // legacy name
 
    bool is_draw () const;
 

@@ -25,6 +25,7 @@ Key  key_turn       (Side sd);
 Key  key_piece      (Piece pc, Side sd, Square sq);
 Key  key_castling   (Side sd, Bit rooks);
 Key  key_en_passant (File fl);
+Key  key_en_passant (Square sq);
 
 int    index (Key key, int mask);
 uint32 lock  (Key key);

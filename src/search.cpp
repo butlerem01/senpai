@@ -308,6 +308,7 @@ static Lockable G_IO;
 
 static double alloc_moves (const Pos & pos);
 static double alloc_early (const Pos & pos);
+static bool omega_sparse   (const Pos & pos);
 
 static double lerp (double mg, double eg, double phase);
 
@@ -481,6 +482,14 @@ static double alloc_moves(const Pos & pos) {
 
 static double alloc_early(const Pos & pos) {
    return lerp(0.4, 0.8, pos::phase(pos));
+}
+
+static bool omega_sparse(const Pos & pos) {
+   if (!variant_is_omega()) return false;
+
+   Bit white = pos.pieces(White) ^ pos.pieces(King, White);
+   Bit black = pos.pieces(Black) ^ pos.pieces(King, Black);
+   return bit::count(white | black) <= 8;
 }
 
 static double lerp(double mg, double eg, double phase) {
@@ -1255,7 +1264,7 @@ Score Search_Local::search(const Pos & pos, Score alpha, Score beta, Depth depth
 
    // reverse futility pruning / eval pruning
 
-   if (!node.in_check && node.depth <= 2) {
+   if (!node.in_check && node.depth <= 2 && !omega_sparse(pos)) {
 
       Score sc = score::add_safe(node.eval, -Score(node.depth * 100));
 
@@ -1274,6 +1283,7 @@ Score Search_Local::search(const Pos & pos, Score alpha, Score beta, Depth depth
     && score::is_eval(node.beta)
     && node.eval >= node.beta
     && !null_bad(pos, pos.turn())
+    && !omega_sparse(pos)
     ) {
 
       Score sc;
@@ -1298,7 +1308,7 @@ Score Search_Local::search(const Pos & pos, Score alpha, Score beta, Depth depth
 
    // futility pruning
 
-   if (!node.in_check && node.depth <= 4) {
+   if (!node.in_check && node.depth <= 4 && !omega_sparse(pos)) {
 
       Score sc = score::add_safe(node.eval, +Score(node.depth * 60));
 
@@ -1574,7 +1584,7 @@ Score Search_Local::qs(const Pos & pos, Score alpha, Score beta, Depth depth, Pl
 
       // depth limit
 
-      if (!in_check && depth <= -4 && move::to(mv) != pos.cap_sq()) continue;
+      if (!in_check && depth <= -4 && move::to(mv) != pos.cap_to()) continue;
 
       // delta pruning
 
@@ -1746,8 +1756,9 @@ bool Search_Local::prune(Move mv, const Node & node) {
    // late-move pruning
 
    if (node.depth <= 2
-    && node.j >= node.depth * 6
+    && node.j >= node.depth * (variant_is_omega() ? 10 : 6)
     && node.score >= -score::Eval_Inf
+    && !omega_sparse(pos)
     && !move_is_dangerous(mv, node)
     ) {
       return true;
@@ -1796,6 +1807,8 @@ Depth Search_Local::reduce(Move mv, const Node & node) {
 
    const Pos & pos = node.pos();
 
+   if (omega_sparse(pos)) return Depth(0);
+
    if (node.depth >= 3
     && node.j >= 1
     && !move_is_dangerous(mv, node)
@@ -1821,9 +1834,16 @@ bool Search_Local::move_is_dangerous(Move mv, const Node & node) {
 
    const Pos & pos = node.pos();
 
+   bool advanced_omega_pawn = false;
+   if (variant_is_omega() && move::piece(mv, pos) == Pawn) {
+      Side sd = move::side(mv, pos);
+      advanced_omega_pawn = square_rank(move::to(mv), sd) >= Rank_7;
+   }
+
    return move::is_tactical(mv, pos)
        || node.in_check
        || move::is_check(mv, pos)
+       || advanced_omega_pawn
        ;
 }
 

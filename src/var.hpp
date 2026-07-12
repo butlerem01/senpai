@@ -6,6 +6,7 @@
 
 #include <string>
 
+#include "common.hpp"
 #include "libmy.hpp"
 
 namespace var {
@@ -17,6 +18,7 @@ extern bool SMP;
 extern int  Threads;
 extern int  Hash;
 extern bool Chess_960;
+extern Variant UCI_Variant;
 
 // functions
 
@@ -28,6 +30,10 @@ void        set (const std::string & name, const std::string & value);
 
 bool get_bool (const std::string & name);
 int  get_int  (const std::string & name);
+
+bool        variant_is_ok      (const std::string & value);
+Variant     variant_from_string (const std::string & value);
+std::string variant_to_string   (Variant value);
 
 }
 

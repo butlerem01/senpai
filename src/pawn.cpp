@@ -11,19 +11,19 @@ namespace pawn {
 
 // variables
 
-static Bit File_[Square_Size];
-static Bit Rank_[Square_Size];
+static Bit File_[Square_Capacity];
+static Bit Rank_[Square_Capacity];
 
-static Bit Files[Square_Size];
-static Bit Ranks[Square_Size];
+static Bit Files[Square_Capacity];
+static Bit Ranks[Square_Capacity];
 
-static Bit File_Both[Square_Size];
+static Bit File_Both[Square_Capacity];
 
-static Bit Rank_Front[Side_Size][Square_Size];
-static Bit Rank_Rear [Side_Size][Square_Size];
+static Bit Rank_Front[Side_Size][Square_Capacity];
+static Bit Rank_Rear [Side_Size][Square_Capacity];
 
-static Bit Ranks_Front[Side_Size][Square_Size];
-static Bit Ranks_Rear [Side_Size][Square_Size];
+static Bit Ranks_Front[Side_Size][Square_Capacity];
+static Bit Ranks_Rear [Side_Size][Square_Capacity];
 
 // prototypes
 
@@ -44,9 +44,28 @@ static Bit unsafe_xd (const Pos & pos, Side sd);
 
 void init() {
 
-   for (int r = 0; r < Rank_Size; r++) {
+   // These tables are variant-dependent and UCI_Variant can be changed at
+   // runtime.  Clear the full storage before rebuilding the active geometry so
+   // that switching back from Omega does not leave 10x10 data behind.
+   for (int sq = 0; sq < Square_Capacity; sq++) {
+      File_[sq] = Bit(0);
+      Rank_[sq] = Bit(0);
+      Files[sq] = Bit(0);
+      Ranks[sq] = Bit(0);
+      File_Both[sq] = Bit(0);
 
-      for (int f = 0; f < File_Size; f++) {
+      for (int s = 0; s < Side_Size; s++) {
+         Side sd = side_make(s);
+         Rank_Front[sd][sq] = Bit(0);
+         Rank_Rear [sd][sq] = Bit(0);
+         Ranks_Front[sd][sq] = Bit(0);
+         Ranks_Rear [sd][sq] = Bit(0);
+      }
+   }
+
+   for (int r = 0; r < rank_size(); r++) {
+
+      for (int f = 0; f < file_size(); f++) {
 
          File fl = file_make(f);
          Rank rk = rank_make(r);
@@ -57,16 +76,16 @@ void init() {
          Rank_[sq] = bit::rank(rk);
 
          if (fl > 0)             File_Both[sq] |= bit::file(fl - 1);
-         if (fl < File_Size - 1) File_Both[sq] |= bit::file(fl + 1);
+         if (fl < file_size() - 1) File_Both[sq] |= bit::file(fl + 1);
 
          if (rk > 0)             Rank_Rear [White][sq] = bit::rank(rk - 1);
-         if (rk < Rank_Size - 1) Rank_Front[White][sq] = bit::rank(rk + 1);
+         if (rk < rank_size() - 1) Rank_Front[White][sq] = bit::rank(rk + 1);
 
          Rank_Front[Black][sq] = Rank_Rear [White][sq];
          Rank_Rear [Black][sq] = Rank_Front[White][sq];
 
-         Ranks_Front[White][sq] = bit::rect(0, rk + 1, File_Size, Rank_Size);
-         Ranks_Rear [White][sq] = bit::rect(0, 0,      File_Size, rk);
+         Ranks_Front[White][sq] = bit::rect(0, rk + 1, file_size(), rank_size());
+         Ranks_Rear [White][sq] = bit::rect(0, 0,      file_size(), rk);
 
          Ranks_Front[Black][sq] = Ranks_Rear [White][sq];
          Ranks_Rear [Black][sq] = Ranks_Front[White][sq];
@@ -153,6 +172,27 @@ Bit blocked(const Pos & pos, Side sd) {
 }
 
 static Bit bit_sides(Bit b) {
+
+   if (variant_is_omega()) {
+      Bit sides = Bit(0);
+
+      for (Bit froms = b; froms != 0; froms = bit::rest(froms)) {
+         Square from = bit::first(froms);
+         if (square_is_corner(from)) continue;
+
+         int fl = int(square_file(from));
+         int rk = int(square_rank(from));
+
+         Square west = square_from_coordinates(fl - 1, rk);
+         Square east = square_from_coordinates(fl + 1, rk);
+
+         if (west != Square_None) bit::set(sides, west);
+         if (east != Square_None) bit::set(sides, east);
+      }
+
+      return sides;
+   }
+
    return Bit(b >> Inc_W) | Bit(b << Inc_W);
 }
 

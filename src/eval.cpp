@@ -16,6 +16,7 @@
 #include "hash.hpp"
 #include "libmy.hpp"
 #include "math.hpp"
+#include "omega_eval.hpp"
 #include "pawn.hpp"
 #include "pos.hpp"
 #include "score.hpp"
@@ -28,6 +29,10 @@ const int  Pawn_Table_Size { 1 << Pawn_Table_Bit };
 const int  Pawn_Table_Mask { Pawn_Table_Size - 1 };
 
 const int  Scale { 100 }; // units per cp
+
+// The bundled weights were trained with the six standard chess piece types.
+// Keep their table layout stable as the native position gains Omega pieces.
+const int Eval_Piece_Stride { 6 };
 
 // types
 
@@ -842,6 +847,7 @@ std::vector<Pawn_Info> G_Pawn_Table;
 // prototypes
 
 static int  eval (const Pos & pos);
+static int  eval_omega (const Pos & pos);
 
 static void comp_pawn_info (Pawn_Info & pi, const Pos & pos);
 
@@ -870,6 +876,15 @@ void clear_pawn_table() {
 }
 
 Score eval(const Pos & pos, Side sd) {
+
+   // Senpai's learned evaluator is an 8x8, six-piece model.  In particular it
+   // indexes ranks and weight tables that do not exist for Omega's detached
+   // Wizard squares.  Keep that model byte-for-byte for chess and use a small,
+   // geometry-safe evaluator while the Omega weights are still untuned.
+   if (variant_is_omega()) {
+      int sc = eval_omega(pos);
+      return score::clamp(score::side(Score(sc), sd));
+   }
 
    int sc = eval(pos);
 
@@ -934,6 +949,10 @@ Score eval(const Pos & pos, Side sd) {
    }
 
    return score::clamp(score::side(Score(sc), sd)); // for sd
+}
+
+static int eval_omega(const Pos & pos) {
+   return omega_eval::evaluate(pos);
 }
 
 static int eval(const Pos & pos) {
@@ -1002,7 +1021,7 @@ static int eval(const Pos & pos) {
 
       // pawn captures
 
-      var = 271 + pc * Piece_Size;
+      var = 271 + pc * Eval_Piece_Stride;
 
       for (Bit b = ai.pawn_attacks(sd) & pos.non_pawns(xd); b != 0; b = bit::rest(b)) {
          Square to = bit::first(b);
@@ -1097,7 +1116,7 @@ static int eval(const Pos & pos) {
 
          // captures
 
-         var = 271 + pc * Piece_Size;
+         var = 271 + pc * Eval_Piece_Stride;
 
          for (Bit bt = tos & pos.pieces(xd) & ~(pawns_xd & ai.pawn_attacks(xd)); bt != 0; bt = bit::rest(bt)) {
             Square to = bit::first(bt);
@@ -1127,7 +1146,7 @@ static int eval(const Pos & pos) {
 
          if (is_pinned(pos, king_sd, sq, sd)) {
 
-            var = 313 + pc * Piece_Size;
+            var = 313 + pc * Eval_Piece_Stride;
 
             Square pin_sq = pinned_by(pos, king_sd, sq, sd);
             Piece  pin_pc = pos.piece(pin_sq);
@@ -1143,7 +1162,7 @@ static int eval(const Pos & pos) {
 
             assert(attackers >= 1 && attackers <= 4);
 
-            var = 349 + ((attackers - 1) * Piece_Size + pc) * 2;
+            var = 349 + ((attackers - 1) * Eval_Piece_Stride + pc) * 2;
 
             int p0 = bit::count(tos & king_zone_xd & pawn_safe & ~ai.queen_attacks(xd));
             int p1 = bit::count(tos & king_zone_xd & pawn_safe &  ai.queen_attacks(xd));
@@ -1264,7 +1283,7 @@ static int eval(const Pos & pos) {
 
          // captures
 
-         var = 271 + pc * Piece_Size;
+         var = 271 + pc * Eval_Piece_Stride;
 
          for (Bit bt = tos & pos.pieces(xd) & ~ai.pawn_attacks(xd); bt != 0; bt = bit::rest(bt)) {
             Square to = bit::first(bt);
@@ -1467,7 +1486,9 @@ Score piece_mat(Piece pc) {
 
    assert(pc != Piece_None);
 
-   const int mat[Piece_Size + 1] { 100, 325, 325, 500, 1000, 10000, 0 };
+   if (variant_is_omega()) return Score(omega_eval::piece_value(pc));
+
+   const int mat[Piece_Size + 1] { 100, 325, 325, 500, 1000, 10000, 400, 400, 0 };
    return Score(mat[pc]);
 }
 

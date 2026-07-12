@@ -45,6 +45,18 @@ Side Game::turn() const {
    return pos().turn();
 }
 
+Bit Game::ep_squares() const {
+   return pos().ep_squares();
+}
+
+int Game::halfmove_clock() const {
+   return pos().halfmove_clock();
+}
+
+int Game::fullmove_number() const {
+   return pos().fullmove_number();
+}
+
 const Pos & Game::pos() const {
    assert(p_pos.size() > 0);
    return p_pos[p_pos.size() - 1];

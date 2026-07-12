@@ -2,6 +2,7 @@
 // includes
 
 #include <cstdlib>
+#include <climits>
 #include <iostream>
 #include <string>
 #include <utility>
@@ -18,12 +19,40 @@
 
 // functions
 
+static int counter_next(int value) {
+   return value == INT_MAX ? INT_MAX : value + 1;
+}
+
+static bool omega_insufficient_material(const Pos & pos) {
+   if (!variant_is_omega()) return false;
+
+   if (pos.pieces(Pawn) != 0 || pos.pieces(Rook) != 0 || pos.pieces(Queen) != 0) {
+      return false;
+   }
+
+   Bit minors = pos.pieces(Knight) | pos.pieces(Bishop)
+              | pos.pieces(Champion) | pos.pieces(Wizard);
+
+   // A bare king, or king plus one N/B/C/W against a bare king, cannot mate.
+   return bit::count(minors) <= 1;
+}
+
 Pos::Pos() {
 }
 
-Pos::Pos(Side turn, Bit piece_side[], Bit castling_rooks) {
+Pos::Pos(Side turn, Bit piece_side[], Bit castling_rooks)
+   : Pos(turn, piece_side, castling_rooks, Bit(0), 0, 1) {
+}
+
+Pos::Pos(Side turn, Bit piece_side[], Bit castling_rooks, Bit ep_squares,
+         int halfmove_clock, int fullmove_number) {
 
    clear();
+
+   assert(halfmove_clock >= 0);
+   assert(fullmove_number >= 1);
+   assert(bit::count(ep_squares) <= 2);
+   assert(bit::is_incl(ep_squares, bit::Board_Squares));
 
    // set up position
 
@@ -41,6 +70,9 @@ Pos::Pos(Side turn, Bit piece_side[], Bit castling_rooks) {
    }
 
    p_castling_rooks = castling_rooks;
+   p_ep_squares = ep_squares;
+   p_halfmove_clock = halfmove_clock;
+   p_fullmove_number = fullmove_number;
 
    if (turn != p_turn) switch_turn();
 
@@ -56,7 +88,9 @@ void Pos::update() {
    p_key_full ^= hash::key_castling(White, castling_rooks(White));
    p_key_full ^= hash::key_castling(Black, castling_rooks(Black));
 
-   if (p_ep_sq != Square_None) p_key_full ^= hash::key_en_passant(square_file(p_ep_sq));
+   for (Bit b = p_ep_squares; b != 0; b = bit::rest(b)) {
+      p_key_full ^= hash::key_en_passant(bit::first(b));
+   }
 }
 
 void Pos::clear() {
@@ -76,11 +110,12 @@ void Pos::clear() {
    p_turn = White;
 
    p_castling_rooks = Bit(0);
-   p_ep_sq = Square_None;
-   p_ply = 0;
+   p_ep_squares = Bit(0);
+   p_halfmove_clock = 0;
+   p_fullmove_number = 1;
    p_rep = 0;
 
-   for (int sq = 0; sq < Square_Size; sq++) {
+   for (int sq = 0; sq < Square_Capacity; sq++) {
       p_pc[sq] = Piece_None;
    }
 
@@ -108,9 +143,12 @@ Pos Pos::succ(Move mv) const {
 
    pos.p_parent = this;
 
-   pos.p_ep_sq = Square_None;
-   pos.p_ply = move::is_conversion(mv, *this) ? 0 : p_ply + 1;
-   pos.p_rep = pos.p_ply;
+   bool conversion = move::is_conversion(mv, *this);
+
+   pos.p_ep_squares = Bit(0);
+   pos.p_halfmove_clock = conversion ? 0 : counter_next(p_halfmove_clock);
+   pos.p_fullmove_number = p_fullmove_number + (sd == Black && p_fullmove_number != INT_MAX ? 1 : 0);
+   pos.p_rep = conversion ? 0 : p_rep + 1;
 
    pos.p_last_move = mv;
    pos.p_cap_sq = Square_None;
@@ -126,9 +164,10 @@ Pos Pos::succ(Move mv) const {
       pos.p_cap_sq = to;
 
    } else if (move::is_en_passant(mv)) {
-
-      pos.remove_piece(Pawn, xd, square_rear(to, sd));
-      pos.p_cap_sq = to;
+      Square capture = move::en_passant_capture_square(mv, *this);
+      assert(capture != Square_None);
+      pos.remove_piece(Pawn, xd, capture);
+      pos.p_cap_sq = capture;
    }
 
    if (move::is_promotion(mv)) {
@@ -145,12 +184,17 @@ Pos Pos::succ(Move mv) const {
 
    // special moves
 
-   if (pc == Pawn
-    && square_rank(from, sd) == Rank_2
-    && square_rank(to,   sd) == Rank_4) {
+   if (pc == Pawn && square_rank(from, sd) == Rank_2) {
 
-      Square sq = square_make((from + to) / 2);
-      if ((pos.pawns(xd) & bit::pawn_attacks_to(xd, sq)) != 0) pos.p_ep_sq = sq;
+      int distance = int(square_rank(to, sd)) - int(square_rank(from, sd));
+
+      if (distance >= 2 && distance <= (variant_is_omega() ? 3 : 2)) {
+         for (int step = 1; step < distance; step++) {
+            Square sq = square_from_coordinates(square_file(from), square_rank(from) + square_inc(sd) * step);
+            assert(sq != Square_None);
+            if ((pos.pawns(xd) & bit::pawn_attacks_to(xd, sq)) != 0) bit::set(pos.p_ep_squares, sq);
+         }
+      }
 
    } else if (pc == King) {
 
@@ -172,25 +216,17 @@ Pos Pos::castle(Move mv) const {
    Square kf = move::from(mv);
    Square rf = move::to(mv);
 
-   Square kt, rt;
-
-   Rank rk = rank_side(Rank_1, sd);
-
-   if (square_file(rf) > square_file(kf)) {
-      kt = square_make(File_G, rk);
-      rt = square_make(File_F, rk);
-   } else {
-      kt = square_make(File_C, rk);
-      rt = square_make(File_D, rk);
-   }
+   Square kt = move::castling_king_to(mv);
+   Square rt = move::castling_rook_to(mv);
 
    Pos pos = *this;
 
    pos.p_parent = this;
 
-   pos.p_ep_sq = Square_None;
-   pos.p_ply = move::is_conversion(mv, *this) ? 0 : p_ply + 1;
-   pos.p_rep = pos.p_ply;
+   pos.p_ep_squares = Bit(0);
+   pos.p_halfmove_clock = counter_next(p_halfmove_clock);
+   pos.p_fullmove_number = p_fullmove_number + (sd == Black && p_fullmove_number != INT_MAX ? 1 : 0);
+   pos.p_rep = p_rep + 1;
 
    pos.p_last_move = mv;
    pos.p_cap_sq = Square_None;
@@ -215,8 +251,8 @@ Pos Pos::null() const {
 
    pos.switch_turn();
 
-   pos.p_ep_sq = Square_None;
-   pos.p_ply = p_ply + 1;
+   pos.p_ep_squares = Bit(0);
+   pos.p_halfmove_clock = counter_next(p_halfmove_clock);
    pos.p_rep = 0; // don't detect repetition across a null move
 
    pos.p_last_move = move::Null;
@@ -224,6 +260,10 @@ Pos Pos::null() const {
 
    pos.update();
    return pos;
+}
+
+Square Pos::cap_to() const {
+   return p_cap_sq == Square_None ? Square_None : move::to(p_last_move);
 }
 
 void Pos::switch_turn() {
@@ -274,7 +314,9 @@ void Pos::remove_piece(Piece pc, Side sd, Square sq) {
 
 bool Pos::is_draw() const {
 
-   if (p_ply >= 100) {
+   if (omega_insufficient_material(*this)) {
+      return true;
+   } else if (p_halfmove_clock >= 100) {
       return !is_mate(*this);
    } else if (p_rep >= 4) {
       return is_rep();
@@ -308,6 +350,14 @@ void init() {
 }
 
 double phase(const Pos & pos) {
+
+   if (variant_is_omega()) {
+      const int omega_stage_size = 32;
+      int remaining = std::min(force(pos, White) + force(pos, Black), omega_stage_size);
+      double phase = double(omega_stage_size - remaining) / double(omega_stage_size);
+      assert(phase >= 0.0 && phase <= 1.0);
+      return phase;
+   }
 
    double phase = double(stage(pos)) / double(Stage_Size);
 
@@ -344,6 +394,8 @@ int force(const Pos & pos, Side sd) {
 
    return pos.count(Knight, sd) * 1
         + pos.count(Bishop, sd) * 1
+        + pos.count(Champion, sd) * 1
+        + pos.count(Wizard, sd) * 1
         + pos.count(Rook,   sd) * 2
         + pos.count(Queen,  sd) * 4;
 }
