@@ -9,6 +9,7 @@
 #include "../src/fen.hpp"
 #include "../src/hash.hpp"
 #include "../src/math.hpp"
+#include "../src/omega_eval.hpp"
 #include "../src/pawn.hpp"
 #include "../src/pos.hpp"
 
@@ -255,6 +256,75 @@ void test_corner_wizard_development() {
           "developing a Wizard from its corner must improve the evaluation");
 }
 
+Ofen_Position development_shell() {
+   Ofen_Position pos = bare_omega();
+
+   put(pos, Champion, White, "a0");
+   put(pos, Knight, White, "c0");
+   put(pos, Bishop, White, "d0");
+   put(pos, Bishop, White, "g0");
+   put(pos, Knight, White, "h0");
+   put(pos, Champion, White, "j0");
+   put(pos, Wizard, White, "w1");
+   put(pos, Wizard, White, "w2");
+
+   put(pos, Champion, Black, "a9");
+   put(pos, Knight, Black, "c9");
+   put(pos, Bishop, Black, "d9");
+   put(pos, Bishop, Black, "g9");
+   put(pos, Knight, Black, "h9");
+   put(pos, Champion, Black, "j9");
+   put(pos, Wizard, Black, "w3");
+   put(pos, Wizard, Black, "w4");
+
+   return pos;
+}
+
+void test_development_completion() {
+   Ofen_Position home = development_shell();
+
+   Ofen_Position one_developed = home;
+   one_developed.piece_side[square("a0")] = Empty;
+   put(one_developed, Champion, White, "c2");
+
+   Ofen_Position two_developed = one_developed;
+   two_developed.piece_side[square("j0")] = Empty;
+   put(two_developed, Champion, White, "h2");
+
+   expect(white_score(one_developed) > white_score(home),
+          "developing a new home unit must improve army readiness");
+   expect(white_score(two_developed) > white_score(one_developed),
+          "developing a second distinct unit must improve army readiness");
+
+   expect(omega_eval::development_penalty(8) == -72
+       && omega_eval::development_penalty(7) == -50
+       && omega_eval::development_penalty(6) == -32
+       && omega_eval::development_penalty(2) == 0,
+          "development completion must use the declared nonlinear curve");
+
+   expect(omega_eval::undeveloped_units(make(home), White) == 8,
+          "all eight home units must begin undeveloped");
+   expect(omega_eval::undeveloped_units(make(one_developed), White) == 7,
+          "the first distinct developed unit must reduce the count once");
+   expect(omega_eval::undeveloped_units(make(two_developed), White) == 6,
+          "the second distinct developed unit must reduce the count once");
+
+   Ofen_Position repeated = one_developed;
+   repeated.piece_side[square("c2")] = Empty;
+   put(repeated, Champion, White, "e4");
+   expect(omega_eval::undeveloped_units(make(repeated), White) == 7,
+          "moving an active unit again must not improve army readiness");
+
+   Ofen_Position captured_home = home;
+   captured_home.piece_side[square("a0")] = Empty;
+   expect(omega_eval::undeveloped_units(make(captured_home), White) == 8,
+          "capturing an undeveloped unit must not refund readiness");
+
+   Ofen_Position mirrored = colour_rank_mirror(two_developed);
+   expect(white_score(two_developed) == -white_score(mirrored),
+          "development completion must preserve colour symmetry");
+}
+
 void test_endgame_material_classes() {
    Ofen_Position rook = bare_omega();
    put(rook, Rook, White, "e4");
@@ -311,6 +381,7 @@ int main() {
    test_pawns();
    test_king_safety_and_castling();
    test_corner_wizard_development();
+   test_development_completion();
    test_endgame_material_classes();
 
    // Omega evaluation must not perturb the trained standard evaluator or its
