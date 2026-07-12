@@ -289,6 +289,12 @@ void eval_pieces(Eval_Score & score, const Pos & pos, const Attack_Maps & maps,
          score.add(sd, 10, 8);
       }
 
+      // Reward breadth of development rather than repeated moves by an
+      // already-active unit.  The last two home units remain optional so the
+      // term does not prescribe a rigid opening scheme, and it fades out with
+      // the normal middlegame/endgame taper.
+      score.add(sd, development_penalty(undeveloped_units(pos, sd)), 0);
+
       // Connected rooks retain more of their value on the expanded board.
       Bit rooks = pos.pieces(Rook, sd);
       for (Bit firsts = rooks; firsts != 0; firsts = bit::rest(firsts)) {
@@ -448,6 +454,32 @@ int material_scale(const Pos & pos, int value) {
    return value;
 }
 
+}
+
+int undeveloped_units(const Pos & pos, Side sd) {
+   int developed = 0;
+
+   const Piece home_rank_pieces[] { Knight, Bishop, Champion };
+   for (Piece pc : home_rank_pieces) {
+      for (Bit b = pos.pieces(pc, sd); b != 0; b = bit::rest(b)) {
+         Square sq = bit::first(b);
+         if (square_is_corner(sq) || relative_rank(sq, sd) != 0) developed++;
+      }
+   }
+
+   for (Bit b = pos.pieces(Wizard, sd); b != 0; b = bit::rest(b)) {
+      if (!square_is_corner(bit::first(b))) developed++;
+   }
+
+   // Omega begins with eight eligible units.  Missing units do not count as
+   // developed, so capturing a sleeping piece cannot refund this penalty.
+   return std::max(0, 8 - developed);
+}
+
+int development_penalty(int undeveloped) {
+   int bounded = std::max(0, std::min(undeveloped, 8));
+   int excess = std::max(0, bounded - 2);
+   return -2 * excess * excess;
 }
 
 int piece_value(Piece pc) {
