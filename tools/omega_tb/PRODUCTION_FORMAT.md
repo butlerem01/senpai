@@ -2,8 +2,8 @@
 
 `production_format.py` and `src/production_format.*` implement the same
 fixed-layout, little-endian container. The Python implementation is the
-offline atomic writer/reference reader. The native implementation is an
-unused loader foundation; no search or evaluation code calls it yet.
+offline atomic writer/reference reader. Senpai's native runtime loads only
+files which pass the same strict reader.
 
 ## Semantic contract
 
@@ -13,6 +13,7 @@ unused loader foundation; no search or evaluation code calls it yet.
   - KRK: strong king, rook, bare king.
   - KCK: Champion-side king, Champion, bare king.
   - KRKC: rook-side king, rook, Champion-side king, Champion.
+  - KRKN: rook-side king, rook, Knight-side king, Knight.
 - Historically illegal dense slots use the `invalid` WDL code.
 - Current legal/index populations are fixed in the header validator:
 
@@ -21,14 +22,15 @@ unused loader foundation; no search or evaluation code calls it yet.
 | KRK | 273,816 | 235,033 |
 | KCK | 273,816 | 244,779 |
 | KRKC | 27,594,696 | 22,607,206 |
+| KRKN | 27,594,696 | 23,034,346 |
 
 The canonical SHA-256 rules fingerprint covers geometry, index version,
-historical legality, King/Rook/Champion moves, the automatic 100-ply draw,
+historical legality, King/Rook/Champion/Knight moves, the automatic 100-ply draw,
 current lone-N/B/C/W insufficient-material policy, and the WDL5/DTZ16
 encoding. Its v1 hexadecimal value is:
 
 ```text
-af9f4553fa6fa50065b1352f352294522b5d96c0ad10f0fd2a517fac53177939
+cbae8f8bf3e2ab2e621a2eab8ddbec36895b3378535f9ce0ba134b72382ebf39
 ```
 
 A rules change requires a new fingerprint and regenerated files. The native
@@ -59,7 +61,7 @@ through `encode_theoretical_wdl()` before `write_table()`. The conversion
 rejects `unknown` rather than silently storing it as a production loss.
 
 KCK is additionally validated against current rule policy: every legal state
-must be a draw. KRKC uses the same format and semantic metadata. Only an
+must be a draw. KRKC and KRKN use the same format and semantic metadata. Only an
 `OMTB4WDL` artifact marked `complete=true` with `boundary=full` is eligible
 for production conversion.
 
@@ -67,8 +69,9 @@ for production conversion.
 
 `convert_to_production.py` validates the complete JSON-line source container,
 its frozen rules/index metadata, outcome populations and payload checksum
-before explicitly remapping the four-valued source codes to WDL5. KRKC also
-requires the exact KRK source dependency used during four-man generation:
+before explicitly remapping the four-valued source codes to WDL5. Both
+four-man families also require the exact KRK source dependency used during
+generation:
 
 ```powershell
 python tools/omega_tb/convert_to_production.py `
@@ -79,9 +82,19 @@ python tools/omega_tb/convert_to_production.py `
   --input build/omega-tb/omega-krkc-wdl-v1.omtb4 `
   --krk-dependency .build-omega-tb/omega-krk-wdl-v1.omtb3 `
   --output .build-omega-tb/production/omega-krkc-wdl-v1.omtb
+
+python tools/omega_tb/convert_to_production.py `
+  --input build/omega-tb/omega-krkn-wdl-v1.omtb4 `
+  --krk-dependency .build-omega-tb/omega-krk-wdl-v1.omtb3 `
+  --output .build-omega-tb/production/omega-krkn-wdl-v1.omtb
 ```
 
-Run `test-production-conversion.ps1` to repeat both conversions, check
+`OmegaTablebasePath` names a directory containing the fixed production
+filenames `omega-krk-wdl-v1.omtb`, `omega-kck-wdl-v1.omtb`,
+`omega-krkc-wdl-v1.omtb`, and `omega-krkn-wdl-v1.omtb`. Loading is
+all-or-nothing.
+
+Run `test-production-conversion.ps1` to repeat the conversions, check
 byte-for-byte determinism, and load the full outputs through the native C++
 reader.
 
@@ -136,7 +149,7 @@ destination table unchanged on native load failure.
 
 ## Tests
 
-Python tests cover KRK/KCK round trips, optional DTZ, KRKC frozen metadata,
+Python tests cover KRK/KCK round trips, optional DTZ, KRKC/KRKN frozen metadata,
 invalid WDL codes, KCK policy violations, material/rules mismatch, header and
 payload corruption, and truncation:
 

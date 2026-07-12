@@ -3,10 +3,11 @@
 ## Rules and role normalization
 
 Tables normalize by material role rather than colour. Three-man order is
-strong-side king, role piece, bare king, side-to-move bit. KRKC order is
-rook-side king, rook, Champion-side king, Champion, side-to-move bit. The
-rules fingerprint covers the 104-square geometry, historical-legality test,
-Champion movement, and current insufficient-material policy.
+strong-side king, role piece, bare king, side-to-move bit. Four-man order is
+rook-side king, rook, minor-side king, minor, side-to-move bit, with the minor
+fixed by the material signature (`KRKC` or `KRKN`). The material-specific rules
+fingerprint covers the 104-square geometry, historical-legality test, Champion
+or Knight movement, and current insufficient-material policy.
 
 A stored placement is historically legal when the side that just moved is not
 in check. The current side may be in check, so legal checkmate and stalemate
@@ -31,15 +32,16 @@ the Python index and compares the graphs. The default deterministic sample
 covers ordinary, detached-corner, invalid-history, mate, and reported-game
 states; an exhaustive mode covers every three-man D4 slot.
 
-`KCK` is all draw under the current `omega_insufficient_material()` rule. It is
-still indexed and serialized so KRKC capture dependencies are explicit and a
-future rules change cannot silently reuse incompatible data.
+`KCK` is all draw under the current `omega_insufficient_material()` rule.
+`KNK` captures use the same current automatic-draw policy. Their explicit
+rules fingerprints prevent a future policy change from reusing incompatible
+four-man data.
 
 The three-man solver uses a one-byte status and one-byte unresolved-successor
 counter per canonical slot. Predecessors are generated on demand, keeping the
 working set small and making a full verified build practical in stock Python.
 
-## Retained KRKC index
+## Retained four-man index
 
 The 104-square board has 16 first-king D4 orbits. Ten have a trivial
 stabilizer and six retain one reflection. A generic block contains
@@ -50,17 +52,23 @@ stabilizer and six retain one reflection. A generic block contains
 |---|---:|
 | Raw placements with turn | 220,710,048 |
 | D4-canonical placements with turn | 27,594,696 |
-| Legal D4-canonical states | 22,607,206 |
+| Legal KRKC D4-canonical states | 22,607,206 |
+| Legal KRKN D4-canonical states | 23,034,346 |
 
 The reported `Kw2/Rj6` versus `Ke5/Ch4` position is permanently fixed at dense
 index `26,750,996`, protecting compatibility with the retained v1 design.
 
-## Implemented four-man dependency: KRKC
+## Implemented four-man dependencies: KRKC and KRKN
 
 Within KRKC, quiet moves remain in-class. Captures leave the family:
 
 - `R x C` probes the exact KRK table.
 - `C x R` probes the rules-policy KCK table.
+
+KRKN uses the identical role-normalized graph construction with Knight jumps,
+including jumps between the detached corners and their two adjacent regular
+squares. `R x N` probes KRK, while `N x R` is a KNK draw under the current
+insufficient-material policy.
 
 The standalone C++17 four-man pass reuses the same attractor algorithm and
 on-demand predecessor strategy. It does not infer a blanket draw from the
@@ -70,11 +78,10 @@ which preserves WDL semantics without storing edge multiplicity.
 
 The full working set is bounded by a one-byte status array, a one-byte
 unresolved-successor array, and a `uint32_t` FIFO whose entries are appended at
-most once per legal state. Captures are resolved during enumeration: `R x C`
-probes the checksummed OMTB3 KRK dependency and `C x R` is a KCK draw under the
-current rules fingerprint. Quiet predecessors are generated only when a child
-becomes decisive. Unresolved cycles become draws, followed by an optional full
-Bellman pass.
+most once per legal state. Rook-side captures probe the checksummed OMTB3 KRK
+dependency; minor-side captures of the rook are KCK/KNK policy draws. Quiet
+predecessors are generated only when a child becomes decisive. Unresolved
+cycles become draws, followed by an optional full Bellman pass.
 
 Small mode ranks real production states but treats any same-family child beyond
 the configured dense prefix as a draw boundary. It is therefore an exact solve

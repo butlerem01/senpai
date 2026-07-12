@@ -9,6 +9,8 @@ TOOLS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(TOOLS))
 
 from convert_to_production import (
+    FOUR_MAN_ORDERS,
+    KRKN_RULES,
     SOURCE_CODES,
     THREE_MAN_ORDER,
     THREE_MAN_RULES,
@@ -46,6 +48,43 @@ def write_source(path: Path, payload: bytes, **changes):
     path.write_bytes(json.dumps(header, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n" + payload)
 
 
+def source_krkn_payload():
+    spec = material_spec("KRKN")
+    invalid = spec.state_count - spec.legal_count
+    return bytes([SOURCE_CODES["invalid"]]) * invalid + bytes([SOURCE_CODES["draw"]]) * spec.legal_count
+
+
+def write_krkn_source(path: Path, payload: bytes, krk_payload_sha256: str, **changes):
+    spec = material_spec("KRKN")
+    counts = {name: payload.count(code) for name, code in SOURCE_CODES.items()}
+    header = {
+        "magic": "OMTB4WDL",
+        "version": 1,
+        "material": "KRKN",
+        "labelled_order": FOUR_MAN_ORDERS["KRKN"],
+        "index": "D4-first-piece-v1",
+        "square_count": 104,
+        "dense_state_count": spec.state_count,
+        "state_count": spec.state_count,
+        "complete": True,
+        "boundary": "full",
+        "legal_count": spec.legal_count,
+        "rules": KRKN_RULES,
+        "rules_sha256": hashlib.sha256(KRKN_RULES.encode("ascii")).hexdigest(),
+        "krk_payload_sha256": krk_payload_sha256,
+        "codes": SOURCE_CODES,
+        "payload_sha256": hashlib.sha256(payload).hexdigest(),
+        "counts": counts,
+    }
+    for name, count in counts.items():
+        header[f"{name}_count"] = count
+    header.update(changes)
+    path.write_bytes(
+        json.dumps(header, sort_keys=True, separators=(",", ":")).encode("ascii")
+        + b"\n" + payload
+    )
+
+
 class ConvertToProductionTests(unittest.TestCase):
     def test_full_krk_conversion_and_code_remap(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -78,6 +117,38 @@ class ConvertToProductionTests(unittest.TestCase):
             source.write_bytes(b"{" + b" " * (64 * 1024) + b"}\n")
             with self.assertRaisesRegex(ValueError, "oversized"):
                 read_source_artifact(source)
+
+    def test_full_krkn_conversion_dependency_and_code_remap(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            dependency = root / "omega-krk-wdl-v1.omtb3"
+            dependency_payload = source_krk_payload()
+            write_source(dependency, dependency_payload)
+
+            source = root / "omega-krkn-wdl-v1.omtb4"
+            payload = source_krkn_payload()
+            write_krkn_source(
+                source, payload, hashlib.sha256(dependency_payload).hexdigest()
+            )
+            artifact = read_source_artifact(source)
+            self.assertEqual("KRKN", artifact.material)
+
+            output = root / "omega-krkn-wdl-v1.omtb"
+            convert_artifact(source, output, dependency)
+            table = read_table(output, "KRKN")
+            self.assertEqual(
+                (4_560_350, 0, 0, 23_034_346, 0, 0),
+                table.header.outcome_counts,
+            )
+
+            wrong_dependency = root / "wrong-krk.omtb3"
+            changed_dependency = bytearray(dependency_payload)
+            changed_dependency[-1] = SOURCE_CODES["loss"]
+            # Preserve legal source codes while changing the hash.
+            changed_dependency[-2] = SOURCE_CODES["win"]
+            write_source(wrong_dependency, bytes(changed_dependency))
+            with self.assertRaisesRegex(ValueError, "different KRK dependency"):
+                convert_artifact(source, output, wrong_dependency)
 
 
 if __name__ == "__main__":

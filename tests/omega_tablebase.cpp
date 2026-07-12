@@ -83,6 +83,7 @@ struct Cleanup {
       omega_tb::G_Tablebases.configure("");
       const fmt::Material materials[] {
          fmt::Material::KRK, fmt::Material::KCK, fmt::Material::KRKC,
+         fmt::Material::KRKN,
       };
       for (fmt::Material material : materials) {
          std::remove(fixture_path(material).c_str());
@@ -126,6 +127,9 @@ int main() {
    const Pos krkc_draw = make(
       "10/10/10/9R/4k5/7c2/10/10/10/10[-/K/-/-] w - - 0 1"
    );
+   const Pos krkn_draw = make(
+      "10/10/10/9R/4k5/3n6/10/1K8/10/10[-/-/-/-] w - - 0 1"
+   );
    const Pos krk_stalemate = make(
       "R9/1K8/10/10/10/10/10/10/10/10[-/-/-/k] b - - 0 1"
    );
@@ -137,6 +141,7 @@ int main() {
    assert(is_legal(krk_win));
    assert(is_legal(kck_draw));
    assert(is_legal(krkc_draw));
+   assert(is_legal(krkn_draw));
    assert(is_legal(krk_stalemate));
    assert(is_stalemate(krk_stalemate));
    assert(!krk_stalemate.is_draw());
@@ -159,6 +164,9 @@ int main() {
    const std::uint32_t krk_stalemate_index = omega_tb::dense_index(
       fmt::Material::KRK, {{ 18, 9, 103, 0 }}, 1
    );
+   const std::uint32_t krkn_draw_index = omega_tb::dense_index(
+      fmt::Material::KRKN, {{ 12, 96, 45, 34 }}, 0
+   );
 
    assert(_mkdir(Fixture_Directory.c_str()) == 0);
    Cleanup cleanup;
@@ -172,6 +180,9 @@ int main() {
    });
    write_fixture(fmt::Material::KRKC, {
       { 26750996, fmt::Wdl::Draw },
+   });
+   write_fixture(fmt::Material::KRKN, {
+      { krkn_draw_index, fmt::Wdl::Draw },
    });
 
    const omega_tb::Configure_Result loaded =
@@ -205,6 +216,12 @@ int main() {
    assert(probe.index == 26750996);
    assert(omega_tb::probe_search_draw(krkc_draw));
 
+   assert(omega_tb::G_Tablebases.probe(krkn_draw, probe));
+   assert(probe.material == fmt::Material::KRKN);
+   assert(probe.wdl == fmt::Wdl::Draw);
+   assert(probe.index == krkn_draw_index);
+   assert(omega_tb::probe_search_draw(krkn_draw));
+
    // Terminal native rules precede the table: stalemate and the current
    // halfmove-clock draw gate are not replaced by a production WDL result.
    assert(omega_tb::G_Tablebases.probe(krk_stalemate, probe));
@@ -215,6 +232,13 @@ int main() {
 
    // A failed reload keeps the fully validated table set currently visible to
    // search threads, and disabling is explicit and atomic.
+   assert(std::remove(fixture_path(fmt::Material::KRKN).c_str()) == 0);
+   const omega_tb::Configure_Result missing_krkn =
+      omega_tb::G_Tablebases.configure(Fixture_Directory);
+   assert(!missing_krkn.ok && missing_krkn.retained_previous);
+   assert(missing_krkn.message.find("omega-krkn-wdl-v1.omtb") != std::string::npos);
+   assert(omega_tb::G_Tablebases.probe(krkn_draw, probe));
+
    const omega_tb::Configure_Result failed =
       omega_tb::G_Tablebases.configure("omega-tablebase-directory-does-not-exist");
    assert(!failed.ok && failed.retained_previous);

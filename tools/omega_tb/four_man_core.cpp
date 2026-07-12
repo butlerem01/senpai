@@ -18,9 +18,20 @@ constexpr const char * Three_Man_Index = "D4-first-piece-v1";
 constexpr const char * Three_Man_Rules =
     "omega-104-v1;d4-first-piece-v1;historical-legality-v1;"
     "krk-theoretical-wdl;kck-insufficient-material-v1";
-constexpr const char * Four_Man_Rules =
+constexpr const char * Krkc_Rules =
     "omega-104-v1;d4-first-piece-v1;historical-legality-v1;"
     "krkc-theoretical-wdl;krk-OMTB3WDL-v1;kck-insufficient-material-v1";
+constexpr const char * Krkn_Rules =
+    "omega-104-v1;d4-first-piece-v1;historical-legality-v1;"
+    "krkn-theoretical-wdl;krk-OMTB3WDL-v1;knk-insufficient-material-v1";
+
+const char * four_man_rules(FourManMaterial material) {
+    return material == FourManMaterial::Krkc ? Krkc_Rules : Krkn_Rules;
+}
+
+const char * minor_name(FourManMaterial material) {
+    return material == FourManMaterial::Krkc ? "champion" : "knight";
+}
 
 std::uint8_t square_from_coordinate(const std::array<Coordinate, Square_Count> & coordinates,
                                     int x, int y) {
@@ -188,6 +199,8 @@ Geometry::Geometry() {
                 king_moves_[origin].push_back(static_cast<std::uint8_t>(target));
             if (champion_attacks(static_cast<std::uint8_t>(origin), static_cast<std::uint8_t>(target)))
                 champion_moves_[origin].push_back(static_cast<std::uint8_t>(target));
+            if (knight_attacks(static_cast<std::uint8_t>(origin), static_cast<std::uint8_t>(target)))
+                knight_moves_[origin].push_back(static_cast<std::uint8_t>(target));
         }
         if (origin >= Regular_Squares) continue;
         const int x = coordinates_[origin].x;
@@ -218,6 +231,12 @@ bool Geometry::champion_attacks(std::uint8_t first, std::uint8_t second) const {
     return (std::abs(dx) == 1 && dy == 0) || (std::abs(dy) == 1 && dx == 0) ||
            (std::abs(dx) == 2 && dy == 0) || (std::abs(dy) == 2 && dx == 0) ||
            (std::abs(dx) == 2 && std::abs(dy) == 2);
+}
+
+bool Geometry::knight_attacks(std::uint8_t first, std::uint8_t second) const {
+    const int dx = std::abs(coordinates_[second].x - coordinates_[first].x);
+    const int dy = std::abs(coordinates_[second].y - coordinates_[first].y);
+    return (dx == 1 && dy == 2) || (dx == 2 && dy == 1);
 }
 
 bool Geometry::rook_attacks(std::uint8_t first, std::uint8_t second,
@@ -545,9 +564,19 @@ std::uint64_t json_unsigned(const std::string & header, const std::string & key)
     return std::stoull(header.substr(position, end - position));
 }
 
+const char * four_man_material_name(FourManMaterial material) {
+    return material == FourManMaterial::Krkc ? "KRKC" : "KRKN";
+}
+
+FourManMaterial parse_four_man_material(const std::string & name) {
+    if (name == "krkc" || name == "KRKC") return FourManMaterial::Krkc;
+    if (name == "krkn" || name == "KRKN") return FourManMaterial::Krkn;
+    throw std::invalid_argument("four-man material must be krkc or krkn");
+}
+
 void write_four_man_file(const std::string & path, const std::vector<std::uint8_t> & payload,
                          std::uint64_t legal_count, bool complete,
-                         const std::string & dependency_sha256) {
+                         const std::string & dependency_sha256, FourManMaterial material) {
     std::uint64_t invalid = 0, loss = 0, draw = 0, win = 0;
     for (std::uint8_t outcome : payload) {
         if (outcome == Invalid) ++invalid;
@@ -562,17 +591,21 @@ void write_four_man_file(const std::string & path, const std::vector<std::uint8_
         throw std::runtime_error("complete four-man payload has the wrong size");
 
     const std::string payload_sha = sha256(payload.data(), payload.size());
-    const std::string rules_sha = sha256(std::string(Four_Man_Rules));
+    const std::string rules = four_man_rules(material);
+    const std::string rules_sha = sha256(rules);
+    const std::string minor = minor_name(material);
     std::ostringstream header;
-    header << "{\"magic\":\"OMTB4WDL\",\"version\":1,\"material\":\"KRKC\""
-           << ",\"labelled_order\":[\"rook_king\",\"rook\",\"champion_king\",\"champion\",\"turn\"]"
+    header << "{\"magic\":\"OMTB4WDL\",\"version\":1,\"material\":\""
+           << four_man_material_name(material) << "\""
+           << ",\"labelled_order\":[\"rook_king\",\"rook\",\"" << minor
+           << "_king\",\"" << minor << "\",\"turn\"]"
            << ",\"index\":\"D4-first-piece-v1\",\"square_count\":104"
            << ",\"dense_state_count\":" << Four_Man_State_Count
            << ",\"state_count\":" << payload.size()
            << ",\"complete\":" << (complete ? "true" : "false")
            << ",\"boundary\":\"" << (complete ? "full" : "outside-draw-test") << "\""
            << ",\"legal_count\":" << legal_count
-           << ",\"rules\":\"" << Four_Man_Rules << "\""
+           << ",\"rules\":\"" << rules << "\""
            << ",\"rules_sha256\":\"" << rules_sha << "\""
            << ",\"krk_payload_sha256\":\"" << dependency_sha256 << "\""
            << ",\"codes\":{\"invalid\":0,\"loss\":2,\"draw\":3,\"win\":4}"
@@ -599,18 +632,25 @@ void write_four_man_file(const std::string & path, const std::vector<std::uint8_
     }
 }
 
-std::vector<std::uint8_t> read_four_man_file(const std::string & path) {
+FourManTable read_four_man_file(const std::string & path) {
     std::string header;
     std::vector<std::uint8_t> payload = read_payload(path, header);
     if (json_string(header, "magic") != "OMTB4WDL" || json_unsigned(header, "version") != 1)
         throw std::runtime_error("unsupported OMTB4WDL file");
-    if (json_string(header, "material") != "KRKC" ||
-        json_string(header, "index") != "D4-first-piece-v1")
+    const FourManMaterial material = parse_four_man_material(json_string(header, "material"));
+    if (json_string(header, "index") != "D4-first-piece-v1")
         throw std::runtime_error("four-man table metadata mismatch");
+    const std::string minor = minor_name(material);
+    const std::string labelled_order = "\"labelled_order\":[\"rook_king\",\"rook\",\"" +
+        minor + "_king\",\"" + minor + "\",\"turn\"]";
+    if (header.find(labelled_order) == std::string::npos)
+        throw std::runtime_error("four-man labelled-piece order mismatch");
     if (json_unsigned(header, "dense_state_count") != Four_Man_State_Count ||
         json_unsigned(header, "state_count") != payload.size())
         throw std::runtime_error("four-man table state count mismatch");
-    if (json_string(header, "rules_sha256") != sha256(std::string(Four_Man_Rules)))
+    const std::string rules = four_man_rules(material);
+    if (json_string(header, "rules") != rules ||
+        json_string(header, "rules_sha256") != sha256(rules))
         throw std::runtime_error("four-man rules fingerprint mismatch");
     const std::string actual_sha = sha256(payload.data(), payload.size());
     if (json_string(header, "payload_sha256") != actual_sha)
@@ -634,15 +674,17 @@ std::vector<std::uint8_t> read_four_man_file(const std::string & path) {
         throw std::runtime_error("four-man outcome counts mismatch");
     if (json_string(header, "krk_payload_sha256").size() != 64)
         throw std::runtime_error("four-man dependency checksum is missing");
-    return payload;
+    return FourManTable { material, std::move(payload) };
 }
 
 void inspect_four_man_file(const std::string & path) {
-    const std::vector<std::uint8_t> payload = read_four_man_file(path);
+    const FourManTable table = read_four_man_file(path);
+    const std::vector<std::uint8_t> & payload = table.payload;
     std::uint64_t legal = 0;
     for (std::uint8_t outcome : payload)
         if (outcome == Loss || outcome == Draw || outcome == Win) ++legal;
-    std::cout << "OMTB4WDL verified: states=" << payload.size()
+    std::cout << "OMTB4WDL " << four_man_material_name(table.material)
+              << " verified: states=" << payload.size()
               << " legal=" << legal << " sha256="
               << sha256(payload.data(), payload.size()) << '\n';
 }

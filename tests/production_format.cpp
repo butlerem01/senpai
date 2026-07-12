@@ -45,6 +45,15 @@ std::vector<std::uint8_t> kck_payload() {
    return result;
 }
 
+std::vector<std::uint8_t> krkn_payload() {
+   std::vector<std::uint8_t> result(
+      static_cast<std::size_t>(fmt::state_count(fmt::Material::KRKN)),
+      static_cast<std::uint8_t>(fmt::Wdl::Invalid));
+   std::fill(result.end() - static_cast<std::ptrdiff_t>(fmt::legal_count(fmt::Material::KRKN)),
+             result.end(), static_cast<std::uint8_t>(fmt::Wdl::Draw));
+   return result;
+}
+
 std::vector<std::uint8_t> read_bytes(const std::string & path) {
    std::ifstream stream(path, std::ios::binary);
    assert(stream);
@@ -85,11 +94,13 @@ struct Cleanup {
 int main() {
    const std::string krk_path = "production-format-krk.omtb";
    const std::string kck_path = "production-format-kck.omtb";
+   const std::string krkn_path = "production-format-krkn.omtb";
    const std::string dtz_path = "production-format-krk-dtz.omtb";
    const std::string payload_corrupt = "production-format-payload-corrupt.omtb";
    const std::string header_corrupt = "production-format-header-corrupt.omtb";
    const std::string truncated = "production-format-truncated.omtb";
-   Cleanup cleanup {{ krk_path, kck_path, dtz_path, payload_corrupt, header_corrupt, truncated }};
+   Cleanup cleanup {{ krk_path, kck_path, krkn_path, dtz_path,
+                      payload_corrupt, header_corrupt, truncated }};
 
    assert(fmt::state_count(fmt::Material::KRK) == 273816);
    assert(fmt::legal_count(fmt::Material::KRK) == 235033);
@@ -97,8 +108,10 @@ int main() {
    assert(fmt::legal_count(fmt::Material::KCK) == 244779);
    assert(fmt::state_count(fmt::Material::KRKC) == 27594696);
    assert(fmt::legal_count(fmt::Material::KRKC) == 22607206);
+   assert(fmt::state_count(fmt::Material::KRKN) == 27594696);
+   assert(fmt::legal_count(fmt::Material::KRKN) == 23034346);
    assert(hex(fmt::canonical_rules_fingerprint()) ==
-          "af9f4553fa6fa50065b1352f352294522b5d96c0ad10f0fd2a517fac53177939");
+          "cbae8f8bf3e2ab2e621a2eab8ddbec36895b3378535f9ce0ba134b72382ebf39");
 
    std::string error;
    const std::vector<std::uint8_t> krk = krk_payload();
@@ -123,7 +136,7 @@ int main() {
    assert(hex(table.metadata.payload_sha256) ==
           "9df95c3ab43f6c79c8ee33acd5cb860596f3cb7cbe5981cb986dc478707f5bd3");
    assert(hex(table.metadata.header_sha256) ==
-          "e505ce3fe287b194da31ad8fe711f07d335c1ba110ecd87d587318d76e3a9fd1");
+          "8d661c6aaffb69c1d9c43333b384217ec4291bba2e70c9d9e636fe25db44a8df");
 
    std::vector<std::uint16_t> dtz(krk.size(), 0);
    dtz.back() = 7;
@@ -142,6 +155,17 @@ int main() {
    assert(fmt::read_file(kck_path, fmt::canonical_requirements(fmt::Material::KCK),
                          kck_table, error));
    assert(kck_table.metadata.outcome_counts[3] == 244779);
+
+   const std::vector<std::uint8_t> krkn = krkn_payload();
+   assert(fmt::write_file(krkn_path, fmt::Material::KRKN, krkn, {}, error));
+   fmt::Table krkn_table;
+   assert(fmt::read_file(krkn_path, fmt::canonical_requirements(fmt::Material::KRKN),
+                         krkn_table, error));
+   assert(krkn_table.metadata.material == fmt::Material::KRKN);
+   assert(krkn_table.metadata.state_count == 27594696);
+   assert(krkn_table.metadata.legal_count == 23034346);
+   assert(krkn_table.metadata.outcome_counts[0] == 4560350);
+   assert(krkn_table.metadata.outcome_counts[3] == 23034346);
 
    // Unsupported codes are rejected before a file is written.
    std::vector<std::uint8_t> bad_code = krk;

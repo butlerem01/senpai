@@ -53,7 +53,7 @@ class ProductionFormatTests(unittest.TestCase):
                 table.header.payload_sha256.hex(),
             )
             self.assertEqual(
-                "e505ce3fe287b194da31ad8fe711f07d335c1ba110ecd87d587318d76e3a9fd1",
+                "8d661c6aaffb69c1d9c43333b384217ec4291bba2e70c9d9e636fe25db44a8df",
                 table.header.header_sha256.hex(),
             )
 
@@ -117,6 +117,12 @@ class ProductionFormatTests(unittest.TestCase):
         spec = material_spec("KRKC")
         self.assertEqual(27_594_696, spec.state_count)
         self.assertEqual(22_607_206, spec.legal_count)
+        self.assertEqual(4, spec.piece_count)
+
+    def test_krkn_shape_is_frozen_without_allocating_the_payload(self):
+        spec = material_spec("KRKN")
+        self.assertEqual(27_594_696, spec.state_count)
+        self.assertEqual(23_034_346, spec.legal_count)
         self.assertEqual(4, spec.piece_count)
 
 

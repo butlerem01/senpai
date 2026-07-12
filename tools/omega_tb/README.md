@@ -2,7 +2,7 @@
 
 This directory contains standalone, evaluator-independent foundations for
 exact Omega Chess tablebases. Nothing here changes Senpai's search or playing
-behaviour, and this branch intentionally contains **no heuristic KRKC score
+behaviour, and this branch intentionally contains **no heuristic four-man score
 scaler**.
 
 ## Implemented
@@ -11,16 +11,15 @@ scaler**.
   104 Omega squares (`omega_geometry.py`).
 - The retained KRKC index/count proof (`index_prototype.py`).
 - A full exact theoretical-WDL retrograde solver for `KRK`.
-- A rules-exact `KCK` policy table. Senpai currently declares king plus one
-  Champion versus a bare king drawn in `Pos::is_draw()`, before move search, so
-  every legal KCK record is a draw under the current rules fingerprint.
-- A standalone C++17 exact KRKC theoretical-WDL generator
+- Rules-exact `KCK`/`KNK` capture policies. Senpai currently declares king
+  plus one Champion or Knight versus a bare king drawn in `Pos::is_draw()`.
+- A standalone C++17 exact KRKC/KRKN theoretical-WDL generator
   (`four_man_*.{hpp,cpp,ps1}`). It consumes the checksummed KRK dependency,
-  treats KCK captures according to the current automatic-draw policy, and uses
-  on-demand predecessors instead of retaining a reverse graph.
-- A checksummed, read-only offline KRKC probe in `four_man_wdl`. It accepts a
-  dense index or the labelled `rook_king,rook,champion_king,champion,turn`
-  tuple and reports WDL from the side-to-move perspective.
+  treats KCK/KNK captures according to the current automatic-draw policy, and
+  uses on-demand predecessors instead of retaining a reverse graph.
+- A checksummed, read-only offline four-man probe in `four_man_wdl`. It accepts
+  a dense index or the labelled `rook_king,rook,minor_king,minor,turn` tuple
+  and reports WDL from the side-to-move perspective.
 - Versioned, checksummed three-man foundation files. They are deliberately not
   yet an engine probe format.
 
@@ -62,18 +61,27 @@ fast Bellman/serialization regression and not a substitute for the full table:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/omega_tb/four_man_test.ps1
+
+# Also freeze the completed KRKN counts/hash and reported-suite probes.
+powershell -ExecutionPolicy Bypass -File tools/omega_tb/four_man_test.ps1 `
+  -KrknFullPath build/omega-tb/omega-krkn-wdl-v1.omtb4
 ```
 
-Generate the full KRKC WDL file offline:
+Generate the full KRKC and KRKN WDL files offline:
 
 ```powershell
 python tools/omega_tb/three_man_wdl.py --material krk --output build/omega-tb
 powershell -ExecutionPolicy Bypass -File tools/omega_tb/four_man_build.ps1
-.\.build-omega-tb\four_man_wdl.exe --self-test --verify-counts `
+.\.build-omega-tb\four_man_wdl.exe --material krkc --self-test --verify-counts `
   --krk build/omega-tb/omega-krk-wdl-v1.omtb3
-.\.build-omega-tb\four_man_wdl.exe --full --verify `
+.\.build-omega-tb\four_man_wdl.exe --material krkc --full --verify `
   --krk build/omega-tb/omega-krk-wdl-v1.omtb3 `
   --output build/omega-tb/omega-krkc-wdl-v1.omtb4
+.\.build-omega-tb\four_man_wdl.exe --material krkn --self-test --verify-counts `
+  --krk build/omega-tb/omega-krk-wdl-v1.omtb3
+.\.build-omega-tb\four_man_wdl.exe --material krkn --full --verify `
+  --krk build/omega-tb/omega-krk-wdl-v1.omtb3 `
+  --output build/omega-tb/omega-krkn-wdl-v1.omtb4
 
 # Probe one or more records after validating the complete container.
 .\.build-omega-tb\four_man_wdl.exe --probe build/omega-tb/omega-krkc-wdl-v1.omtb4 `
@@ -97,16 +105,17 @@ pass completed in 46.16 seconds on the development machine; use
 | KRK | 273,816 | 235,033 | 339 | 232,962 | 1,732 |
 | KCK | 273,816 | 244,779 | 0 | 244,779 | 0 |
 | KRKC | 27,594,696 | 22,607,206 | 2,909 | 22,576,396 | 27,901 |
+| KRKN | 27,594,696 | 23,034,346 | 2,564 | 23,005,864 | 25,918 |
 
 WDL is stored from the side-to-move perspective. `invalid` occupies the
-remaining three-man index slots. The generated payload is one byte per D4
-slot (273,816 bytes), plus one JSON header line.
+historically illegal index slots. Each generated payload is one byte per D4
+slot plus one JSON header line.
 
 ## Current limitations
 
 - Runtime probing is enabled through the UCI string option
   `OmegaTablebasePath`. The directory must contain the fixed KRK, KCK, and
-  KRKC `OMTBPROD` filenames documented in `PRODUCTION_FORMAT.md`.
+  KRKC, and KRKN `OMTBPROD` filenames documented in `PRODUCTION_FORMAT.md`.
 - Search consumes exact tablebase draws only. Theoretical win/loss records
   deliberately fall through to normal search until DTZ can account for the
   100-ply conversion boundary.
@@ -117,9 +126,10 @@ slot (273,816 bytes), plus one JSON header line.
 - Indexing includes every labelled spatial placement. Historically illegal
   positions receive the reserved `invalid` code; this avoids a second sparse
   legality index.
-- KCK results intentionally follow the current automatic insufficient-material
-  policy. Changing that rule requires a new rules fingerprint and regeneration.
+- KCK/KNK capture results intentionally follow the current automatic
+  insufficient-material policy. Changing that rule requires a new rules
+  fingerprint and regeneration.
 - Native/Python parity is sampled by default to keep normal verification fast;
   use `test-native-parity.ps1 -Exhaustive` for every indexed three-man state.
 
-See `DESIGN.md` for the retained KRKC dependency plan.
+See `DESIGN.md` for the retained four-man dependency plan.

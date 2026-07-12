@@ -35,6 +35,7 @@ constexpr std::uint8_t Piece_None = 0;
 constexpr std::uint8_t Piece_King = 1;
 constexpr std::uint8_t Piece_Rook = 2;
 constexpr std::uint8_t Piece_Champion = 3;
+constexpr std::uint8_t Piece_Knight = 4;
 constexpr std::uint8_t Role_None = 0xFF;
 constexpr std::uint8_t Role_Zero = 0;
 constexpr std::uint8_t Role_One = 1;
@@ -45,7 +46,7 @@ const std::array<std::uint8_t, 8> Magic {{
 
 const char Rules_Description[] =
    "omega-104-v1;d4-first-piece-v1;historical-legality-v1;"
-   "king-v1;rook-v1;champion-v1;100-ply-auto-draw-v1;"
+   "king-v1;rook-v1;champion-v1;knight-v1;100-ply-auto-draw-v1;"
    "insufficient-k-plus-one-nbcw-v1;wdl5-dtz16-v1";
 
 struct Material_Spec {
@@ -70,6 +71,10 @@ const Material_Spec Specs[] {
      {{ Piece_King, Piece_Rook, Piece_King, Piece_Champion }},
      {{ Role_Zero, Role_Zero, Role_One, Role_One }},
      27594696ULL, 22607206ULL },
+   { Material::KRKN, 4,
+     {{ Piece_King, Piece_Rook, Piece_King, Piece_Knight }},
+     {{ Role_Zero, Role_Zero, Role_One, Role_One }},
+     27594696ULL, 23034346ULL },
 };
 
 const Material_Spec * spec_for(Material material) {

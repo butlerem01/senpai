@@ -65,7 +65,7 @@ and native depth-5 search. Native and companion opening perft agree at 40,
 1,600, and 67,202 nodes through depths 1-3.
 
 An evaluator-independent exact endgame foundation lives in `tools/omega_tb`.
-It provides verified KRK, KCK, and KRKC theoretical WDL, native/Python graph
+It provides verified KRK, KCK, KRKC, and KRKN theoretical WDL, native/Python graph
 parity, and a checksummed production format. Set the UCI string option
 `OmegaTablebasePath` to a directory containing the three production files.
 Search consumes exact draws only; theoretical wins and losses fall back to

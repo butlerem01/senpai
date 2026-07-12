@@ -35,13 +35,15 @@ struct Counts {
 class FourManSolver {
 public:
     FourManSolver(const Geometry & geometry, const D4Indexer & four_index,
-                  const KrkTable & krk, std::uint32_t limit, bool verbose)
-        : geometry_(geometry), index_(four_index), krk_(krk), limit_(limit), verbose_(verbose) {
+                  const KrkTable & krk, FourManMaterial material,
+                  std::uint32_t limit, bool verbose)
+        : geometry_(geometry), index_(four_index), krk_(krk), material_(material),
+          limit_(limit), verbose_(verbose) {
         if (limit_ == 0 || limit_ > index_.state_count())
             throw std::invalid_argument("four-man state limit is out of range");
         status_.assign(limit_, Invalid);
         remaining_.assign(limit_, 0);
-        queue_.reserve(limit_ == index_.state_count() ? Four_Man_Legal_Count : limit_);
+        queue_.reserve(limit_ == index_.state_count() ? expected_legal_count() : limit_);
     }
 
     const std::vector<std::uint8_t> & solve() {
@@ -101,8 +103,9 @@ public:
         for (std::uint8_t & outcome : status_)
             if (outcome == Unknown) outcome = Draw;
 
-        if (limit_ == index_.state_count() && legal_count_ != Four_Man_Legal_Count)
-            throw std::logic_error("full KRKC legal-state count changed");
+        if (limit_ == index_.state_count() && legal_count_ != expected_legal_count())
+            throw std::logic_error(std::string("full ") + four_man_material_name(material_) +
+                                   " legal-state count changed");
         return status_;
     }
 
@@ -150,7 +153,8 @@ public:
                 else expected = Draw;
             }
             if (status_[dense] != expected)
-                throw std::logic_error("KRKC Bellman mismatch at dense index " +
+                throw std::logic_error(std::string(four_man_material_name(material_)) +
+                                       " Bellman mismatch at dense index " +
                                        std::to_string(dense));
             progress("verify", dense + 1, started);
         }
@@ -165,22 +169,22 @@ public:
             for (int j = 0; j < i; ++j)
                 if (squares[i] == squares[j]) return false;
         }
-        if (geometry_.king_attacks(state.rook_king, state.champion_king)) return false;
-        if (state.turn == Champion_To_Move)
-            return !geometry_.champion_attacks(state.champion, state.rook_king);
-        return !geometry_.rook_attacks(state.rook, state.champion_king,
-                                       { state.rook_king, state.champion });
+        if (geometry_.king_attacks(state.rook_king, state.minor_king)) return false;
+        if (state.turn == Minor_To_Move)
+            return !minor_attacks(state.minor, state.rook_king);
+        return !geometry_.rook_attacks(state.rook, state.minor_king,
+                                       { state.rook_king, state.minor });
     }
 
     bool in_check(const State4 & state) const {
         if (state.turn == Rook_To_Move)
-            return geometry_.champion_attacks(state.champion, state.rook_king);
-        return geometry_.rook_attacks(state.rook, state.champion_king,
-                                      { state.rook_king, state.champion });
+            return minor_attacks(state.minor, state.rook_king);
+        return geometry_.rook_attacks(state.rook, state.minor_king,
+                                      { state.rook_king, state.minor });
     }
 
     Successors successors(const State4 & state) const {
-        if (!is_legal(state)) throw std::logic_error("successors requested for illegal KRKC state");
+        if (!is_legal(state)) throw std::logic_error("successors requested for illegal four-man state");
         Successors result;
         result.same_class.reserve(32);
 
@@ -202,47 +206,47 @@ public:
 
         if (state.turn == Rook_To_Move) {
             for (std::uint8_t target : geometry_.king_moves(state.rook_king)) {
-                if (target == state.rook || target == state.champion_king) continue;
-                if (target == state.champion) {
-                    if (geometry_.king_attacks(target, state.champion_king)) continue;
-                    const State3 dependency { target, state.rook, state.champion_king, Weak_To_Move };
+                if (target == state.rook || target == state.minor_king) continue;
+                if (target == state.minor) {
+                    if (geometry_.king_attacks(target, state.minor_king)) continue;
+                    const State3 dependency { target, state.rook, state.minor_king, Weak_To_Move };
                     add_external(krk_.probe(dependency));
                 } else {
-                    add_child(State4 { target, state.rook, state.champion_king,
-                                       state.champion, Champion_To_Move });
+                    add_child(State4 { target, state.rook, state.minor_king,
+                                       state.minor, Minor_To_Move });
                 }
             }
             for (const auto & ray : geometry_.rook_rays(state.rook)) {
                 for (std::uint8_t target : ray) {
-                    if (target == state.rook_king || target == state.champion_king ||
-                        target == state.champion) {
-                        if (target == state.champion) {
+                    if (target == state.rook_king || target == state.minor_king ||
+                        target == state.minor) {
+                        if (target == state.minor) {
                             const State3 dependency { state.rook_king, target,
-                                                      state.champion_king, Weak_To_Move };
+                                                      state.minor_king, Weak_To_Move };
                             add_external(krk_.probe(dependency));
                         }
                         break;
                     }
-                    add_child(State4 { state.rook_king, target, state.champion_king,
-                                       state.champion, Champion_To_Move });
+                    add_child(State4 { state.rook_king, target, state.minor_king,
+                                       state.minor, Minor_To_Move });
                 }
             }
         } else {
-            for (std::uint8_t target : geometry_.king_moves(state.champion_king)) {
-                if (target == state.champion || target == state.rook_king) continue;
+            for (std::uint8_t target : geometry_.king_moves(state.minor_king)) {
+                if (target == state.minor || target == state.rook_king) continue;
                 if (target == state.rook) {
                     if (!geometry_.king_attacks(target, state.rook_king)) add_external(Draw);
                 } else {
                     add_child(State4 { state.rook_king, state.rook, target,
-                                       state.champion, Rook_To_Move });
+                                       state.minor, Rook_To_Move });
                 }
             }
-            for (std::uint8_t target : geometry_.champion_moves(state.champion)) {
-                if (target == state.champion_king || target == state.rook_king) continue;
+            for (std::uint8_t target : minor_moves(state.minor)) {
+                if (target == state.minor_king || target == state.rook_king) continue;
                 if (target == state.rook) {
-                    add_external(Draw); // Current KCK insufficient-material policy.
+                    add_external(Draw); // Current KCK/KNK insufficient-material policy.
                 } else {
-                    add_child(State4 { state.rook_king, state.rook, state.champion_king,
+                    add_child(State4 { state.rook_king, state.rook, state.minor_king,
                                        target, Rook_To_Move });
                 }
             }
@@ -255,7 +259,7 @@ public:
     }
 
     std::vector<std::uint32_t> predecessors(const State4 & state) const {
-        if (!is_legal(state)) throw std::logic_error("predecessors requested for illegal KRKC state");
+        if (!is_legal(state)) throw std::logic_error("predecessors requested for illegal four-man state");
         std::vector<std::uint32_t> result;
         result.reserve(32);
         auto add_parent = [&](const State4 & parent) {
@@ -265,33 +269,33 @@ public:
             if (dense < limit_) result.push_back(dense);
         };
 
-        if (state.turn == Champion_To_Move) {
+        if (state.turn == Minor_To_Move) {
             for (std::uint8_t origin : geometry_.king_moves(state.rook_king)) {
-                if (origin == state.rook || origin == state.champion_king || origin == state.champion)
+                if (origin == state.rook || origin == state.minor_king || origin == state.minor)
                     continue;
-                add_parent(State4 { origin, state.rook, state.champion_king,
-                                    state.champion, Rook_To_Move });
+                add_parent(State4 { origin, state.rook, state.minor_king,
+                                    state.minor, Rook_To_Move });
             }
             for (const auto & ray : geometry_.rook_rays(state.rook)) {
                 for (std::uint8_t origin : ray) {
-                    if (origin == state.rook_king || origin == state.champion_king ||
-                        origin == state.champion) break;
-                    add_parent(State4 { state.rook_king, origin, state.champion_king,
-                                        state.champion, Rook_To_Move });
+                    if (origin == state.rook_king || origin == state.minor_king ||
+                        origin == state.minor) break;
+                    add_parent(State4 { state.rook_king, origin, state.minor_king,
+                                        state.minor, Rook_To_Move });
                 }
             }
         } else {
-            for (std::uint8_t origin : geometry_.king_moves(state.champion_king)) {
-                if (origin == state.rook_king || origin == state.rook || origin == state.champion)
+            for (std::uint8_t origin : geometry_.king_moves(state.minor_king)) {
+                if (origin == state.rook_king || origin == state.rook || origin == state.minor)
                     continue;
                 add_parent(State4 { state.rook_king, state.rook, origin,
-                                    state.champion, Champion_To_Move });
+                                    state.minor, Minor_To_Move });
             }
-            for (std::uint8_t origin : geometry_.champion_moves(state.champion)) {
+            for (std::uint8_t origin : minor_moves(state.minor)) {
                 if (origin == state.rook_king || origin == state.rook ||
-                    origin == state.champion_king) continue;
-                add_parent(State4 { state.rook_king, state.rook, state.champion_king,
-                                    origin, Champion_To_Move });
+                    origin == state.minor_king) continue;
+                add_parent(State4 { state.rook_king, state.rook, state.minor_king,
+                                    origin, Minor_To_Move });
             }
         }
         std::sort(result.begin(), result.end());
@@ -305,8 +309,8 @@ public:
         index_.unrank(dense, squares, state.turn);
         state.rook_king = squares[0];
         state.rook = squares[1];
-        state.champion_king = squares[2];
-        state.champion = squares[3];
+        state.minor_king = squares[2];
+        state.minor = squares[3];
         return state;
     }
 
@@ -314,12 +318,29 @@ private:
     const Geometry & geometry_;
     const D4Indexer & index_;
     const KrkTable & krk_;
+    FourManMaterial material_ = FourManMaterial::Krkc;
     std::uint32_t limit_ = 0;
     bool verbose_ = true;
     std::vector<std::uint8_t> status_;
     std::vector<std::uint8_t> remaining_;
     std::vector<std::uint32_t> queue_;
     std::uint64_t legal_count_ = 0;
+
+    std::uint32_t expected_legal_count() const {
+        return material_ == FourManMaterial::Krkc ? Krkc_Legal_Count : Krkn_Legal_Count;
+    }
+
+    bool minor_attacks(std::uint8_t from, std::uint8_t to) const {
+        return material_ == FourManMaterial::Krkc
+            ? geometry_.champion_attacks(from, to)
+            : geometry_.knight_attacks(from, to);
+    }
+
+    const std::vector<std::uint8_t> & minor_moves(std::uint8_t square) const {
+        return material_ == FourManMaterial::Krkc
+            ? geometry_.champion_moves(square)
+            : geometry_.knight_moves(square);
+    }
 
     void progress(const char * phase, std::uint32_t done,
                   std::chrono::steady_clock::time_point started) const {
@@ -332,7 +353,8 @@ private:
 };
 
 void self_test(const Geometry & geometry, const D4Indexer & four_index,
-               const D4Indexer & three_index, const KrkTable * krk) {
+               const D4Indexer & three_index, const KrkTable * krk,
+               FourManMaterial material) {
     if (sha256(std::string("abc")) !=
         "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
         throw std::logic_error("SHA-256 self-test failed");
@@ -346,6 +368,29 @@ void self_test(const Geometry & geometry, const D4Indexer & four_index,
     const auto reported_squares = reported.squares();
     if (four_index.rank(reported_squares.data(), reported.turn) != 26'750'996)
         throw std::logic_error("reported KRKC position changed dense index");
+
+    const std::array<std::array<std::uint8_t, 2>, 4> corner_knight_moves {{
+        {{ 1, 10 }}, {{ 80, 91 }}, {{ 89, 98 }}, {{ 8, 19 }}
+    }};
+    for (std::uint8_t corner = 0; corner < 4; ++corner) {
+        const auto & actual = geometry.knight_moves(100 + corner);
+        if (actual.size() != corner_knight_moves[corner].size() ||
+            !std::equal(actual.begin(), actual.end(), corner_knight_moves[corner].begin()))
+            throw std::logic_error("Omega detached-corner Knight geometry changed");
+    }
+    for (std::uint8_t from = 0; from < Square_Count; ++from) {
+        for (std::uint8_t to = 0; to < Square_Count; ++to) {
+            const bool attacks = geometry.knight_attacks(from, to);
+            if (attacks != geometry.knight_attacks(to, from))
+                throw std::logic_error("Knight attack relation is not symmetric");
+            for (int transform = 0; transform < 8; ++transform) {
+                if (attacks != geometry.knight_attacks(
+                        geometry.transforms()[transform][from],
+                        geometry.transforms()[transform][to]))
+                    throw std::logic_error("D4 transform changed Knight geometry");
+            }
+        }
+    }
 
     std::mt19937 random(0x4F4D4547U);
     for (int sample = 0; sample < 2000; ++sample) {
@@ -383,9 +428,10 @@ void self_test(const Geometry & geometry, const D4Indexer & four_index,
 
     // Concrete KRKC mate from the evaluator regression: Kc5/Ra0 mates Ka5
     // while the remote Cj9 cannot interpose or capture.
-    if (krk != nullptr && krk->loaded()) {
-        FourManSolver probe(geometry, four_index, *krk, four_index.state_count(), false);
-        const State4 mate { 25, 0, 5, 99, Champion_To_Move };
+    if (material == FourManMaterial::Krkc && krk != nullptr && krk->loaded()) {
+        FourManSolver probe(geometry, four_index, *krk, material,
+                            four_index.state_count(), false);
+        const State4 mate { 25, 0, 5, 99, Minor_To_Move };
         const Successors moves = probe.successors(mate);
         if (!probe.is_legal(mate) || !probe.in_check(mate) || moves.has_move)
             throw std::logic_error("concrete KRKC checkmate move generation failed");
@@ -393,7 +439,8 @@ void self_test(const Geometry & geometry, const D4Indexer & four_index,
     std::cout << "four-man indexing, geometry, SHA-256, and dependency self-test: PASS\n";
 }
 
-std::uint64_t count_legal_states(const Geometry & geometry, const D4Indexer & index) {
+std::uint64_t count_legal_states(const Geometry & geometry, const D4Indexer & index,
+                                 FourManMaterial material) {
     std::uint64_t legal = 0;
     for (std::uint32_t dense = 0; dense < index.state_count(); ++dense) {
         std::uint8_t squares[4]{};
@@ -404,8 +451,11 @@ std::uint64_t count_legal_states(const Geometry & geometry, const D4Indexer & in
             for (int j = 0; j < i; ++j)
                 distinct = distinct && squares[i] != squares[j];
         if (!distinct || geometry.king_attacks(squares[0], squares[2])) continue;
-        if (turn == Champion_To_Move) {
-            if (geometry.champion_attacks(squares[3], squares[0])) continue;
+        if (turn == Minor_To_Move) {
+            const bool attacks = material == FourManMaterial::Krkc
+                ? geometry.champion_attacks(squares[3], squares[0])
+                : geometry.knight_attacks(squares[3], squares[0]);
+            if (attacks) continue;
         } else if (geometry.rook_attacks(squares[1], squares[2], { squares[0], squares[3] })) {
             continue;
         }
@@ -432,17 +482,17 @@ State4 parse_state(const std::string & text) {
     std::string normalized = text;
     std::replace(normalized.begin(), normalized.end(), ',', ' ');
     std::istringstream stream(normalized);
-    unsigned rook_king = 0, rook = 0, champion_king = 0, champion = 0, turn = 0;
+    unsigned rook_king = 0, rook = 0, minor_king = 0, minor = 0, turn = 0;
     std::string extra;
-    if (!(stream >> rook_king >> rook >> champion_king >> champion >> turn) ||
+    if (!(stream >> rook_king >> rook >> minor_king >> minor >> turn) ||
         (stream >> extra) || rook_king >= Square_Count || rook >= Square_Count ||
-        champion_king >= Square_Count || champion >= Square_Count || turn > 1)
+        minor_king >= Square_Count || minor >= Square_Count || turn > 1)
         throw std::invalid_argument(
-            "--state requires rook_king,rook,champion_king,champion,turn; "
-            "squares are 0..103 and turn is 0 (rook side) or 1 (Champion side)");
+            "--state requires rook_king,rook,minor_king,minor,turn; "
+            "squares are 0..103 and turn is 0 (rook side) or 1 (minor side)");
     return State4 { static_cast<std::uint8_t>(rook_king), static_cast<std::uint8_t>(rook),
-                    static_cast<std::uint8_t>(champion_king),
-                    static_cast<std::uint8_t>(champion), static_cast<std::uint8_t>(turn) };
+                    static_cast<std::uint8_t>(minor_king),
+                    static_cast<std::uint8_t>(minor), static_cast<std::uint8_t>(turn) };
 }
 
 const char * outcome_name(std::uint8_t outcome) {
@@ -457,10 +507,10 @@ void usage() {
     std::cout
         << "four_man_wdl --self-test [--krk omega-krk-wdl-v1.omtb3]\n"
         << "four_man_wdl --verify-counts\n"
-        << "four_man_wdl --small STATES --krk FILE [--verify] [--output FILE]\n"
-        << "four_man_wdl --full --krk FILE [--verify] [--output FILE]\n"
+        << "four_man_wdl --material krkc|krkn --small STATES --krk FILE [--verify] [--output FILE]\n"
+        << "four_man_wdl --material krkc|krkn --full --krk FILE [--verify] [--output FILE]\n"
         << "four_man_wdl --inspect FILE\n"
-        << "four_man_wdl --probe FILE [--state RK,R,CK,C,TURN] [--index DENSE]...\n";
+        << "four_man_wdl --probe FILE [--state RK,R,MK,M,TURN] [--index DENSE]...\n";
 }
 
 } // namespace
@@ -474,6 +524,8 @@ int main(int argc, char ** argv) {
         bool run_self_test = false;
         bool verify_counts = false;
         bool quiet = false;
+        bool material_explicit = false;
+        FourManMaterial material = FourManMaterial::Krkc;
         std::uint32_t small = 0;
         std::string krk_path;
         std::string output_path;
@@ -490,6 +542,10 @@ int main(int argc, char ** argv) {
             };
             if (option == "--full") full = true;
             else if (option == "--small") small = parse_u32(value("--small"), "--small");
+            else if (option == "--material") {
+                material = parse_four_man_material(value("--material"));
+                material_explicit = true;
+            }
             else if (option == "--krk") krk_path = value("--krk");
             else if (option == "--output") output_path = value("--output");
             else if (option == "--inspect") inspect_path = value("--inspect");
@@ -517,7 +573,10 @@ int main(int argc, char ** argv) {
                 const auto squares = state.squares();
                 probe_indices.push_back(index.rank(squares.data(), state.turn));
             }
-            const std::vector<std::uint8_t> payload = read_four_man_file(probe_path);
+            const FourManTable table = read_four_man_file(probe_path);
+            if (material_explicit && table.material != material)
+                throw std::invalid_argument("--material does not match the probed table");
+            const std::vector<std::uint8_t> & payload = table.payload;
             for (std::uint32_t dense : probe_indices) {
                 if (dense >= payload.size())
                     throw std::out_of_range("probe index is outside this bounded table");
@@ -536,39 +595,49 @@ int main(int argc, char ** argv) {
         KrkTable krk(geometry, three_index);
         if (!krk_path.empty()) krk.load(krk_path);
 
-        if (run_self_test) self_test(geometry, four_index, three_index, krk.loaded() ? &krk : nullptr);
+        if (run_self_test)
+            self_test(geometry, four_index, three_index, krk.loaded() ? &krk : nullptr,
+                      material);
         if (verify_counts) {
-            const std::uint64_t legal = count_legal_states(geometry, four_index);
-            if (legal != Four_Man_Legal_Count)
-                throw std::logic_error("KRKC legal-state population changed");
-            std::cout << "four-man legal-state count: " << legal << " PASS\n";
+            const std::uint64_t legal = count_legal_states(geometry, four_index, material);
+            const std::uint64_t expected = material == FourManMaterial::Krkc
+                ? Krkc_Legal_Count : Krkn_Legal_Count;
+            if (legal != expected)
+                throw std::logic_error(std::string(four_man_material_name(material)) +
+                                       " legal-state population changed");
+            std::cout << four_man_material_name(material)
+                      << " legal-state count: " << legal << " PASS\n";
         }
         if (!full && small == 0) {
             if (!run_self_test && !verify_counts) usage();
             return (run_self_test || verify_counts) ? 0 : 2;
         }
-        if (!krk.loaded()) throw std::invalid_argument("--krk is required for exact KRKC generation");
+        if (!krk.loaded())
+            throw std::invalid_argument("--krk is required for exact four-man generation");
 
         const std::uint32_t limit = full ? four_index.state_count() : small;
         const bool complete = limit == four_index.state_count();
-        std::cout << "KRKC dense slots: " << limit << (complete ? " (full)" : " (outside-draw test boundary)") << '\n';
+        std::cout << four_man_material_name(material) << " dense slots: " << limit
+                  << (complete ? " (full)" : " (outside-draw test boundary)") << '\n';
         std::cout << "working-set bound: status+remaining=" << (2ULL * limit)
                   << " bytes, queue<= " << (4ULL * limit) << " bytes\n";
         const auto started = std::chrono::steady_clock::now();
-        FourManSolver solver(geometry, four_index, krk, limit, !quiet);
+        FourManSolver solver(geometry, four_index, krk, material, limit, !quiet);
         const auto & payload = solver.solve();
         if (verify) solver.verify();
         const Counts counts = solver.counts();
         const double seconds = std::chrono::duration<double>(
             std::chrono::steady_clock::now() - started).count();
-        std::cout << "KRKC legal=" << solver.legal_count() << " loss=" << counts.loss
+        std::cout << four_man_material_name(material) << " legal=" << solver.legal_count()
+                  << " loss=" << counts.loss
                   << " draw=" << counts.draw << " win=" << counts.win
                   << " invalid=" << counts.invalid << " time=" << std::fixed
                   << std::setprecision(2) << seconds << "s\n";
-        if (verify) std::cout << "KRKC Bellman verification: PASS\n";
+        if (verify)
+            std::cout << four_man_material_name(material) << " Bellman verification: PASS\n";
         if (!output_path.empty()) {
             write_four_man_file(output_path, payload, solver.legal_count(), complete,
-                                krk.payload_sha256());
+                                krk.payload_sha256(), material);
             std::cout << "wrote " << output_path << '\n';
         }
         return 0;

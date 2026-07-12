@@ -33,7 +33,12 @@ INDEX_NAME = "D4-first-piece-v1"
 SQUARE_COUNT = 104
 
 THREE_MAN_ORDER = ["strong_king", "role_piece", "weak_king", "turn"]
-FOUR_MAN_ORDER = ["rook_king", "rook", "champion_king", "champion", "turn"]
+FOUR_MAN_ORDERS = {
+    "KRKC": ["rook_king", "rook", "champion_king", "champion", "turn"],
+    "KRKN": ["rook_king", "rook", "knight_king", "knight", "turn"],
+}
+# Retain the public name used by existing tests and scripts.
+FOUR_MAN_ORDER = FOUR_MAN_ORDERS["KRKC"]
 
 THREE_MAN_RULES = (
     "omega-104-v1;d4-first-piece-v1;historical-legality-v1;"
@@ -42,6 +47,10 @@ THREE_MAN_RULES = (
 FOUR_MAN_RULES = (
     "omega-104-v1;d4-first-piece-v1;historical-legality-v1;"
     "krkc-theoretical-wdl;krk-OMTB3WDL-v1;kck-insufficient-material-v1"
+)
+KRKN_RULES = (
+    "omega-104-v1;d4-first-piece-v1;historical-legality-v1;"
+    "krkn-theoretical-wdl;krk-OMTB3WDL-v1;knk-insufficient-material-v1"
 )
 
 
@@ -109,10 +118,10 @@ def read_source_artifact(path: Path) -> SourceArtifact:
         expected_order = THREE_MAN_ORDER
         expected_rules = THREE_MAN_RULES
     else:
-        if material != "KRKC":
-            raise ValueError("OMTB4WDL must contain KRKC")
-        expected_order = FOUR_MAN_ORDER
-        expected_rules = FOUR_MAN_RULES
+        if material not in FOUR_MAN_ORDERS:
+            raise ValueError("OMTB4WDL must contain KRKC or KRKN")
+        expected_order = FOUR_MAN_ORDERS[material]
+        expected_rules = FOUR_MAN_RULES if material == "KRKC" else KRKN_RULES
         if header.get("complete") is not True or header.get("boundary") != "full":
             raise ValueError("production conversion requires a complete full-boundary OMTB4WDL table")
         _require_int(header, "dense_state_count", spec.state_count)
@@ -163,16 +172,16 @@ def convert_artifact(input_path: Path, output_path: Path,
     """Validate, convert, write, and re-read one production table."""
 
     source = read_source_artifact(input_path)
-    if source.material == "KRKC":
+    if source.material in ("KRKC", "KRKN"):
         if krk_dependency is None:
-            raise ValueError("KRKC conversion requires the source KRK dependency")
+            raise ValueError(f"{source.material} conversion requires the source KRK dependency")
         dependency = read_source_artifact(krk_dependency)
         if dependency.material != "KRK":
-            raise ValueError("KRKC dependency must be an OMTB3WDL KRK table")
+            raise ValueError(f"{source.material} dependency must be an OMTB3WDL KRK table")
         if source.header.get("krk_payload_sha256") != dependency.payload_sha256:
-            raise ValueError("KRKC source was built from a different KRK dependency")
+            raise ValueError(f"{source.material} source was built from a different KRK dependency")
     elif krk_dependency is not None:
-        raise ValueError("--krk-dependency is only valid for KRKC conversion")
+        raise ValueError("--krk-dependency is only valid for KRKC/KRKN conversion")
 
     production_wdl = encode_theoretical_wdl(source.payload)
     write_table(Path(output_path), source.material, production_wdl)
@@ -195,7 +204,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", required=True, type=Path,
                         help="OMTBPROD output path")
     parser.add_argument("--krk-dependency", type=Path,
-                        help="OMTB3WDL KRK file used to build a KRKC input")
+                        help="OMTB3WDL KRK file used to build a KRKC/KRKN input")
     return parser
 
 

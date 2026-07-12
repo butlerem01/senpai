@@ -11,8 +11,11 @@ namespace omega_tb4 {
 constexpr std::uint32_t Square_Count = 104;
 constexpr std::uint32_t Regular_Squares = 100;
 constexpr std::uint32_t Four_Man_State_Count = 27'594'696;
-constexpr std::uint32_t Four_Man_Legal_Count = 22'607'206;
+constexpr std::uint32_t Krkc_Legal_Count = 22'607'206;
+constexpr std::uint32_t Krkn_Legal_Count = 23'034'346;
 constexpr std::uint32_t Three_Man_State_Count = 273'816;
+
+enum class FourManMaterial : std::uint8_t { Krkc, Krkn };
 
 constexpr std::uint8_t Invalid = 0;
 constexpr std::uint8_t Unknown = 1;
@@ -21,7 +24,7 @@ constexpr std::uint8_t Draw = 3;
 constexpr std::uint8_t Win = 4;
 
 constexpr std::uint8_t Rook_To_Move = 0;
-constexpr std::uint8_t Champion_To_Move = 1;
+constexpr std::uint8_t Minor_To_Move = 1;
 constexpr std::uint8_t Strong_To_Move = 0;
 constexpr std::uint8_t Weak_To_Move = 1;
 
@@ -33,12 +36,12 @@ struct Coordinate {
 struct State4 {
     std::uint8_t rook_king = 0;
     std::uint8_t rook = 0;
-    std::uint8_t champion_king = 0;
-    std::uint8_t champion = 0;
+    std::uint8_t minor_king = 0;
+    std::uint8_t minor = 0;
     std::uint8_t turn = 0;
 
     std::array<std::uint8_t, 4> squares() const {
-        return { rook_king, rook, champion_king, champion };
+        return { rook_king, rook, minor_king, minor };
     }
 };
 
@@ -67,12 +70,16 @@ public:
     const std::vector<std::uint8_t> & champion_moves(std::uint8_t square) const {
         return champion_moves_[square];
     }
+    const std::vector<std::uint8_t> & knight_moves(std::uint8_t square) const {
+        return knight_moves_[square];
+    }
     const std::array<std::vector<std::uint8_t>, 4> & rook_rays(std::uint8_t square) const {
         return rook_rays_[square];
     }
 
     bool king_attacks(std::uint8_t first, std::uint8_t second) const;
     bool champion_attacks(std::uint8_t first, std::uint8_t second) const;
+    bool knight_attacks(std::uint8_t first, std::uint8_t second) const;
     bool rook_attacks(std::uint8_t first, std::uint8_t second,
                       const std::array<std::uint8_t, 2> & blockers) const;
 
@@ -81,6 +88,7 @@ private:
     std::array<std::array<std::uint8_t, Square_Count>, 8> transforms_{};
     std::array<std::vector<std::uint8_t>, Square_Count> king_moves_{};
     std::array<std::vector<std::uint8_t>, Square_Count> champion_moves_{};
+    std::array<std::vector<std::uint8_t>, Square_Count> knight_moves_{};
     std::array<std::array<std::vector<std::uint8_t>, 4>, Square_Count> rook_rays_{};
 };
 
@@ -151,10 +159,19 @@ std::string sha256(const std::string & text);
 std::string json_string(const std::string & header, const std::string & key);
 std::uint64_t json_unsigned(const std::string & header, const std::string & key);
 
+const char * four_man_material_name(FourManMaterial material);
+FourManMaterial parse_four_man_material(const std::string & name);
+
+struct FourManTable {
+    FourManMaterial material = FourManMaterial::Krkc;
+    std::vector<std::uint8_t> payload;
+};
+
 void write_four_man_file(const std::string & path, const std::vector<std::uint8_t> & payload,
                          std::uint64_t legal_count, bool complete,
-                         const std::string & dependency_sha256);
-std::vector<std::uint8_t> read_four_man_file(const std::string & path);
+                         const std::string & dependency_sha256,
+                         FourManMaterial material);
+FourManTable read_four_man_file(const std::string & path);
 void inspect_four_man_file(const std::string & path);
 
 } // namespace omega_tb4

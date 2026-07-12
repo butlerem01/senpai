@@ -18,6 +18,7 @@ enum class Material : std::uint8_t {
    KRK = 1,
    KCK = 2,
    KRKC = 3,
+   KRKN = 4,
 };
 
 enum class Wdl : std::uint8_t {

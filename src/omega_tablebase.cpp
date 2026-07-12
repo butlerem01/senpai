@@ -406,6 +406,7 @@ bool index_position(const Pos & pos, Indexed_Position & indexed) {
    const int total = bit::count(pos.pieces());
    const int rooks = pos.count(Rook, White) + pos.count(Rook, Black);
    const int champions = pos.count(Champion, White) + pos.count(Champion, Black);
+   const int knights = pos.count(Knight, White) + pos.count(Knight, Black);
 
    if (total == 3 && rooks == 1 && champions == 0) {
       const Side strong = pos.count(Rook, White) == 1 ? White : Black;
@@ -444,6 +445,21 @@ bool index_position(const Pos & pos, Indexed_Position & indexed) {
       return true;
    }
 
+   if (total == 4 && rooks == 1 && knights == 1) {
+      const Side rook_side = pos.count(Rook, White) == 1 ? White : Black;
+      const Side knight_side = pos.count(Knight, White) == 1 ? White : Black;
+      if (rook_side == knight_side) return false;
+      indexed.material = production_format::Material::KRKN;
+      indexed.squares[0] = static_cast<std::uint8_t>(pos.king(rook_side));
+      indexed.squares[1] = static_cast<std::uint8_t>(bit::first(pos.pieces(Rook, rook_side)));
+      indexed.squares[2] = static_cast<std::uint8_t>(pos.king(knight_side));
+      indexed.squares[3] = static_cast<std::uint8_t>(
+         bit::first(pos.pieces(Knight, knight_side))
+      );
+      indexed.turn = pos.turn() == rook_side ? 0 : 1;
+      return true;
+   }
+
    return false;
 }
 
@@ -454,12 +470,14 @@ struct Runtime_Tablebases::Table_Set {
    production_format::Table krk;
    production_format::Table kck;
    production_format::Table krkc;
+   production_format::Table krkn;
 
    const production_format::Table * table(production_format::Material material) const {
       switch (material) {
          case production_format::Material::KRK:  return &krk;
          case production_format::Material::KCK:  return &kck;
          case production_format::Material::KRKC: return &krkc;
+         case production_format::Material::KRKN: return &krkn;
          default:                                 return nullptr;
       }
    }
@@ -472,6 +490,7 @@ const char * production_file_name(production_format::Material material) {
       case production_format::Material::KRK:  return "omega-krk-wdl-v1.omtb";
       case production_format::Material::KCK:  return "omega-kck-wdl-v1.omtb";
       case production_format::Material::KRKC: return "omega-krkc-wdl-v1.omtb";
+      case production_format::Material::KRKN: return "omega-krkn-wdl-v1.omtb";
       default:                                 return "";
    }
 }
@@ -500,6 +519,7 @@ Configure_Result Runtime_Tablebases::configure(const std::string & requested_dir
       production_format::Material::KRK,
       production_format::Material::KCK,
       production_format::Material::KRKC,
+      production_format::Material::KRKN,
    };
 
    std::uint64_t payload_bytes = 0;
@@ -510,6 +530,7 @@ Configure_Result Runtime_Tablebases::configure(const std::string & requested_dir
          case production_format::Material::KRK:  table = &next->krk; break;
          case production_format::Material::KCK:  table = &next->kck; break;
          case production_format::Material::KRKC: table = &next->krkc; break;
+         case production_format::Material::KRKN: table = &next->krkn; break;
          default: break;
       }
 
@@ -545,7 +566,7 @@ Configure_Result Runtime_Tablebases::configure(const std::string & requested_dir
 
    std::atomic_store(&p_tables, std::shared_ptr<const Table_Set>(next));
    result.ok = true;
-   result.message = "Omega tablebases loaded: KRK, KCK, KRKC (" +
+   result.message = "Omega tablebases loaded: KRK, KCK, KRKC, KRKN (" +
                     std::to_string(payload_bytes / (1024 * 1024)) + " MiB payload";
    if (any_dtz) result.message += "; DTZ payload present but not used by search";
    result.message += ")";
@@ -619,6 +640,7 @@ std::uint32_t dense_index(
       case production_format::Material::KCK:
          return retained.three.rank(squares.data(), turn);
       case production_format::Material::KRKC:
+      case production_format::Material::KRKN:
          return retained.four.rank(squares.data(), turn);
       default:
          throw std::invalid_argument("material has no Omega D4 index");

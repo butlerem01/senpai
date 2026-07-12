@@ -12,8 +12,7 @@ five-valued WDL order shifted by three::
     invalid=0, loss=1, blessed-loss=2, draw=3, cursed-win=4, win=5
 
 DTZ is optional unsigned little-endian uint16, one value per dense index.
-KRK and KCK can therefore be written now without DTZ; KRKC can use the same
-container once its WDL/DTZ generation is complete.
+KRK, KCK, KRKC, and KRKN use the same checked container.
 """
 
 from __future__ import annotations
@@ -62,6 +61,7 @@ PIECE_NONE = 0
 PIECE_KING = 1
 PIECE_ROOK = 2
 PIECE_CHAMPION = 3
+PIECE_KNIGHT = 4
 ROLE_NONE = 0xFF
 ROLE_ZERO = 0
 ROLE_ONE = 1
@@ -69,10 +69,11 @@ ROLE_ONE = 1
 MATERIAL_KRK = 1
 MATERIAL_KCK = 2
 MATERIAL_KRKC = 3
+MATERIAL_KRKN = 4
 
 RULES_DESCRIPTION = (
     "omega-104-v1;d4-first-piece-v1;historical-legality-v1;"
-    "king-v1;rook-v1;champion-v1;100-ply-auto-draw-v1;"
+    "king-v1;rook-v1;champion-v1;knight-v1;100-ply-auto-draw-v1;"
     "insufficient-k-plus-one-nbcw-v1;wdl5-dtz16-v1"
 )
 RULES_FINGERPRINT = hashlib.sha256(RULES_DESCRIPTION.encode("ascii")).digest()
@@ -113,6 +114,12 @@ MATERIALS: Mapping[str, MaterialSpec] = {
         (PIECE_KING, PIECE_ROOK, PIECE_KING, PIECE_CHAMPION),
         (ROLE_ZERO, ROLE_ZERO, ROLE_ONE, ROLE_ONE),
         27_594_696, 22_607_206,
+    ),
+    "KRKN": MaterialSpec(
+        "KRKN", MATERIAL_KRKN, 4,
+        (PIECE_KING, PIECE_ROOK, PIECE_KING, PIECE_KNIGHT),
+        (ROLE_ZERO, ROLE_ZERO, ROLE_ONE, ROLE_ONE),
+        27_594_696, 23_034_346,
     ),
 }
 MATERIALS_BY_CODE = {spec.code: spec for spec in MATERIALS.values()}
