@@ -26,6 +26,12 @@ search pruning so unblockable leaper tactics and quiet mating nets are retained.
 The weights are still hand-tuned; standard chess continues to use Senpai's
 original trained evaluator.
 
+Exact pawnless `K+R` versus `K+C` and `K+R` versus `K+N` positions receive
+provisional drawish conversion scaling when the static score favours the rook.
+This is evaluator knowledge, not automatic draw adjudication: concrete wins and
+mate scores remain searchable. The policy is intentionally limited to these
+two material classes pending small-piece tablebase evidence.
+
 Current base values are `P=100`, `N=225`, `W=375`, `C=400`, `B=425`,
 `R=600`, and `Q=1200` centipawns, with small tapered endgame adjustments.
 

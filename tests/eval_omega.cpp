@@ -384,6 +384,53 @@ void test_endgame_material_classes() {
           "Bishop and Wizard must retain value when covering opposite colours");
 }
 
+void test_rook_minor_conversion() {
+   const std::string game_final_ofen {
+      "10/10/10/9R/4k5/7c2/10/10/10/10[-/K/-/-] w - - 32 117"
+   };
+   Pos game_final = pos_from_fen(game_final_ofen, Omega);
+   int game_final_score = int(eval(game_final, White));
+
+   expect(!game_final.is_draw(),
+          "Rook versus Champion must remain a played position, not an automatic draw");
+   expect(game_final_score > 0 && game_final_score < 60,
+          "the reported Rook-versus-Champion ending must be scored as a small edge");
+
+   Ofen_Position champion = bare_omega();
+   put(champion, Rook, White, "j6");
+   put(champion, Champion, Black, "h4");
+
+   Ofen_Position knight = bare_omega();
+   put(knight, Rook, White, "j6");
+   put(knight, Knight, Black, "h4");
+
+   expect(!make(champion).is_draw() && !make(knight).is_draw(),
+          "Rook-versus-minor scaling must not change rules-level draw adjudication");
+   expect(std::abs(white_score(champion)) < 80,
+          "pawnless Rook versus Champion must receive drawish conversion scaling");
+   expect(std::abs(white_score(knight)) < 100,
+          "pawnless Rook versus Knight must receive drawish conversion scaling");
+
+   Ofen_Position mirrored = colour_rank_mirror(champion);
+   expect(white_score(champion) == -white_score(mirrored),
+          "Rook-versus-minor conversion scaling must preserve colour symmetry");
+
+   // Do not generalise beyond the observed and closely analogous classes
+   // without tablebase or match evidence.
+   Ofen_Position bishop = bare_omega();
+   put(bishop, Rook, White, "j6");
+   put(bishop, Bishop, Black, "h4");
+
+   Ofen_Position wizard = bare_omega();
+   put(wizard, Rook, White, "j6");
+   put(wizard, Wizard, Black, "h4");
+
+   expect(white_score(bishop) > white_score(champion) + 100,
+          "Rook-versus-Bishop must remain unscaled pending conversion evidence");
+   expect(white_score(wizard) > white_score(champion) + 100,
+          "Rook-versus-Wizard must remain unscaled pending conversion evidence");
+}
+
 int standard_reference_score() {
    const std::string fen {
       "4k3/2pp4/8/8/4N3/3P4/8/4K3 w - - 0 1"
@@ -412,6 +459,7 @@ int main() {
    test_corner_wizard_development();
    test_development_completion();
    test_endgame_material_classes();
+   test_rook_minor_conversion();
 
    // Omega evaluation must not perturb the trained standard evaluator or its
    // variant-dependent geometry tables when the GUI switches back to chess.

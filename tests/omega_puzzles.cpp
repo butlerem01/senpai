@@ -25,8 +25,7 @@ static void put(Ofen_Position & pos, Piece pc, Side sd, const char * coordinate)
    pos.piece_side[sq] = piece_side_make(pc, sd);
 }
 
-static Search_Output solve(const Ofen_Position & source, int depth) {
-   Pos pos = pos_from_ofen(source);
+static Search_Output solve(const Pos & pos, int depth) {
    Search_Input input;
    input.depth = Depth(depth);
    input.move = true;
@@ -38,6 +37,10 @@ static Search_Output solve(const Ofen_Position & source, int depth) {
    assert(output.move != move::None);
    assert(output.move != move::Null);
    return output;
+}
+
+static Search_Output solve(const Ofen_Position & source, int depth) {
+   return solve(pos_from_ofen(source), depth);
 }
 
 static bool forces_mate(const Pos & pos, Side attacker, int plies) {
@@ -123,6 +126,42 @@ int main() {
    assert(third_mates.size() != 0);
    Search_Output third_result = solve(third, 3);
    require_mating_choice(third_mates, third_result.move, third_pos);
+
+   // In the reported game, 99...Ni0+ left only Wf1xi0 and Ri9xi0.  Search
+   // chooses the former and ...Ch0xi0 reaches the drawish K+R versus K+C
+   // conversion class.  Search, not only the leaf evaluator, must carry that
+   // small score back to the actual liquidation position.
+   Pos forced_liquidation = pos_from_fen(
+      "8R1/10/10/5k4/10/10/10/10/5W4/7cn1[-/K/-/-] w - - 19 100",
+      Omega
+   );
+   List liquidation_replies;
+   gen_legals(liquidation_replies, forced_liquidation);
+   assert(liquidation_replies.size() == 2);
+   assert(list::has(liquidation_replies,
+                    move::from_uci("f1i0", forced_liquidation)));
+   assert(list::has(liquidation_replies,
+                    move::from_uci("i9i0", forced_liquidation)));
+   Search_Output liquidation_result = solve(forced_liquidation, 3);
+   assert(move::to_uci(liquidation_result.move, forced_liquidation) == "f1i0");
+   assert(score::is_eval(liquidation_result.score));
+   assert(int(liquidation_result.score) > -100
+       && int(liquidation_result.score) < 100);
+
+   // Static conversion scaling must not turn a concrete K+R versus K+C mate
+   // into an evaluation result.  Black's remote Champion cannot answer Ra0#.
+   Ofen_Position rook_champion_mate;
+   rook_champion_mate.turn = White;
+   put(rook_champion_mate, King, White, "c5");
+   put(rook_champion_mate, Rook, White, "b0");
+   put(rook_champion_mate, King, Black, "a5");
+   put(rook_champion_mate, Champion, Black, "j9");
+   Pos mate_pos = pos_from_ofen(rook_champion_mate);
+   List mate_moves = mating_first_moves(mate_pos, 1);
+   assert(mate_moves.size() != 0);
+   Search_Output mate_result = solve(rook_champion_mate, 1);
+   require_mating_choice(mate_moves, mate_result.move, mate_pos);
+   assert(score::is_win(mate_result.score));
 
    return 0;
 }

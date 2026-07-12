@@ -12,6 +12,13 @@ namespace {
 
 const int Phase_Max { 32 };
 
+// A rook's nominal material edge does not normally convert once all pawns and
+// other pieces have disappeared: taking the last minor leaves the known
+// corner-drawish K+R versus K ending.  Keep this provisional factor less
+// aggressive than the proven K+R versus K factor below because individual
+// K+R versus K+C/N positions can still contain a forced capture or mate.
+const int Rook_Minor_Drawish_Scale { 8 };
+
 const int MG_Value[Piece_Size] { 100, 225, 425, 600, 1200, 0, 400, 375 };
 const int EG_Value[Piece_Size] { 125, 235, 440, 625, 1225, 0, 400, 375 };
 
@@ -430,6 +437,31 @@ void eval_space_and_threats(Eval_Score & score, const Pos & pos,
 
 int material_scale(const Pos & pos, int value) {
    if (pos.pawns(White) != 0 || pos.pawns(Black) != 0) return value;
+
+   // This is conversion knowledge, not an insufficient-material rule.  Only
+   // reduce a nominal advantage belonging to the rook side; if the minor side
+   // has enough activity to lead the unscaled evaluation, retain that warning.
+   // Champion is the observed failure class and Knight is its closest
+   // established analogue.  Bishop and Wizard remain unscaled until direct
+   // evidence or a small-piece tablebase establishes their conversion class.
+   for (int s = 0; s < Side_Size; s++) {
+      Side rook_side = side_make(s);
+      Side minor_side = side_opp(rook_side);
+
+      if (bit::count(pos.non_king(rook_side)) != 1
+       || pos.count(Rook, rook_side) != 1
+       || bit::count(pos.non_king(minor_side)) != 1) {
+         continue;
+      }
+
+      bool supported_minor = pos.count(Champion, minor_side) == 1
+                          || pos.count(Knight, minor_side) == 1;
+      bool favours_rook = rook_side == White ? value > 0 : value < 0;
+
+      if (supported_minor && favours_rook) {
+         return value / Rook_Minor_Drawish_Scale;
+      }
+   }
 
    for (int s = 0; s < Side_Size; s++) {
       Side attacker = side_make(s);
