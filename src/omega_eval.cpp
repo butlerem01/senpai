@@ -331,6 +331,7 @@ void eval_kings(Eval_Score & score, const Pos & pos, const Attack_Maps & maps,
       int zone_hits = bit::count(zone & maps.attacks[xd]);
       int double_hits = bit::count(zone & maps.double_attacks[xd]);
       int attack_units = 0;
+      int attacker_count = 0;
 
       for (int p = 0; p < Piece_Size; p++) {
          Piece pc = piece_make(p);
@@ -338,12 +339,16 @@ void eval_kings(Eval_Score & score, const Pos & pos, const Attack_Maps & maps,
          for (Bit b = pos.pieces(pc, xd); b != 0; b = bit::rest(b)) {
             Square sq = bit::first(b);
             int hits = bit::count(maps.piece_attacks[sq] & zone);
-            if (hits != 0) attack_units += attack_weight[pc] + std::min(hits, 3) - 1;
+            if (hits != 0) {
+               attacker_count++;
+               attack_units += attack_weight[pc] + std::min(hits, 3) - 1;
+            }
          }
       }
 
       int danger = zone_hits * 3 + double_hits * 5
-                 + attack_units * 4 + attack_units * attack_units / 3;
+                 + attack_units * 4
+                 + king_attack_quadratic(attack_units, attacker_count);
       score.add(sd, -danger, -(zone_hits + attack_units * 2));
 
       if (!square_is_corner(king)) {
@@ -448,6 +453,14 @@ int material_scale(const Pos & pos, int value) {
    return value;
 }
 
+}
+
+int king_attack_quadratic(int attack_units, int attacker_count) {
+   if (attacker_count <= 1) return 0;
+
+   int value = attack_units * attack_units / 3;
+   if (attacker_count == 2) value /= 2;
+   return value;
 }
 
 int piece_value(Piece pc) {
