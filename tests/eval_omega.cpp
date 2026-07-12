@@ -241,6 +241,34 @@ void test_king_safety_and_castling() {
           "retaining usable Omega castling rights must have positive value");
 }
 
+void test_king_attack_coordination() {
+   expect(omega_eval::king_attack_quadratic(9, 1) == 0,
+          "a solo attacker must receive no quadratic king-danger bonus");
+   expect(omega_eval::king_attack_quadratic(9, 2) == 13,
+          "two attackers must receive half the quadratic king-danger bonus");
+   expect(omega_eval::king_attack_quadratic(9, 3) == 27,
+          "three attackers must receive the full quadratic king-danger bonus");
+
+   Ofen_Position solo = bare_omega();
+   put(solo, Pawn, White, "j1");
+   put(solo, Pawn, Black, "j8");
+   put(solo, Champion, White, "f5");
+   put(solo, Wizard, White, "a2");
+
+   Ofen_Position coordinated = bare_omega();
+   put(coordinated, Pawn, White, "j1");
+   put(coordinated, Pawn, Black, "j8");
+   put(coordinated, Champion, White, "f5");
+   put(coordinated, Wizard, White, "d6");
+
+   expect(white_score(coordinated) > white_score(solo),
+          "multiple credible king-zone attackers must outscore a solo raid");
+
+   Ofen_Position mirrored = colour_rank_mirror(coordinated);
+   expect(white_score(coordinated) == -white_score(mirrored),
+          "coordinated king danger must preserve colour symmetry");
+}
+
 void test_corner_wizard_development() {
    Ofen_Position corner = bare_omega();
    put(corner, Pawn, White, "j1");
@@ -380,6 +408,7 @@ int main() {
    test_mobility();
    test_pawns();
    test_king_safety_and_castling();
+   test_king_attack_coordination();
    test_corner_wizard_development();
    test_development_completion();
    test_endgame_material_classes();
