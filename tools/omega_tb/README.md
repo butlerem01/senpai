@@ -18,6 +18,9 @@ scaler**.
   (`four_man_*.{hpp,cpp,ps1}`). It consumes the checksummed KRK dependency,
   treats KCK captures according to the current automatic-draw policy, and uses
   on-demand predecessors instead of retaining a reverse graph.
+- A checksummed, read-only offline KRKC probe in `four_man_wdl`. It accepts a
+  dense index or the labelled `rook_king,rook,champion_king,champion,turn`
+  tuple and reports WDL from the side-to-move perspective.
 - Versioned, checksummed three-man foundation files. They are deliberately not
   yet an engine probe format.
 
@@ -71,6 +74,10 @@ powershell -ExecutionPolicy Bypass -File tools/omega_tb/four_man_build.ps1
 .\.build-omega-tb\four_man_wdl.exe --full --verify `
   --krk build/omega-tb/omega-krk-wdl-v1.omtb3 `
   --output build/omega-tb/omega-krkc-wdl-v1.omtb4
+
+# Probe one or more records after validating the complete container.
+.\.build-omega-tb\four_man_wdl.exe --probe build/omega-tb/omega-krkc-wdl-v1.omtb4 `
+  --state 101,96,45,74,0 --index 26750996
 ```
 
 The full payload is 27,594,696 bytes plus one JSON header line. The generator
@@ -79,9 +86,9 @@ four-byte FIFO entry per solved legal state in the worst case, about 6 MiB for
 the D4 lookup tables, and the 274 KiB KRK dependency. Budget roughly 160 MiB
 of RAM (192 MiB is a comfortable process limit) and about 55 MiB of free disk
 while the checksummed file is atomically replaced. It is intentionally
-single-threaded and deterministic. Depending on CPU, a full solve plus the
-optional second Bellman pass should be budgeted from several minutes to under
-an hour; use `--small 1000000` to benchmark the machine before a full build.
+single-threaded and deterministic. The first verified full solve plus Bellman
+pass completed in 46.16 seconds on the development machine; use
+`--small 1000000` to benchmark another machine before a full build.
 
 ## Exact populations
 
@@ -89,7 +96,7 @@ an hour; use `--small 1000000` to benchmark the machine before a full build.
 |---|---:|---:|---:|---:|---:|
 | KRK | 273,816 | 235,033 | 339 | 232,962 | 1,732 |
 | KCK | 273,816 | 244,779 | 0 | 244,779 | 0 |
-| KRKC | 27,594,696 | 22,607,206 | pending full run | pending full run | pending full run |
+| KRKC | 27,594,696 | 22,607,206 | 2,909 | 22,576,396 | 27,901 |
 
 WDL is stored from the side-to-move perspective. `invalid` occupies the
 remaining three-man index slots. The generated payload is one byte per D4
@@ -97,12 +104,16 @@ slot (273,816 bytes), plus one JSON header line.
 
 ## Current limitations
 
-- KRKC runtime probing is not implemented yet; the C++ output remains an
-  offline verification artifact.
+- Runtime probing is enabled through the UCI string option
+  `OmegaTablebasePath`. The directory must contain the fixed KRK, KCK, and
+  KRKC `OMTBPROD` filenames documented in `PRODUCTION_FORMAT.md`.
+- Search consumes exact tablebase draws only. Theoretical win/loss records
+  deliberately fall through to normal search until DTZ can account for the
+  100-ply conversion boundary.
 - KRK is theoretical WDL. DTZ, cursed/blessed results, and the 100-ply draw
   counter still need the next generation layer.
-- The compact `OMTB3WDL` file is a verification artifact, not the final
-  memory-mapped production format.
+- Compact `OMTB3WDL`/`OMTB4WDL` files are offline verification artifacts;
+  convert them to `OMTBPROD` before runtime loading.
 - Indexing includes every labelled spatial placement. Historically illegal
   positions receive the reserved `invalid` code; this avoids a second sparse
   legality index.

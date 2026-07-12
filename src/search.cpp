@@ -19,6 +19,7 @@
 #include "list.hpp"
 #include "math.hpp"
 #include "move.hpp"
+#include "omega_tablebase.hpp"
 #include "pos.hpp"
 #include "score.hpp"
 #include "search.hpp"
@@ -1215,6 +1216,13 @@ Score Search_Local::search(const Pos & pos, Score alpha, Score beta, Depth depth
 
    if (pos.is_draw()) return leaf(Score(0), ply);
 
+   // WDL-only wins and losses are theoretical and may fail Omega's 100-ply
+   // conversion rule, so they deliberately fall through to normal search.
+   // A stored draw is exact; terminal native rules are guarded in the probe.
+   if (skip_move == move::None && omega_tb::probe_search_draw(pos)) {
+      return leaf(Score(0), ply);
+   }
+
    Node node;
 
    node.p_pos = &pos;
@@ -1534,6 +1542,8 @@ Score Search_Local::qs(const Pos & pos, Score alpha, Score beta, Depth depth, Pl
    if (score::win(ply + Ply(1)) <= alpha) return leaf(score::win(ply + Ply(1)), ply);
 
    if (pos.is_draw()) return leaf(Score(0), ply);
+
+   if (omega_tb::probe_search_draw(pos)) return leaf(Score(0), ply);
 
    Score eval = score::None;
 

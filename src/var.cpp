@@ -32,6 +32,7 @@ void init() {
    set("Hash", "64");
    set("UCI_Chess960", "false");
    set("UCI_Variant", "chess");
+   set("OmegaTablebasePath", "");
 
    update();
 }

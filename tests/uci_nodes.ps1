@@ -22,6 +22,7 @@ try {
     [IO.File]::WriteAllLines($commands, @(
         "uci",
         "setoption name Threads value 1",
+        "setoption name OmegaTablebasePath value <empty>",
         "setoption name UCI_Variant value omega",
         "isready",
         "position startpos",
@@ -46,6 +47,8 @@ try {
 
     Require ($output -contains "uciok") "UCI handshake did not complete"
     Require ($output -contains "readyok") "UCI readiness handshake did not complete"
+    Require ($output -contains "option name OmegaTablebasePath type string default <empty>") "Omega tablebase path option was not advertised"
+    Require ($output -contains "info string Omega tablebases disabled") "Omega tablebase disable command was not acknowledged"
 
     $reportedNodes = @($output | ForEach-Object {
         if ($_ -match '\bnodes ([0-9]+)') { [Int64]$Matches[1] }

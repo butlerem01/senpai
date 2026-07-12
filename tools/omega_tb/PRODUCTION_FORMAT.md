@@ -59,8 +59,31 @@ through `encode_theoretical_wdl()` before `write_table()`. The conversion
 rejects `unknown` rather than silently storing it as a production loss.
 
 KCK is additionally validated against current rule policy: every legal state
-must be a draw. KRKC uses the same format and semantic metadata, but no
-production KRKC payload is written until its solver is complete.
+must be a draw. KRKC uses the same format and semantic metadata. Only an
+`OMTB4WDL` artifact marked `complete=true` with `boundary=full` is eligible
+for production conversion.
+
+## Verified source conversion
+
+`convert_to_production.py` validates the complete JSON-line source container,
+its frozen rules/index metadata, outcome populations and payload checksum
+before explicitly remapping the four-valued source codes to WDL5. KRKC also
+requires the exact KRK source dependency used during four-man generation:
+
+```powershell
+python tools/omega_tb/convert_to_production.py `
+  --input .build-omega-tb/omega-krk-wdl-v1.omtb3 `
+  --output .build-omega-tb/production/omega-krk-wdl-v1.omtb
+
+python tools/omega_tb/convert_to_production.py `
+  --input build/omega-tb/omega-krkc-wdl-v1.omtb4 `
+  --krk-dependency .build-omega-tb/omega-krk-wdl-v1.omtb3 `
+  --output .build-omega-tb/production/omega-krkc-wdl-v1.omtb
+```
+
+Run `test-production-conversion.ps1` to repeat both conversions, check
+byte-for-byte determinism, and load the full outputs through the native C++
+reader.
 
 ## Fixed 256-byte header
 

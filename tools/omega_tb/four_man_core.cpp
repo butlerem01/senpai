@@ -599,9 +599,9 @@ void write_four_man_file(const std::string & path, const std::vector<std::uint8_
     }
 }
 
-void inspect_four_man_file(const std::string & path) {
+std::vector<std::uint8_t> read_four_man_file(const std::string & path) {
     std::string header;
-    const std::vector<std::uint8_t> payload = read_payload(path, header);
+    std::vector<std::uint8_t> payload = read_payload(path, header);
     if (json_string(header, "magic") != "OMTB4WDL" || json_unsigned(header, "version") != 1)
         throw std::runtime_error("unsupported OMTB4WDL file");
     if (json_string(header, "material") != "KRKC" ||
@@ -634,8 +634,17 @@ void inspect_four_man_file(const std::string & path) {
         throw std::runtime_error("four-man outcome counts mismatch");
     if (json_string(header, "krk_payload_sha256").size() != 64)
         throw std::runtime_error("four-man dependency checksum is missing");
+    return payload;
+}
+
+void inspect_four_man_file(const std::string & path) {
+    const std::vector<std::uint8_t> payload = read_four_man_file(path);
+    std::uint64_t legal = 0;
+    for (std::uint8_t outcome : payload)
+        if (outcome == Loss || outcome == Draw || outcome == Win) ++legal;
     std::cout << "OMTB4WDL verified: states=" << payload.size()
-              << " legal=" << legal << " sha256=" << actual_sha << '\n';
+              << " legal=" << legal << " sha256="
+              << sha256(payload.data(), payload.size()) << '\n';
 }
 
 } // namespace omega_tb4

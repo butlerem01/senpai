@@ -154,6 +154,7 @@ std::uint64_t json_unsigned(const std::string & header, const std::string & key)
 void write_four_man_file(const std::string & path, const std::vector<std::uint8_t> & payload,
                          std::uint64_t legal_count, bool complete,
                          const std::string & dependency_sha256);
+std::vector<std::uint8_t> read_four_man_file(const std::string & path);
 void inspect_four_man_file(const std::string & path);
 
 } // namespace omega_tb4

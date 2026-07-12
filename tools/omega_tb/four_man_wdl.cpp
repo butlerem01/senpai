@@ -8,6 +8,7 @@
 #include <iomanip>
 #include <iostream>
 #include <random>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -420,13 +421,46 @@ std::uint32_t parse_u32(const std::string & text, const char * option) {
     return static_cast<std::uint32_t>(value);
 }
 
+std::uint32_t parse_index(const std::string & text, const char * option) {
+    const unsigned long long value = std::stoull(text);
+    if (value >= Four_Man_State_Count)
+        throw std::invalid_argument(std::string(option) + " is out of range");
+    return static_cast<std::uint32_t>(value);
+}
+
+State4 parse_state(const std::string & text) {
+    std::string normalized = text;
+    std::replace(normalized.begin(), normalized.end(), ',', ' ');
+    std::istringstream stream(normalized);
+    unsigned rook_king = 0, rook = 0, champion_king = 0, champion = 0, turn = 0;
+    std::string extra;
+    if (!(stream >> rook_king >> rook >> champion_king >> champion >> turn) ||
+        (stream >> extra) || rook_king >= Square_Count || rook >= Square_Count ||
+        champion_king >= Square_Count || champion >= Square_Count || turn > 1)
+        throw std::invalid_argument(
+            "--state requires rook_king,rook,champion_king,champion,turn; "
+            "squares are 0..103 and turn is 0 (rook side) or 1 (Champion side)");
+    return State4 { static_cast<std::uint8_t>(rook_king), static_cast<std::uint8_t>(rook),
+                    static_cast<std::uint8_t>(champion_king),
+                    static_cast<std::uint8_t>(champion), static_cast<std::uint8_t>(turn) };
+}
+
+const char * outcome_name(std::uint8_t outcome) {
+    if (outcome == Invalid) return "invalid";
+    if (outcome == Loss) return "loss";
+    if (outcome == Draw) return "draw";
+    if (outcome == Win) return "win";
+    throw std::logic_error("unsupported four-man WDL code");
+}
+
 void usage() {
     std::cout
         << "four_man_wdl --self-test [--krk omega-krk-wdl-v1.omtb3]\n"
         << "four_man_wdl --verify-counts\n"
         << "four_man_wdl --small STATES --krk FILE [--verify] [--output FILE]\n"
         << "four_man_wdl --full --krk FILE [--verify] [--output FILE]\n"
-        << "four_man_wdl --inspect FILE\n";
+        << "four_man_wdl --inspect FILE\n"
+        << "four_man_wdl --probe FILE [--state RK,R,CK,C,TURN] [--index DENSE]...\n";
 }
 
 } // namespace
@@ -444,6 +478,9 @@ int main(int argc, char ** argv) {
         std::string krk_path;
         std::string output_path;
         std::string inspect_path;
+        std::string probe_path;
+        std::vector<State4> probe_states;
+        std::vector<std::uint32_t> probe_indices;
 
         for (int i = 1; i < argc; ++i) {
             const std::string option = argv[i];
@@ -456,6 +493,9 @@ int main(int argc, char ** argv) {
             else if (option == "--krk") krk_path = value("--krk");
             else if (option == "--output") output_path = value("--output");
             else if (option == "--inspect") inspect_path = value("--inspect");
+            else if (option == "--probe") probe_path = value("--probe");
+            else if (option == "--state") probe_states.push_back(parse_state(value("--state")));
+            else if (option == "--index") probe_indices.push_back(parse_index(value("--index"), "--index"));
             else if (option == "--verify") verify = true;
             else if (option == "--self-test") run_self_test = true;
             else if (option == "--verify-counts") verify_counts = true;
@@ -468,6 +508,26 @@ int main(int argc, char ** argv) {
             inspect_four_man_file(inspect_path);
             return 0;
         }
+        if (!probe_path.empty()) {
+            if (probe_states.empty() && probe_indices.empty())
+                throw std::invalid_argument("--probe requires at least one --state or --index");
+            Geometry geometry;
+            D4Indexer index(geometry, 4);
+            for (const State4 & state : probe_states) {
+                const auto squares = state.squares();
+                probe_indices.push_back(index.rank(squares.data(), state.turn));
+            }
+            const std::vector<std::uint8_t> payload = read_four_man_file(probe_path);
+            for (std::uint32_t dense : probe_indices) {
+                if (dense >= payload.size())
+                    throw std::out_of_range("probe index is outside this bounded table");
+                std::cout << "index=" << dense << " wdl=" << outcome_name(payload[dense])
+                          << " code=" << static_cast<unsigned>(payload[dense]) << '\n';
+            }
+            return 0;
+        }
+        if (!probe_states.empty() || !probe_indices.empty())
+            throw std::invalid_argument("--state and --index require --probe FILE");
         if (full && small != 0) throw std::invalid_argument("choose either --full or --small");
 
         Geometry geometry;

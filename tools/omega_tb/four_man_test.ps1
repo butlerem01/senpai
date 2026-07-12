@@ -25,6 +25,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "small four-man solve failed" }
     & $generator --inspect $small
     if ($LASTEXITCODE -ne 0) { throw "small four-man file verification failed" }
+    & $generator --probe $small --index 0
+    if ($LASTEXITCODE -ne 0) { throw "small four-man file probe failed" }
 
     if ($SmallStates -eq 100000) {
         $reader = [IO.File]::OpenText($small)
