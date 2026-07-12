@@ -126,8 +126,8 @@ def is_legal(state: State, material: str) -> bool:
 
 
 def in_check(state: State, material: str) -> bool:
-    if state.turn != WEAK_TO_MOVE:
-        return False
+    if state.turn == STRONG_TO_MOVE:
+        return king_attacks(state.weak_king, state.strong_king)
     return king_attacks(state.strong_king, state.weak_king) or _piece_attacks(
         material, state, state.weak_king
     )

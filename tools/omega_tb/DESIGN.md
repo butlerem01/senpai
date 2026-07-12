@@ -24,6 +24,13 @@ states remain representable. All D4-related placements share one dense index.
    successor class is a win. Unresolved cycles become draws.
 6. Re-enumerate the family and verify every WDL Bellman equation.
 
+`native_three_man_oracle.cpp` independently constructs the same role-normalized
+positions through Senpai's `Pos`, then exports native legality, check, draw, and
+legal-successor data. `native_parity.py` canonicalizes those successors with
+the Python index and compares the graphs. The default deterministic sample
+covers ordinary, detached-corner, invalid-history, mate, and reported-game
+states; an exhaustive mode covers every three-man D4 slot.
+
 `KCK` is all draw under the current `omega_insufficient_material()` rule. It is
 still indexed and serialized so KRKC capture dependencies are explicit and a
 future rules change cannot silently reuse incompatible data.
@@ -48,17 +55,32 @@ stabilizer and six retain one reflection. A generic block contains
 The reported `Kw2/Rj6` versus `Ke5/Ch4` position is permanently fixed at dense
 index `26,750,996`, protecting compatibility with the retained v1 design.
 
-## Next dependency: KRKC
+## Implemented four-man dependency: KRKC
 
 Within KRKC, quiet moves remain in-class. Captures leave the family:
 
 - `R x C` probes the exact KRK table.
 - `C x R` probes the rules-policy KCK table.
 
-The four-man WDL pass can therefore reuse the same attractor algorithm and
-on-demand predecessor strategy. It must not infer a blanket draw from the
+The standalone C++17 four-man pass reuses the same attractor algorithm and
+on-demand predecessor strategy. It does not infer a blanket draw from the
 material signature: concrete positions may already be mate or retain a forced
-win.
+win. Same-family children and predecessors are deduplicated after D4 ranking,
+which preserves WDL semantics without storing edge multiplicity.
+
+The full working set is bounded by a one-byte status array, a one-byte
+unresolved-successor array, and a `uint32_t` FIFO whose entries are appended at
+most once per legal state. Captures are resolved during enumeration: `R x C`
+probes the checksummed OMTB3 KRK dependency and `C x R` is a KCK draw under the
+current rules fingerprint. Quiet predecessors are generated only when a child
+becomes decisive. Unresolved cycles become draws, followed by an optional full
+Bellman pass.
+
+Small mode ranks real production states but treats any same-family child beyond
+the configured dense prefix as a draw boundary. It is therefore an exact solve
+of that explicitly bounded model and exercises production indexing, move
+generation, capture dependencies, retrograde propagation, file checksums, and
+Bellman verification without allocating the full working set.
 
 After theoretical WDL, a separate DTZ pass must produce five-valued results
 (loss, blessed loss, draw, cursed win, win). In pawnless tables captures are
