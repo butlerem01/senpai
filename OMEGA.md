@@ -45,11 +45,16 @@ From a Visual Studio Developer PowerShell:
 
 ```powershell
 ./build-msvc.ps1
+./test-msvc.ps1
 ```
 
 The native dual-variant executable is `build-msvc/senpai.exe`. The Makefile
 also retains `src/senpai-omega`, a small independent companion implementation
 used as a rule/perft oracle.
+
+For reproducible one-thread experiments, UCI `go nodes N` accepts a positive
+signed 64-bit node limit. With `Threads=1`, the final `info` output reports the
+exact number of searched nodes. Searches that omit `nodes` are unchanged.
 
 ## Verification
 

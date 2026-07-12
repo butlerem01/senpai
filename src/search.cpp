@@ -230,6 +230,8 @@ private :
    bool p_drop;
    double p_factor;
 
+   std::atomic<int64> p_limited_node;
+
    Depth p_depth;
    Move p_current_move;
    int p_current_number;
@@ -260,6 +262,9 @@ public :
    Split_Point * root_sp () { return &p_root_sp; }
 
    void search_move (Move mv, int searched_size);
+
+   bool node_limited () const { return p_si->nodes != 0; }
+   bool claim_node   ();
 
    void set_flag   () { p_flag = true; }
    void clear_flag () { p_flag = false; p_change = true; }
@@ -507,6 +512,7 @@ void Search_Input::init() {
 
    move = true;
    depth = Depth_Max;
+   nodes = 0;
 
    smart = false;
    moves = 0;
@@ -670,6 +676,8 @@ void Search_Global::init(const Search_Input & si, Search_Output & so, const Pos 
    p_drop = false;
    p_factor = 1.0;
 
+   p_limited_node = 0;
+
    p_depth = Depth(0);
    p_current_move = move::None;
    p_current_number = 0;
@@ -743,6 +751,23 @@ void Search_Global::search_move(Move mv, int searched_size) {
    p_current_number = searched_size + 1;
 
    p_first = searched_size == 0;
+}
+
+bool Search_Global::claim_node() {
+
+   assert(node_limited());
+   assert(p_si->nodes > 0);
+
+   int64 current = p_limited_node.load(std::memory_order_relaxed);
+   while (current < p_si->nodes) {
+      if (p_limited_node.compare_exchange_weak(current, current + 1,
+                                               std::memory_order_relaxed)) {
+         return true;
+      }
+   }
+
+   abort();
+   return false;
 }
 
 void Search_Global::new_best_move(Move mv, Score sc, Flag flag, Depth depth, const Line & pv, bool fail_low) {
@@ -1848,6 +1873,7 @@ bool Search_Local::move_is_dangerous(Move mv, const Node & node) {
 }
 
 void Search_Local::inc_node() {
+   if (p_sg->node_limited() && !p_sg->claim_node()) throw Abort();
    p_node += 1;
    if ((p_node & ml::bit_mask(8)) == 0) p_sg->poll();
    if ((p_node & ml::bit_mask(4)) == 0) poll();

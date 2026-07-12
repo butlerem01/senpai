@@ -55,6 +55,7 @@ public :
 
    bool move;
    Depth depth;
+   int64 nodes;
 
    bool smart;
    int moves;

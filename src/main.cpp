@@ -285,7 +285,9 @@ static void uci_loop() {
          }
 
          int depth = -1;
+         int64 node_limit = 0;
          double move_time = -1.0;
+         bool invalid_node_limit = false;
 
          bool smart = false;
          int moves = 0;
@@ -303,6 +305,18 @@ static void uci_loop() {
             } else if (arg == "depth") {
                ss >> arg;
                depth = std::stoi(arg);
+            } else if (arg == "nodes") {
+               if (!(ss >> arg)) {
+                  invalid_node_limit = true;
+               } else {
+                  try {
+                     std::size_t end = 0;
+                     node_limit = std::stoll(arg, &end);
+                     if (end != arg.size() || node_limit <= 0) invalid_node_limit = true;
+                  } catch (const std::exception &) {
+                     invalid_node_limit = true;
+                  }
+               }
             } else if (arg == "movetime") {
                ss >> arg;
                move_time = std::stod(arg) / 1000.0;
@@ -325,7 +339,15 @@ static void uci_loop() {
             }
          }
 
+         if (invalid_node_limit) {
+            std::cout << "info string Invalid node limit" << std::endl;
+            std::cout << "bestmove 0000" << std::endl;
+            si.init();
+            continue;
+         }
+
          if (depth >= 0) si.depth = Depth(depth);
+         si.nodes = node_limit;
          if (move_time >= 0.0) si.time = move_time;
 
          if (smart) si.set_time(moves, game_time - inc, inc); // GUIs add the increment only after the move :(
