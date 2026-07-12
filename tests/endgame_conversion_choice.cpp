@@ -34,10 +34,12 @@ int main() {
    // Match the reference probe: 128 MiB, one thread, one million nodes.
    tt::G_TT.set_size(int64(128) << (20 - 4));
 
-   // Reported game after 90.Rxg6 ...Kf8.  The material-preserving Wh1 keeps
-   // R+W versus C+N.  Wf5 permits ...Nf4, ...Ch3+, Rxh3, Nxh3 and liquidates
-   // into the practically drawn W-versus-N ending.  Endgame knowledge must
-   // not make that premature liquidation more attractive.
+   // Historical no-table control after 90.Rxg6 ...Kf8.  The frozen combined
+   // evaluator chooses Wh1 at this node budget.  Production KRKN data later
+   // showed that Wh1 does not preserve R+W versus C+N: Black can force a
+   // Champion-for-Wizard trade after either candidate move.  Keep this test as
+   // an A/B control for the unloaded-table behavior, not as a claim that Wh1
+   // wins or should be forced when exact tables are active.
    Pos choice = pos_from_fen(
       "10/5k4/10/6R3/10/6Wc2/7n2/10/9K/10[-/-/-/-] w - - 1 92",
       Omega
