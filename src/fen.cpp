@@ -189,9 +189,14 @@ std::string ofen_serialize(const Ofen_Position & pos) {
          if (std::abs(first % Rank_Capacity - second % Rank_Capacity) != 1) throw Bad_Input();
       }
 
+      Square ep_square[2] { pos.ep_square[0], pos.ep_square[1] };
+      if (pos.ep_size == 2 && ep_square[1] < ep_square[0]) {
+         std::swap(ep_square[0], ep_square[1]);
+      }
+
       for (int i = 0; i < pos.ep_size; i++) {
          if (i != 0) out << ',';
-         out << ofen_square_string(pos.ep_square[i]);
+         out << ofen_square_string(ep_square[i]);
       }
    }
 
@@ -199,6 +204,41 @@ std::string ofen_serialize(const Ofen_Position & pos) {
    out << ' ' << pos.halfmove_clock << ' ' << pos.fullmove_number;
 
    return out.str();
+}
+
+std::string ofen_serialize(const Pos & source) {
+
+   if (!variant_is_omega()) throw Bad_Input();
+
+   Ofen_Position pos;
+
+   for (int sq = 0; sq < Square_Capacity; sq++) {
+      Square square = Square(sq);
+      if (!source.is_empty(square)) {
+         pos.piece_side[sq] = piece_side_make(source.piece(square), source.side(square));
+      }
+   }
+
+   pos.turn = source.turn();
+
+   for (int side = 0; side < Side_Size; side++) {
+      Side sd = side_make(side);
+      Rank home = rank_side(Rank_1, sd);
+      Bit rooks = source.castling_rooks(sd);
+
+      pos.king_castling[sd] = bit::has(rooks, square_make(File_I, home));
+      pos.queen_castling[sd] = bit::has(rooks, square_make(File_B, home));
+   }
+
+   for (Bit ep = source.ep_squares(); ep != 0; ep = bit::rest(ep)) {
+      if (pos.ep_size >= 2) throw Bad_Input();
+      pos.ep_square[pos.ep_size++] = bit::first(ep);
+   }
+
+   pos.halfmove_clock = source.halfmove_clock();
+   pos.fullmove_number = source.fullmove_number();
+
+   return ofen_serialize(pos);
 }
 
 Pos pos_from_ofen(const Ofen_Position & source) {

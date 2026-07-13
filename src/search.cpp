@@ -19,6 +19,7 @@
 #include "list.hpp"
 #include "math.hpp"
 #include "move.hpp"
+#include "omega_book.hpp"
 #include "omega_tablebase.hpp"
 #include "pos.hpp"
 #include "score.hpp"
@@ -345,6 +346,15 @@ void search(Search_Output & so, const Pos & pos, const Search_Input & si) {
    List list;
    gen_legals(list, pos);
    assert(list.size() != 0);
+
+   if (si.move && !si.ponder && var::OwnBook && variant_is_omega()) {
+      Move book_move = move::None;
+      if (omega_book::G_Book.probe(pos, list, book_move)) {
+         std::cout << "info string omega book hit " << move::to_uci(book_move, pos) << std::endl;
+         so.new_best_move(book_move, score::None);
+         return;
+      }
+   }
 
    if (si.move && !si.ponder && list.size() == 1) {
 

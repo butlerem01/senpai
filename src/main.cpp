@@ -21,6 +21,7 @@
 #include "list.hpp"
 #include "math.hpp"
 #include "move.hpp"
+#include "omega_book.hpp"
 #include "omega_tablebase.hpp"
 #include "pawn.hpp"
 #include "pos.hpp"
@@ -97,9 +98,11 @@ static void uci_loop() {
 
          std::cout << "option name " << "Hash" << " type spin default " << var::get("Hash") << " min 1 max 16384" << std::endl;
          std::cout << "option name " << "Ponder" << " type check default " << var::get("Ponder") << std::endl;
+         std::cout << "option name " << "OwnBook" << " type check default " << var::get("OwnBook") << std::endl;
          std::cout << "option name " << "Threads" << " type spin default " << var::get("Threads") << " min 1 max 16" << std::endl;
          std::cout << "option name " << "UCI_Chess960" << " type check default " << var::get("UCI_Chess960") << std::endl;
          std::cout << "option name " << "UCI_Variant" << " type combo default chess var chess var omega" << std::endl;
+         std::cout << "option name OmegaBookFile type string default <empty>" << std::endl;
          std::cout << "option name OmegaTablebasePath type string default <empty>" << std::endl;
 
          std::cout << "option name " << "Clear Hash" << " type button" << std::endl;
@@ -162,6 +165,11 @@ static void uci_loop() {
 
          if (name == "Clear Hash") {
             tt::G_TT.clear();
+         } else if (name == "OmegaBookFile") {
+            const std::string path = value == "<empty>" ? std::string() : value;
+            const omega_book::Configure_Result result = omega_book::G_Book.configure(path);
+            std::cout << "info string " << result.message << std::endl;
+            if (result.ok) var::set("OmegaBookFile", path);
          } else if (name == "OmegaTablebasePath") {
             const std::string path = value == "<empty>" ? std::string() : value;
             const omega_tb::Configure_Result result = omega_tb::G_Tablebases.configure(path);

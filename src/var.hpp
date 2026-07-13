@@ -14,6 +14,7 @@ namespace var {
 // variables
 
 extern bool Ponder;
+extern bool OwnBook;
 extern bool SMP;
 extern int  Threads;
 extern int  Hash;

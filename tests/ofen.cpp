@@ -150,9 +150,9 @@ int main() {
    // Castling order is accepted but serialization is canonical.
 
    assert(ofen_serialize(ofen_parse(empty + " b qK - 3 9")) == empty + " b Kq - 3 9");
+   assert(ofen_serialize(ofen_parse(empty + " b - d3,d2 3 9")) == empty + " b - d2,d3 3 9");
 
-   // Native conversion requires explicitly initialised Omega geometry.  The
-   // Native conversion still requires explicitly initialized Omega geometry.
+   // Native conversion requires explicitly initialized Omega geometry.
 
    bool wrong_geometry_rejected = false;
    try {
@@ -199,6 +199,7 @@ int main() {
    }
 
    Pos omega = pos_from_fen(Omega_Start_OFEN, Omega);
+   assert(ofen_serialize(omega) == Omega_Start_OFEN);
    assert(omega.turn() == White);
    assert(omega.count(Pawn, White) == 10);
    assert(omega.count(Pawn, Black) == 10);
@@ -222,6 +223,7 @@ int main() {
    };
 
    Pos state = pos_from_ofen(ofen_parse(native_state));
+   assert(ofen_serialize(state) == native_state);
    assert(state.turn() == Black);
    assert(state.has_ep(square_from_string("d2")));
    assert(state.has_ep(square_from_string("d3")));

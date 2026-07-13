@@ -56,12 +56,58 @@ For reproducible one-thread experiments, UCI `go nodes N` accepts a positive
 signed 64-bit node limit. With `Threads=1`, the final `info` output reports the
 exact number of searched nodes. Searches that omit `nodes` are unchanged.
 
+## Optional opening book
+
+The native engine advertises these UCI options:
+
+```text
+option name OwnBook type check default false
+option name OmegaBookFile type string default <empty>
+```
+
+`OwnBook=false` is the default and always searches normally. To enable the
+book, set `OmegaBookFile` to a book file and set `OwnBook=true`. Setting the
+file to `<empty>` disables and unloads it. An invalid replacement is rejected
+atomically, so a previously loaded book remains available. Absolute file paths
+are recommended.
+
+The v1 format is UTF-8/ASCII text:
+
+```text
+senpai-omega-book-v1
+<six-field OFEN><TAB><lowercase UCI move><TAB><positive integer weight>
+```
+
+Blank lines and lines beginning with `#` are ignored. Multiple moves may be
+listed for one position. Senpai selects the greatest weight; equal weights are
+resolved by lexical UCI move order, making the choice independent of file
+order, thread count, and platform. Duplicate position/move records are an
+error. Positions use canonical six-field OFEN. Placement, side to move,
+castling, en-passant, and the halfmove clock match exactly. The final fullmove
+number is validated but normalized for lookup because it is notation metadata,
+and CoreChess and Senpai historically advance it at different times.
+
+The parser does not change the active board geometry, so a GUI may send
+`OmegaBookFile` before `UCI_Variant=omega`. At a hit, every candidate is parsed
+as strict lowercase Omega UCI and matched against the canonical UCI strings of
+the generated legal root move list. Illegal candidates are skipped and can
+never be played. A successful hit
+emits stable telemetry such as:
+
+```text
+info string omega book hit a0c2
+```
+
+The Omega book is inactive in standard chess, infinite analysis, and ponder
+searches. It also has no effect when the current normalized book key is absent.
+
 ## Verification
 
 Tests in `tests/` cover geometry, OFEN, state and hashing, castling, promotion,
 near/far en passant, Champion/Wizard legality, malformed positions, draw
 material, evaluator symmetry and structure, official mate-in-two positions,
-and native depth-5 search. Native and companion opening perft agree at 40,
+native depth-5 search, deterministic opening-book selection, atomic book
+replacement, and UCI book bypasses. Native and companion opening perft agree at 40,
 1,600, and 67,202 nodes through depths 1-3.
 
 An evaluator-independent exact endgame foundation lives in `tools/omega_tb`.

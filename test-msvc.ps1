@@ -87,4 +87,9 @@ if ($LASTEXITCODE -ne 0) {
     throw "UCI node-limit protocol test failed with exit code $LASTEXITCODE"
 }
 
-Write-Host "$passed C++ tests and the UCI protocol test passed ($Configuration)"
+& (Join-Path $tests "uci_book.ps1") -EnginePath $engine
+if ($LASTEXITCODE -ne 0) {
+    throw "UCI opening-book protocol test failed with exit code $LASTEXITCODE"
+}
+
+Write-Host "$passed C++ tests and the UCI protocol tests passed ($Configuration)"

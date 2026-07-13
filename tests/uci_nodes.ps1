@@ -47,6 +47,8 @@ try {
 
     Require ($output -contains "uciok") "UCI handshake did not complete"
     Require ($output -contains "readyok") "UCI readiness handshake did not complete"
+    Require ($output -contains "option name OwnBook type check default false") "OwnBook option was not advertised"
+    Require ($output -contains "option name OmegaBookFile type string default <empty>") "Omega book file option was not advertised"
     Require ($output -contains "option name OmegaTablebasePath type string default <empty>") "Omega tablebase path option was not advertised"
     Require ($output -contains "info string Omega tablebases disabled") "Omega tablebase disable command was not acknowledged"
 

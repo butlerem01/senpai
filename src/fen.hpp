@@ -45,6 +45,7 @@ bool fen_variant_supported (Variant variant);
 
 Ofen_Position ofen_parse     (const std::string & s);
 std::string   ofen_serialize (const Ofen_Position & pos);
+std::string   ofen_serialize (const Pos & pos);
 Pos           pos_from_ofen  (const Ofen_Position & pos);
 
 Pos pos_from_fen (const std::string & s);

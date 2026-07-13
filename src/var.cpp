@@ -15,6 +15,7 @@ namespace var {
 // variables
 
 bool Ponder;
+bool OwnBook;
 bool SMP;
 int  Threads;
 int  Hash;
@@ -28,11 +29,13 @@ static std::map<std::string, std::string> Var;
 void init() {
 
    set("Ponder", "false");
+   set("OwnBook", "false");
    set("Threads", "1");
    set("Hash", "64");
    set("UCI_Chess960", "false");
    set("UCI_Variant", "chess");
    set("OmegaTablebasePath", "");
+   set("OmegaBookFile", "");
 
    update();
 }
@@ -40,6 +43,7 @@ void init() {
 void update() {
 
    Ponder    = get_bool("Ponder");
+   OwnBook   = get_bool("OwnBook");
    Threads   = get_int("Threads");
    SMP       = Threads > 1;
    Hash      = 1 << ml::log_2(get_int("Hash"));
