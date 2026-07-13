@@ -8,6 +8,15 @@
 
 namespace omega_eval {
 
+int wizard_endgame_bonus(int pawn_count) {
+   // Post-hoc experiment: the global 395 cp Wizard failed in pawn-rich
+   // positions.  Keep the declared/ordering value at 375 and add a smooth,
+   // endgame-only bonus after the board has fewer than 15 pawns.  The bonus
+   // reaches its 20 cp ceiling at six pawns, avoiding a bucket-edge jump.
+   int sparse_pawns = std::max(0, std::min(15 - pawn_count, 9));
+   return 20 * sparse_pawns / 9;
+}
+
 namespace {
 
 const int Phase_Max { 32 };
@@ -219,6 +228,8 @@ void eval_pieces(Eval_Score & score, const Pos & pos, const Attack_Maps & maps,
                  int pawn_files[Side_Size][File_Capacity]) {
    const int centre_weight_mg[Piece_Size] { 0, 2, 1, 0, 0, 0, 2, 1 };
    const int centre_weight_eg[Piece_Size] { 0, 2, 1, 0, 0, 0, 2, 1 };
+   int pawn_count = pos.count(Pawn, White) + pos.count(Pawn, Black);
+   int wizard_eg_value = EG_Value[Wizard] + wizard_endgame_bonus(pawn_count);
 
    for (int s = 0; s < Side_Size; s++) {
       Side sd = side_make(s);
@@ -229,8 +240,9 @@ void eval_pieces(Eval_Score & score, const Pos & pos, const Attack_Maps & maps,
          if (pc == King) continue;
 
          Bit pieces = pos.pieces(pc, sd);
+         int eg_value = pc == Wizard ? wizard_eg_value : EG_Value[pc];
          score.add(sd, MG_Value[pc] * bit::count(pieces),
-                       EG_Value[pc] * bit::count(pieces));
+                       eg_value * bit::count(pieces));
 
          for (Bit b = pieces; b != 0; b = bit::rest(b)) {
             Square sq = bit::first(b);

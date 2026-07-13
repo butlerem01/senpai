@@ -29,6 +29,15 @@ original trained evaluator.
 Current base values are `P=100`, `N=225`, `W=375`, `C=400`, `B=425`,
 `R=600`, and `Q=1200` centipawns, with small tapered endgame adjustments.
 
+The `codex/omega-wizard-pawn-density` experiment leaves the Wizard's declared
+value, middlegame value, SEE, and capture ordering at 375 cp.  Its endgame
+material term stays 375 while 15 or more pawns remain, then gains a smooth
+`20 * clamp(15 - pawns, 0, 9) / 9` centipawn bonus as total pawn count falls.
+The bonus is 2/6/11/17/20 cp at 14/12/10/7/6 pawns and remains capped at 20
+below that.  The normal 32-unit phase taper still applies, so this is a single
+post-hoc pawn-density hypothesis for fresh out-of-sample testing, not a new
+default value.
+
 The starting values are based on the [official strategy guide](https://www.omegachess.com/strategy).
 Official [mating puzzles](https://www.omegachess.com/puzzles) are included as
 search regressions.
