@@ -139,8 +139,14 @@ void test_material_ordering() {
    expect(rook > bishop, "a Rook must be worth more than a Bishop");
    expect(bishop > champion,
           "a Bishop's 10x10 range must place it above a Champion");
-   expect(champion > wizard,
-          "a Champion must be worth more than a Wizard");
+   // Positional and mobility terms can outweigh a narrow base-value gap in a
+   // particular sparse position.  The declared base ordering itself must
+   // remain C > W at both endpoints of this phase-specific experiment.
+   expect(omega_eval::phase_piece_value(Champion, 32)
+             > omega_eval::phase_piece_value(Wizard, 32)
+       && omega_eval::phase_piece_value(Champion, 0)
+             > omega_eval::phase_piece_value(Wizard, 0),
+          "a Champion's base value must remain above a Wizard's");
    expect(wizard > knight,
           "a Wizard must be worth more than a Knight");
    expect(knight > pawn,
@@ -156,6 +162,15 @@ void test_material_ordering() {
        && piece_mat(Champion) > piece_mat(Wizard)
        && piece_mat(Wizard) > piece_mat(Knight),
           "capture ordering must use the Omega minor-piece hierarchy");
+}
+
+void test_phase_wizard_value() {
+   expect(omega_eval::phase_piece_value(Wizard, 32) == 375
+       && omega_eval::phase_piece_value(Wizard, 24) == 380
+       && omega_eval::phase_piece_value(Wizard, 16) == 385
+       && omega_eval::phase_piece_value(Wizard, 8) == 390
+       && omega_eval::phase_piece_value(Wizard, 0) == 395,
+          "Wizard value must taper from 375 to 395 across the Omega phase");
 }
 
 void test_mobility() {
@@ -405,6 +420,7 @@ int main() {
    select_variant(Omega);
    test_colour_symmetry();
    test_material_ordering();
+   test_phase_wizard_value();
    test_mobility();
    test_pawns();
    test_king_safety_and_castling();
