@@ -161,10 +161,10 @@ void test_material_ordering() {
 void test_phase_piece_values() {
    expect(omega_eval::phase_piece_value(Rook, 32) == 600,
           "Rook middlegame value must remain unchanged");
-   expect(omega_eval::phase_piece_value(Rook, 24) == 581
-       && omega_eval::phase_piece_value(Rook, 16) == 562
-       && omega_eval::phase_piece_value(Rook, 8) == 543
-       && omega_eval::phase_piece_value(Rook, 0) == 525,
+   expect(omega_eval::phase_piece_value(Rook, 24) == 587
+       && omega_eval::phase_piece_value(Rook, 16) == 575
+       && omega_eval::phase_piece_value(Rook, 8) == 562
+       && omega_eval::phase_piece_value(Rook, 0) == 550,
           "Rook value must taper smoothly toward its Omega endgame value");
    expect(omega_eval::phase_piece_value(Rook, 0)
           > omega_eval::phase_piece_value(Bishop, 0),

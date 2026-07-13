@@ -17,7 +17,7 @@ const int MG_Value[Piece_Size] { 100, 225, 425, 600, 1200, 0, 400, 375 };
 // when the board simplifies and detached-corner coverage disappears.  Exact
 // KRK/KRKC/KRKN WDL data supports a conservative endgame taper rather than a
 // global material reduction.
-const int EG_Value[Piece_Size] { 125, 235, 440, 525, 1225, 0, 400, 375 };
+const int EG_Value[Piece_Size] { 125, 235, 440, 550, 1225, 0, 400, 375 };
 
 const int MG_Mobility[Piece_Size] { 0, 6, 4, 3, 2, 0, 6, 5 };
 const int EG_Mobility[Piece_Size] { 0, 5, 5, 4, 2, 0, 5, 6 };

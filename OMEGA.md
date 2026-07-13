@@ -29,9 +29,9 @@ original trained evaluator.
 Current base values are `P=100`, `N=225`, `W=375`, `C=400`, `B=425`,
 `R=600`, and `Q=1200` centipawns, with small tapered endgame adjustments.
 
-The `omega/exp-phase-piece-values` experiment keeps the Rook at 600 cp in the
-middlegame but tapers it to 525 cp in a fully simplified position. Intermediate
-values are 581/562/543 cp at 24/16/8 remaining non-pawn phase units. Capture
+The `omega/exp-phase-piece-values-r550` experiment keeps the Rook at 600 cp in
+the middlegame but tapers it to 550 cp in a fully simplified position.
+Intermediate values are 587/575/562 cp at 24/16/8 remaining non-pawn phase units. Capture
 ordering, SEE, mobility, the standard-chess evaluator, and exact Omega
 tablebases remain unchanged so matches isolate the material-value hypothesis.
 
