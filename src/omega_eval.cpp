@@ -13,7 +13,9 @@ namespace {
 const int Phase_Max { 32 };
 
 const int MG_Value[Piece_Size] { 100, 225, 425, 600, 1200, 0, 400, 375 };
-const int EG_Value[Piece_Size] { 125, 235, 440, 625, 1225, 0, 400, 375 };
+// Isolated experiment: test the hypothesis that a Knight retains more value
+// as Omega positions simplify.  Exact KRKN WDL does not establish this value.
+const int EG_Value[Piece_Size] { 125, 260, 440, 625, 1225, 0, 400, 375 };
 
 const int MG_Mobility[Piece_Size] { 0, 6, 4, 3, 2, 0, 6, 5 };
 const int EG_Mobility[Piece_Size] { 0, 5, 5, 4, 2, 0, 5, 6 };
@@ -499,6 +501,13 @@ int piece_value(Piece pc) {
    const int value[Piece_Size] { 100, 225, 425, 600, 1200, 10000, 400, 375 };
    assert(pc != Piece_None);
    return value[pc];
+}
+
+int phase_piece_value(Piece pc, int opening_units) {
+   assert(pc != Piece_None);
+   int opening = std::max(0, std::min(opening_units, Phase_Max));
+   int endgame = Phase_Max - opening;
+   return (MG_Value[pc] * opening + EG_Value[pc] * endgame) / Phase_Max;
 }
 
 int evaluate(const Pos & pos) {

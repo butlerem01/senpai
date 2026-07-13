@@ -29,6 +29,15 @@ original trained evaluator.
 Current base values are `P=100`, `N=225`, `W=375`, `C=400`, `B=425`,
 `R=600`, and `Q=1200` centipawns, with small tapered endgame adjustments.
 
+The `omega/exp-phase-knight-eg260` experiment keeps the Knight at 225 cp with
+all 32 opening-phase units present and tapers it to 260 cp in a fully
+simplified position. At 24/16/8 units its integer-interpolated values are
+233/242/251 cp. This is an isolated hypothesis for match testing, not a value
+proved by the KRKN tablebase: theoretical WDL classifies positions but does not
+measure practical piece strength or a gameplay distribution. The Knight's
+middlegame value, static capture-ordering/SEE value, mobility, all other
+weights, standard-chess evaluation, and exact tablebases remain unchanged.
+
 The starting values are based on the [official strategy guide](https://www.omegachess.com/strategy).
 Official [mating puzzles](https://www.omegachess.com/puzzles) are included as
 search regressions.

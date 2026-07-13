@@ -158,6 +158,15 @@ void test_material_ordering() {
           "capture ordering must use the Omega minor-piece hierarchy");
 }
 
+void test_phase_knight_value() {
+   expect(omega_eval::phase_piece_value(Knight, 32) == 225
+       && omega_eval::phase_piece_value(Knight, 24) == 233
+       && omega_eval::phase_piece_value(Knight, 16) == 242
+       && omega_eval::phase_piece_value(Knight, 8) == 251
+       && omega_eval::phase_piece_value(Knight, 0) == 260,
+          "Knight value must taper from 225 to 260 with integer truncation");
+}
+
 void test_mobility() {
    // The Knight squares e5 and f5 are mirror-equivalent on the empty 10x10
    // board.  On e5 it blocks its own Rook on e4; on f5 it does not.  Material,
@@ -405,6 +414,7 @@ int main() {
    select_variant(Omega);
    test_colour_symmetry();
    test_material_ordering();
+   test_phase_knight_value();
    test_mobility();
    test_pawns();
    test_king_safety_and_castling();
