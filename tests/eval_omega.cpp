@@ -158,6 +158,22 @@ void test_material_ordering() {
           "capture ordering must use the Omega minor-piece hierarchy");
 }
 
+void test_phase_piece_values() {
+   expect(omega_eval::phase_piece_value(Rook, 32) == 600,
+          "Rook middlegame value must remain unchanged");
+   expect(omega_eval::phase_piece_value(Rook, 24) == 581
+       && omega_eval::phase_piece_value(Rook, 16) == 562
+       && omega_eval::phase_piece_value(Rook, 8) == 543
+       && omega_eval::phase_piece_value(Rook, 0) == 525,
+          "Rook value must taper smoothly toward its Omega endgame value");
+   expect(omega_eval::phase_piece_value(Rook, 0)
+          > omega_eval::phase_piece_value(Bishop, 0),
+          "Rook must remain above Bishop in the endgame material ordering");
+   expect(omega_eval::phase_piece_value(Queen, 0)
+          > omega_eval::phase_piece_value(Rook, 0),
+          "Queen must remain above Rook in the endgame material ordering");
+}
+
 void test_mobility() {
    // The Knight squares e5 and f5 are mirror-equivalent on the empty 10x10
    // board.  On e5 it blocks its own Rook on e4; on f5 it does not.  Material,
@@ -405,6 +421,7 @@ int main() {
    select_variant(Omega);
    test_colour_symmetry();
    test_material_ordering();
+   test_phase_piece_values();
    test_mobility();
    test_pawns();
    test_king_safety_and_castling();
