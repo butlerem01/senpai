@@ -77,9 +77,9 @@ orbits fixed through a board symmetry.
 
 Frozen witnesses include:
 
-- checkmate: `AK=b0,Ca=a0,DK=w2,Cb=b1,turn=defender`
+- checkmate: `AK=a1,Ca=a0,DK=w1,Cb=b1,turn=defender`
   (native state `1,0,100,11,1`, dense index 1,081,911);
-- stalemate: `AK=b0,Ca=a0,DK=w2,Cb=c0,turn=defender`
+- stalemate: `AK=a1,Ca=a0,DK=w1,Cb=a2,turn=defender`
   (native state `1,0,100,2,1`, dense index 1,081,893);
 - deeper forced win: dense index 0,
   `AK=a0,Ca=b1,DK=c2,Cb=d3,turn=attacker`;
