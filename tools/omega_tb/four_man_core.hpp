@@ -14,9 +14,10 @@ constexpr std::uint32_t Four_Man_State_Count = 27'594'696;
 constexpr std::uint32_t Krkc_Legal_Count = 22'607'206;
 constexpr std::uint32_t Krkn_Legal_Count = 23'034'346;
 constexpr std::uint32_t Kwkn_Legal_Count = 24'078'355;
+constexpr std::uint32_t Kckw_Legal_Count = 23'651'215;
 constexpr std::uint32_t Three_Man_State_Count = 273'816;
 
-enum class FourManMaterial : std::uint8_t { Krkc, Krkn, Kwkn };
+enum class FourManMaterial : std::uint8_t { Krkc, Krkn, Kwkn, Kckw };
 
 constexpr std::uint8_t Invalid = 0;
 constexpr std::uint8_t Unknown = 1;
@@ -171,6 +172,7 @@ FourManMaterial parse_four_man_material(const std::string & name);
 struct FourManTable {
     FourManMaterial material = FourManMaterial::Krkc;
     std::vector<std::uint8_t> payload;
+    std::string dependency_sha256;
 };
 
 void write_four_man_file(const std::string & path, const std::vector<std::uint8_t> & payload,

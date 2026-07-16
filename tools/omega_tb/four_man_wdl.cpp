@@ -32,6 +32,20 @@ struct Counts {
     std::uint64_t win = 0;
 };
 
+std::uint32_t expected_legal_count(FourManMaterial material) {
+    switch (material) {
+        case FourManMaterial::Krkc: return Krkc_Legal_Count;
+        case FourManMaterial::Krkn: return Krkn_Legal_Count;
+        case FourManMaterial::Kwkn: return Kwkn_Legal_Count;
+        case FourManMaterial::Kckw: return Kckw_Legal_Count;
+    }
+    throw std::logic_error("unknown four-man legal population");
+}
+
+bool material_requires_krk(FourManMaterial material) {
+    return material == FourManMaterial::Krkc || material == FourManMaterial::Krkn;
+}
+
 class FourManSolver {
 public:
     FourManSolver(const Geometry & geometry, const D4Indexer & four_index,
@@ -47,7 +61,8 @@ public:
         if (!status_.empty()) throw std::logic_error("four-man solver may only run once");
         status_.assign(limit_, Invalid);
         remaining_.assign(limit_, 0);
-        queue_.reserve(limit_ == index_.state_count() ? expected_legal_count() : limit_);
+        queue_.reserve(limit_ == index_.state_count()
+            ? expected_legal_count(material_) : limit_);
         const auto started = std::chrono::steady_clock::now();
         legal_count_ = 0;
         for (std::uint32_t dense = 0; dense < limit_; ++dense) {
@@ -104,7 +119,8 @@ public:
         for (std::uint8_t & outcome : status_)
             if (outcome == Unknown) outcome = Draw;
 
-        if (limit_ == index_.state_count() && legal_count_ != expected_legal_count())
+        if (limit_ == index_.state_count() &&
+            legal_count_ != expected_legal_count(material_))
             throw std::logic_error(std::string("full ") + four_man_material_name(material_) +
                                    " legal-state count changed");
         return status_;
@@ -216,7 +232,7 @@ public:
                         };
                         add_external(krk_.probe(dependency));
                     } else {
-                        add_external(Draw); // K+Wizard versus bare King.
+                        add_external(Draw); // K plus the primary leaper versus bare King.
                     }
                 } else {
                     add_child(State4 { target, state.rook, state.minor_king,
@@ -243,7 +259,7 @@ public:
                 for (std::uint8_t target : primary_moves(state.rook)) {
                     if (target == state.rook_king || target == state.minor_king) continue;
                     if (target == state.minor) {
-                        add_external(Draw); // K+Wizard versus bare King.
+                        add_external(Draw); // K plus the primary leaper versus bare King.
                     } else {
                         add_child(State4 { state.rook_king, target, state.minor_king,
                                            state.minor, Minor_To_Move });
@@ -263,7 +279,7 @@ public:
             for (std::uint8_t target : minor_moves(state.minor)) {
                 if (target == state.minor_king || target == state.rook_king) continue;
                 if (target == state.rook) {
-                    add_external(Draw); // Current KCK/KNK insufficient-material policy.
+                    add_external(Draw); // Current one-leaper insufficient-material policy.
                 } else {
                     add_child(State4 { state.rook_king, state.rook, state.minor_king,
                                        target, Rook_To_Move });
@@ -354,42 +370,41 @@ private:
     std::vector<std::uint32_t> queue_;
     std::uint64_t legal_count_ = 0;
 
-    std::uint32_t expected_legal_count() const {
-        switch (material_) {
-            case FourManMaterial::Krkc: return Krkc_Legal_Count;
-            case FourManMaterial::Krkn: return Krkn_Legal_Count;
-            case FourManMaterial::Kwkn: return Kwkn_Legal_Count;
-        }
-        throw std::logic_error("unknown four-man legal population");
-    }
-
     bool primary_is_rook() const {
-        return material_ != FourManMaterial::Kwkn;
+        return material_ == FourManMaterial::Krkc ||
+               material_ == FourManMaterial::Krkn;
     }
 
     bool primary_attacks(std::uint8_t from, std::uint8_t to,
                          const std::array<std::uint8_t, 2> & blockers) const {
-        return primary_is_rook()
-            ? geometry_.rook_attacks(from, to, blockers)
-            : geometry_.wizard_attacks(from, to);
+        if (primary_is_rook()) return geometry_.rook_attacks(from, to, blockers);
+        if (material_ == FourManMaterial::Kwkn)
+            return geometry_.wizard_attacks(from, to);
+        return geometry_.champion_attacks(from, to);
     }
 
     const std::vector<std::uint8_t> & primary_moves(std::uint8_t square) const {
         if (primary_is_rook())
             throw std::logic_error("rook moves require blocker-aware ray generation");
-        return geometry_.wizard_moves(square);
+        return material_ == FourManMaterial::Kwkn
+            ? geometry_.wizard_moves(square)
+            : geometry_.champion_moves(square);
     }
 
     bool minor_attacks(std::uint8_t from, std::uint8_t to) const {
-        return material_ == FourManMaterial::Krkc
-            ? geometry_.champion_attacks(from, to)
-            : geometry_.knight_attacks(from, to);
+        if (material_ == FourManMaterial::Krkc)
+            return geometry_.champion_attacks(from, to);
+        if (material_ == FourManMaterial::Kckw)
+            return geometry_.wizard_attacks(from, to);
+        return geometry_.knight_attacks(from, to);
     }
 
     const std::vector<std::uint8_t> & minor_moves(std::uint8_t square) const {
-        return material_ == FourManMaterial::Krkc
-            ? geometry_.champion_moves(square)
-            : geometry_.knight_moves(square);
+        if (material_ == FourManMaterial::Krkc)
+            return geometry_.champion_moves(square);
+        if (material_ == FourManMaterial::Kckw)
+            return geometry_.wizard_moves(square);
+        return geometry_.knight_moves(square);
     }
 
     void progress(const char * phase, std::uint32_t done,
@@ -425,6 +440,9 @@ void self_test(const Geometry & geometry, const D4Indexer & four_index,
     const std::array<std::array<std::uint8_t, 3>, 4> corner_wizard_moves {{
         {{ 0, 2, 20 }}, {{ 70, 90, 92 }}, {{ 79, 97, 99 }}, {{ 7, 9, 29 }}
     }};
+    const std::array<std::array<std::uint8_t, 1>, 4> corner_champion_moves {{
+        {{ 11 }}, {{ 81 }}, {{ 88 }}, {{ 18 }}
+    }};
     for (std::uint8_t corner = 0; corner < 4; ++corner) {
         const auto & knight_actual = geometry.knight_moves(100 + corner);
         if (knight_actual.size() != corner_knight_moves[corner].size() ||
@@ -436,15 +454,23 @@ void self_test(const Geometry & geometry, const D4Indexer & four_index,
             !std::equal(wizard_actual.begin(), wizard_actual.end(),
                         corner_wizard_moves[corner].begin()))
             throw std::logic_error("Omega detached-corner Wizard geometry changed");
+        const auto & champion_actual = geometry.champion_moves(100 + corner);
+        if (champion_actual.size() != corner_champion_moves[corner].size() ||
+            !std::equal(champion_actual.begin(), champion_actual.end(),
+                        corner_champion_moves[corner].begin()))
+            throw std::logic_error("Omega detached-corner Champion geometry changed");
     }
     for (std::uint8_t from = 0; from < Square_Count; ++from) {
         for (std::uint8_t to = 0; to < Square_Count; ++to) {
             const bool knight_attacks = geometry.knight_attacks(from, to);
             const bool wizard_attacks = geometry.wizard_attacks(from, to);
+            const bool champion_attacks = geometry.champion_attacks(from, to);
             if (knight_attacks != geometry.knight_attacks(to, from))
                 throw std::logic_error("Knight attack relation is not symmetric");
             if (wizard_attacks != geometry.wizard_attacks(to, from))
                 throw std::logic_error("Wizard attack relation is not symmetric");
+            if (champion_attacks != geometry.champion_attacks(to, from))
+                throw std::logic_error("Champion attack relation is not symmetric");
             for (int transform = 0; transform < 8; ++transform) {
                 if (knight_attacks != geometry.knight_attacks(
                         geometry.transforms()[transform][from],
@@ -454,6 +480,10 @@ void self_test(const Geometry & geometry, const D4Indexer & four_index,
                         geometry.transforms()[transform][from],
                         geometry.transforms()[transform][to]))
                     throw std::logic_error("D4 transform changed Wizard geometry");
+                if (champion_attacks != geometry.champion_attacks(
+                        geometry.transforms()[transform][from],
+                        geometry.transforms()[transform][to]))
+                    throw std::logic_error("D4 transform changed Champion geometry");
             }
         }
     }
@@ -511,6 +541,26 @@ void self_test(const Geometry & geometry, const D4Indexer & four_index,
         if (!probe.is_legal(mate) || !probe.in_check(mate) || moves.has_move)
             throw std::logic_error("concrete KWKN detached-corner mate failed");
     }
+    if (material == FourManMaterial::Kckw) {
+        FourManSolver probe(geometry, four_index, *krk, material,
+                            four_index.state_count(), false);
+        // Ka1/Cb1 mates Kw1 while Wa3 cannot answer the Champion check.
+        const State4 mate { 1, 11, 100, 3, Minor_To_Move };
+        const Successors mate_moves = probe.successors(mate);
+        if (!probe.is_legal(mate) || !probe.in_check(mate) || mate_moves.has_move)
+            throw std::logic_error("concrete KCKW detached-corner mate failed");
+
+        // Capturing either leaper leaves K+C/K+W versus K, both frozen draws.
+        const State4 champion_capture { 0, 22, 99, 42, Rook_To_Move };
+        const Successors champion_moves = probe.successors(champion_capture);
+        const State4 wizard_capture { 0, 22, 99, 53, Minor_To_Move };
+        const Successors wizard_moves = probe.successors(wizard_capture);
+        if (!probe.is_legal(champion_capture) || !champion_moves.external_draw ||
+            champion_moves.external_loss || champion_moves.external_win ||
+            !probe.is_legal(wizard_capture) || !wizard_moves.external_draw ||
+            wizard_moves.external_loss || wizard_moves.external_win)
+            throw std::logic_error("KCKW capture-to-draw policy changed");
+    }
     std::cout << "four-man indexing, geometry, SHA-256, and dependency self-test: PASS\n";
 }
 
@@ -529,13 +579,17 @@ std::uint64_t count_legal_states(const Geometry & geometry, const D4Indexer & in
         if (turn == Minor_To_Move) {
             const bool attacks = material == FourManMaterial::Krkc
                 ? geometry.champion_attacks(squares[3], squares[0])
-                : geometry.knight_attacks(squares[3], squares[0]);
+                : material == FourManMaterial::Kckw
+                    ? geometry.wizard_attacks(squares[3], squares[0])
+                    : geometry.knight_attacks(squares[3], squares[0]);
             if (attacks) continue;
         } else {
             const bool attacks = material == FourManMaterial::Kwkn
                 ? geometry.wizard_attacks(squares[1], squares[2])
-                : geometry.rook_attacks(squares[1], squares[2],
-                                        { squares[0], squares[3] });
+                : material == FourManMaterial::Kckw
+                    ? geometry.champion_attacks(squares[1], squares[2])
+                    : geometry.rook_attacks(squares[1], squares[2],
+                                            { squares[0], squares[3] });
             if (attacks) continue;
         }
         ++legal;
@@ -561,17 +615,19 @@ State4 parse_state(const std::string & text) {
     std::string normalized = text;
     std::replace(normalized.begin(), normalized.end(), ',', ' ');
     std::istringstream stream(normalized);
-    unsigned rook_king = 0, rook = 0, minor_king = 0, minor = 0, turn = 0;
+    unsigned primary_king = 0, primary = 0, opposing_king = 0, opposing = 0, turn = 0;
     std::string extra;
-    if (!(stream >> rook_king >> rook >> minor_king >> minor >> turn) ||
-        (stream >> extra) || rook_king >= Square_Count || rook >= Square_Count ||
-        minor_king >= Square_Count || minor >= Square_Count || turn > 1)
+    if (!(stream >> primary_king >> primary >> opposing_king >> opposing >> turn) ||
+        (stream >> extra) || primary_king >= Square_Count || primary >= Square_Count ||
+        opposing_king >= Square_Count || opposing >= Square_Count || turn > 1)
         throw std::invalid_argument(
-            "--state requires rook_king,rook,minor_king,minor,turn; "
-            "squares are 0..103 and turn is 0 (rook side) or 1 (minor side)");
-    return State4 { static_cast<std::uint8_t>(rook_king), static_cast<std::uint8_t>(rook),
-                    static_cast<std::uint8_t>(minor_king),
-                    static_cast<std::uint8_t>(minor), static_cast<std::uint8_t>(turn) };
+            "--state requires primary_king,primary,opposing_king,opposing,turn; "
+            "squares are 0..103 and turn is 0 (primary side) or 1 (opposing side)");
+    return State4 { static_cast<std::uint8_t>(primary_king),
+                    static_cast<std::uint8_t>(primary),
+                    static_cast<std::uint8_t>(opposing_king),
+                    static_cast<std::uint8_t>(opposing),
+                    static_cast<std::uint8_t>(turn) };
 }
 
 const char * outcome_name(std::uint8_t outcome) {
@@ -592,50 +648,143 @@ std::string square_name(std::uint8_t square) {
     return std::string("w") + static_cast<char>('1' + square - Regular_Squares);
 }
 
-std::string state_name(const State4 & state) {
+struct MaterialLabels {
+    const char * primary_side;
+    const char * primary_king;
+    const char * primary_piece;
+    const char * opposing_side;
+    const char * opposing_king;
+    const char * opposing_piece;
+};
+
+MaterialLabels material_labels(FourManMaterial material) {
+    switch (material) {
+        case FourManMaterial::Krkc:
+            return { "rook", "RK", "R", "champion", "CK", "C" };
+        case FourManMaterial::Krkn:
+            return { "rook", "RK", "R", "knight", "NK", "N" };
+        case FourManMaterial::Kwkn:
+            return { "wizard", "WK", "W", "knight", "NK", "N" };
+        case FourManMaterial::Kckw:
+            return { "champion", "CK", "C", "wizard", "WK", "W" };
+    }
+    throw std::logic_error("unknown four-man material labels");
+}
+
+std::string state_name(const State4 & state, FourManMaterial material) {
+    const MaterialLabels labels = material_labels(material);
     std::ostringstream out;
-    out << "WK=" << square_name(state.rook_king)
-        << ",W=" << square_name(state.rook)
-        << ",NK=" << square_name(state.minor_king)
-        << ",N=" << square_name(state.minor)
-        << ",turn=" << (state.turn == Rook_To_Move ? "wizard" : "knight");
+    out << labels.primary_king << '=' << square_name(state.rook_king)
+        << ',' << labels.primary_piece << '=' << square_name(state.rook)
+        << ',' << labels.opposing_king << '=' << square_name(state.minor_king)
+        << ',' << labels.opposing_piece << '=' << square_name(state.minor)
+        << ",turn=" << (state.turn == Rook_To_Move
+            ? labels.primary_side : labels.opposing_side);
     return out.str();
 }
 
-void summarize_kwkn_file(const std::string & path) {
+void summarize_four_man_file(const std::string & path, const std::string & krk_path) {
     const FourManTable table = read_four_man_file(path);
-    if (table.material != FourManMaterial::Kwkn ||
-        table.payload.size() != Four_Man_State_Count)
-        throw std::invalid_argument("--summary requires a complete KWKN artifact");
+    if (table.payload.size() != Four_Man_State_Count)
+        throw std::invalid_argument("--summary requires a complete four-man artifact");
+    const MaterialLabels labels = material_labels(table.material);
 
     std::array<std::array<std::uint64_t, 5>, 2> counts{};
     for (std::uint32_t dense = 0; dense < table.payload.size(); ++dense) {
         const std::uint8_t outcome = table.payload[dense];
         if (outcome >= counts[0].size())
-            throw std::logic_error("KWKN summary encountered an unsupported WDL code");
+            throw std::logic_error("four-man summary encountered an unsupported WDL code");
         ++counts[dense & 1U][outcome];
     }
+    const std::uint64_t legal = counts[0][Loss] + counts[0][Draw] + counts[0][Win] +
+                                counts[1][Loss] + counts[1][Draw] + counts[1][Win];
+    if (legal != expected_legal_count(table.material))
+        throw std::logic_error(std::string(four_man_material_name(table.material)) +
+                               " summary legal population changed");
     for (std::uint8_t turn = 0; turn < 2; ++turn) {
-        std::cout << (turn == Rook_To_Move ? "wizard-to-move" : "knight-to-move")
+        std::cout << (turn == Rook_To_Move ? labels.primary_side : labels.opposing_side)
+                  << "-to-move"
                   << " invalid=" << counts[turn][Invalid]
                   << " loss=" << counts[turn][Loss]
                   << " draw=" << counts[turn][Draw]
                   << " win=" << counts[turn][Win] << '\n';
     }
 
+    const std::uint64_t primary_wins = counts[Rook_To_Move][Win] +
+                                       counts[Minor_To_Move][Loss];
+    const std::uint64_t opposing_wins = counts[Rook_To_Move][Loss] +
+                                        counts[Minor_To_Move][Win];
+    const std::uint64_t draws = counts[Rook_To_Move][Draw] +
+                                counts[Minor_To_Move][Draw];
+    std::cout << "material-side-wins " << labels.primary_side << '=' << primary_wins
+              << ' ' << labels.opposing_side << '=' << opposing_wins
+              << " draws=" << draws
+              << " decisive=" << primary_wins + opposing_wins << '\n';
+
+    enum MaterialWinner : std::uint8_t {
+        No_Winner,
+        Primary_Winner,
+        Opposing_Winner,
+    };
+    auto material_winner = [](std::uint8_t turn, std::uint8_t outcome) {
+        if (outcome == Draw) return No_Winner;
+        if (outcome != Loss && outcome != Win)
+            throw std::logic_error("material winner requested for an invalid state");
+        const bool mover_wins = outcome == Win;
+        const bool primary_to_move = turn == Rook_To_Move;
+        return mover_wins == primary_to_move ? Primary_Winner : Opposing_Winner;
+    };
+
+    std::uint64_t both_legal = 0;
+    std::uint64_t primary_wins_both = 0;
+    std::uint64_t opposing_wins_both = 0;
+    std::uint64_t split_decisive = 0;
+    std::uint64_t decisive_draw_mixed = 0;
+    std::uint64_t draws_both = 0;
+    std::uint64_t at_least_one_invalid = 0;
+    for (std::uint32_t dense = 0; dense < table.payload.size(); dense += 2) {
+        const std::uint8_t primary_turn = table.payload[dense];
+        const std::uint8_t opposing_turn = table.payload[dense + 1];
+        if (primary_turn == Invalid || opposing_turn == Invalid) {
+            ++at_least_one_invalid;
+            continue;
+        }
+        ++both_legal;
+        const MaterialWinner first = material_winner(Rook_To_Move, primary_turn);
+        const MaterialWinner second = material_winner(Minor_To_Move, opposing_turn);
+        if (first == No_Winner && second == No_Winner) ++draws_both;
+        else if (first == Primary_Winner && second == Primary_Winner) ++primary_wins_both;
+        else if (first == Opposing_Winner && second == Opposing_Winner) ++opposing_wins_both;
+        else if (first != No_Winner && second != No_Winner) ++split_decisive;
+        else ++decisive_draw_mixed;
+    }
+    std::cout << "turn-paired-placements both-legal=" << both_legal
+              << ' ' << labels.primary_side << "-wins-both=" << primary_wins_both
+              << ' ' << labels.opposing_side << "-wins-both=" << opposing_wins_both
+              << " split-decisive=" << split_decisive
+              << " decisive-draw-mixed=" << decisive_draw_mixed
+              << " draws-both=" << draws_both
+              << " at-least-one-invalid=" << at_least_one_invalid << '\n';
+
     Geometry geometry;
     D4Indexer four_index(geometry, 4);
     D4Indexer three_index(geometry, 3);
-    KrkTable unused_krk(geometry, three_index);
-    FourManSolver graph(geometry, four_index, unused_krk,
-                        FourManMaterial::Kwkn, four_index.state_count(), false);
+    KrkTable krk(geometry, three_index);
+    if (!krk_path.empty()) krk.load(krk_path);
+    if (material_requires_krk(table.material) && !krk.loaded())
+        throw std::invalid_argument("--summary requires --krk for a rook material");
+    if (material_requires_krk(table.material) &&
+        krk.payload_sha256() != table.dependency_sha256)
+        throw std::invalid_argument("--krk does not match the summarized artifact");
+    FourManSolver graph(geometry, four_index, krk,
+                        table.material, four_index.state_count(), false);
 
     bool found_mate = false;
     bool found_mate_in_one = false;
     bool found_deeper_win = false;
     bool found_nonterminal_loss = false;
-    bool found_robust_wizard_win = false;
-    bool found_robust_knight_win = false;
+    bool found_robust_primary_win = false;
+    bool found_robust_opposing_win = false;
     for (std::uint32_t dense = 0; dense < table.payload.size(); ++dense) {
         const std::uint8_t outcome = table.payload[dense];
         if (outcome != Loss && outcome != Win) continue;
@@ -643,12 +792,12 @@ void summarize_kwkn_file(const std::string & path) {
         const Successors moves = graph.successors(state);
         if (outcome == Loss && !moves.has_move && graph.in_check(state) && !found_mate) {
             std::cout << "terminal-checkmate index=" << dense << ' '
-                      << state_name(state) << '\n';
+                      << state_name(state, table.material) << '\n';
             found_mate = true;
         }
         if (outcome == Loss && moves.has_move && !found_nonterminal_loss) {
             std::cout << "nonterminal-forced-loss index=" << dense << ' '
-                      << state_name(state) << '\n';
+                      << state_name(state, table.material) << '\n';
             found_nonterminal_loss = true;
         }
         if (outcome == Win) {
@@ -658,11 +807,13 @@ void summarize_kwkn_file(const std::string & path) {
                 const Successors child_moves = graph.successors(child_state);
                 if (!child_moves.has_move && graph.in_check(child_state) && !found_mate_in_one) {
                     std::cout << "mate-in-one-win index=" << dense << ' '
-                              << state_name(state) << " child=" << child << '\n';
+                              << state_name(state, table.material)
+                              << " child=" << child << '\n';
                     found_mate_in_one = true;
                 } else if (child_moves.has_move && !found_deeper_win) {
                     std::cout << "nonterminal-forced-win index=" << dense << ' '
-                              << state_name(state) << " child=" << child << '\n';
+                              << state_name(state, table.material)
+                              << " child=" << child << '\n';
                     found_deeper_win = true;
                 }
             }
@@ -671,44 +822,50 @@ void summarize_kwkn_file(const std::string & path) {
             break;
     }
     if (!found_mate || !found_mate_in_one || !found_deeper_win || !found_nonterminal_loss)
-        throw std::logic_error("KWKN summary could not find every decisive witness class");
+        throw std::logic_error(std::string(four_man_material_name(table.material)) +
+                               " summary could not find every decisive witness class");
 
     for (std::uint32_t dense = 0; dense < table.payload.size(); dense += 2) {
-        const std::uint8_t wizard_turn = table.payload[dense];
-        const std::uint8_t knight_turn = table.payload[dense + 1];
-        const bool wizard_wins_both = wizard_turn == Win && knight_turn == Loss;
-        const bool knight_wins_both = wizard_turn == Loss && knight_turn == Win;
-        if ((!wizard_wins_both || found_robust_wizard_win) &&
-            (!knight_wins_both || found_robust_knight_win)) continue;
-        const State4 wizard_state = graph.unrank(dense);
-        const State4 knight_state = graph.unrank(dense + 1);
-        if (!graph.successors(wizard_state).has_move ||
-            !graph.successors(knight_state).has_move) continue;
-        if (wizard_wins_both && !found_robust_wizard_win) {
-            std::cout << "turn-independent-wizard-win indices=" << dense << ','
-                      << dense + 1 << ' ' << state_name(wizard_state) << '\n';
-            found_robust_wizard_win = true;
+        const std::uint8_t primary_turn = table.payload[dense];
+        const std::uint8_t opposing_turn = table.payload[dense + 1];
+        const bool primary_wins_pair = primary_turn == Win && opposing_turn == Loss;
+        const bool opposing_wins_pair = primary_turn == Loss && opposing_turn == Win;
+        if ((!primary_wins_pair || found_robust_primary_win) &&
+            (!opposing_wins_pair || found_robust_opposing_win)) continue;
+        const State4 primary_state = graph.unrank(dense);
+        const State4 opposing_state = graph.unrank(dense + 1);
+        if (!graph.successors(primary_state).has_move ||
+            !graph.successors(opposing_state).has_move) continue;
+        if (primary_wins_pair && !found_robust_primary_win) {
+            std::cout << "turn-independent-" << labels.primary_side
+                      << "-win indices=" << dense << ',' << dense + 1 << ' '
+                      << state_name(primary_state, table.material) << '\n';
+            found_robust_primary_win = true;
         }
-        if (knight_wins_both && !found_robust_knight_win) {
-            std::cout << "turn-independent-knight-win indices=" << dense << ','
-                      << dense + 1 << ' ' << state_name(wizard_state) << '\n';
-            found_robust_knight_win = true;
+        if (opposing_wins_pair && !found_robust_opposing_win) {
+            std::cout << "turn-independent-" << labels.opposing_side
+                      << "-win indices=" << dense << ',' << dense + 1 << ' '
+                      << state_name(primary_state, table.material) << '\n';
+            found_robust_opposing_win = true;
         }
-        if (found_robust_wizard_win && found_robust_knight_win) break;
+        if ((found_robust_primary_win || primary_wins_both == 0) &&
+            (found_robust_opposing_win || opposing_wins_both == 0)) break;
     }
-    if (!found_robust_wizard_win || !found_robust_knight_win)
-        throw std::logic_error("KWKN summary could not find both turn-independent win classes");
+    if ((primary_wins_both > 0 && !found_robust_primary_win) ||
+        (opposing_wins_both > 0 && !found_robust_opposing_win))
+        throw std::logic_error(std::string(four_man_material_name(table.material)) +
+                               " summary could not find a nonterminal turn-independent witness");
 }
 
 void usage() {
     std::cout
         << "four_man_wdl --self-test [--krk omega-krk-wdl-v1.omtb3]\n"
         << "four_man_wdl --verify-counts\n"
-        << "four_man_wdl --material krkc|krkn|kwkn --small STATES [--krk FILE] [--verify] [--output FILE]\n"
-        << "four_man_wdl --material krkc|krkn|kwkn --full [--krk FILE] [--verify] [--output FILE]\n"
+        << "four_man_wdl --material krkc|krkn|kwkn|kckw --small STATES [--krk FILE] [--verify] [--output FILE]\n"
+        << "four_man_wdl --material krkc|krkn|kwkn|kckw --full [--krk FILE] [--verify] [--output FILE]\n"
         << "four_man_wdl --inspect FILE\n"
-        << "four_man_wdl --summary FILE\n"
-        << "four_man_wdl --probe FILE [--state RK,R,MK,M,TURN] [--index DENSE]...\n";
+        << "four_man_wdl --summary FILE [--krk FILE]\n"
+        << "four_man_wdl --probe FILE [--state PK,P,OK,O,TURN] [--index DENSE]...\n";
 }
 
 } // namespace
@@ -765,7 +922,7 @@ int main(int argc, char ** argv) {
             return 0;
         }
         if (!summary_path.empty()) {
-            summarize_kwkn_file(summary_path);
+            summarize_four_man_file(summary_path, krk_path);
             return 0;
         }
         if (!probe_path.empty()) {
@@ -803,10 +960,7 @@ int main(int argc, char ** argv) {
             self_test(geometry, four_index, three_index, &krk, material);
         if (verify_counts) {
             const std::uint64_t legal = count_legal_states(geometry, four_index, material);
-            const std::uint64_t expected = material == FourManMaterial::Krkc
-                ? Krkc_Legal_Count
-                : material == FourManMaterial::Krkn ? Krkn_Legal_Count
-                                                    : Kwkn_Legal_Count;
+            const std::uint64_t expected = expected_legal_count(material);
             if (legal != expected)
                 throw std::logic_error(std::string(four_man_material_name(material)) +
                                        " legal-state population changed: expected " +
@@ -819,7 +973,7 @@ int main(int argc, char ** argv) {
             if (!run_self_test && !verify_counts) usage();
             return (run_self_test || verify_counts) ? 0 : 2;
         }
-        if (material != FourManMaterial::Kwkn && !krk.loaded())
+        if (material_requires_krk(material) && !krk.loaded())
             throw std::invalid_argument("--krk is required for exact four-man generation");
 
         const std::uint32_t limit = full ? four_index.state_count() : small;
@@ -845,7 +999,9 @@ int main(int argc, char ** argv) {
         if (!output_path.empty()) {
             const std::string dependency = material == FourManMaterial::Kwkn
                 ? sha256(std::string("kwk-knk-insufficient-material-v1"))
-                : krk.payload_sha256();
+                : material == FourManMaterial::Kckw
+                    ? sha256(std::string("kck-kwk-insufficient-material-v1"))
+                    : krk.payload_sha256();
             write_four_man_file(output_path, payload, solver.legal_count(), complete,
                                 dependency, material);
             std::cout << "wrote " << output_path << '\n';

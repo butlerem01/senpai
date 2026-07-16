@@ -6,6 +6,8 @@ Tables normalize by material role rather than colour. Three-man order is
 strong-side king, role piece, bare king, side-to-move bit. KRKC/KRKN order is
 rook-side king, rook, minor-side king, minor, side-to-move bit. KWKN order is
 Wizard-side king, Wizard, Knight-side king, Knight, side-to-move bit. The
+diagnostic KCKW experiment uses Champion-side king, Champion, Wizard-side
+king, Wizard, side-to-move bit. The
 material-specific rules fingerprint covers the 104-square geometry,
 historical-legality test, relevant leaper movement, and current
 insufficient-material policy.
@@ -56,11 +58,12 @@ stabilizer and six retain one reflection. A generic block contains
 | Legal KRKC D4-canonical states | 22,607,206 |
 | Legal KRKN D4-canonical states | 23,034,346 |
 | Legal KWKN D4-canonical states | 24,078,355 |
+| Legal KCKW D4-canonical states | 23,651,215 |
 
 The reported `Kw2/Rj6` versus `Ke5/Ch4` position is permanently fixed at dense
 index `26,750,996`, protecting compatibility with the retained v1 design.
 
-## Implemented four-man dependencies: KRKC, KRKN, and KWKN
+## Implemented four-man dependencies and diagnostic KCKW
 
 Within KRKC, quiet moves remain in-class. Captures leave the family:
 
@@ -79,6 +82,14 @@ Either side capturing the opposing leaper leaves KWK or KNK, which is an
 external draw under the current automatic insufficient-material rule. KWKN
 therefore has no KRK file dependency; the capture policy has its own frozen
 checksum in the source artifact.
+
+KCKW reuses the no-KRK graph boundary with the Champion as the primary leaper
+and Wizard as the opposing leaper. Either capture leaves KCK or KWK, both
+automatic draws under the current engine rule. Its material-specific rules and
+capture-policy hashes are validated by the offline container reader. KCKW is a
+geometry diagnostic only: it is deliberately absent from the production
+format, runtime material set, and evaluator. See `KCKW_DESIGN.md` for its
+acceptance contract and `KCKW_THEORY.md` for the frozen solve.
 
 The standalone C++17 four-man pass reuses the same attractor algorithm and
 on-demand predecessor strategy. It does not infer a blanket draw from the
@@ -109,6 +120,7 @@ probing must combine DTZ with the remaining `100 - halfmove_clock` budget.
 `OMTBPROD` provides fixed metadata, rules and payload hashes, and a strict
 native reader. `OmegaTablebasePath` atomically loads KRK, KCK, KRKC, KRKN, and
 KWKN as one set; a missing or invalid replacement retains the previous set.
+KCKW remains outside this production boundary.
 Runtime indexing is role-normalized and read-only. Search consumes only exact
 draw records. Win/loss records remain diagnostic until a later DTZ pass can
 respect the automatic 100-ply boundary and provide root ordering.

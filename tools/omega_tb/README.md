@@ -11,17 +11,19 @@ heuristic four-man score scaler**.
   104 Omega squares (`omega_geometry.py`).
 - The retained KRKC index/count proof (`index_prototype.py`).
 - A full exact theoretical-WDL retrograde solver for `KRK`.
-- Rules-exact `KCK`/`KNK` capture policies. Senpai currently declares king
-  plus one Champion or Knight versus a bare king drawn in `Pos::is_draw()`.
-- A standalone C++17 exact KRKC/KRKN/KWKN theoretical-WDL generator
+- Rules-exact `KCK`/`KNK`/`KWK` capture policies. Senpai currently declares
+  king plus one Knight, Bishop, Champion, or Wizard versus a bare king drawn
+  in `Pos::is_draw()`.
+- A standalone C++17 exact KRKC/KRKN/KWKN/KCKW theoretical-WDL generator
   (`four_man_*.{hpp,cpp,ps1}`). KRKC/KRKN consume the checksummed KRK
-  dependency. KWKN instead freezes its KWK/KNK capture-to-draw policy in the
-  source header. All three use on-demand predecessors instead of retaining a
-  reverse graph.
+  dependency. KWKN and diagnostic-only KCKW instead freeze their one-leaper
+  capture-to-draw policies in the artifact header. All four use on-demand
+  predecessors instead of retaining a reverse graph.
 - A checksummed, read-only offline four-man probe in `four_man_wdl`. It accepts
   a dense index or a labelled four-piece tuple and reports WDL from the
   side-to-move perspective. KWKN order is
-  `wizard_king,wizard,knight_king,knight,turn`.
+  `wizard_king,wizard,knight_king,knight,turn`; KCKW order is
+  `champion_king,champion,wizard_king,wizard,turn`.
 - Versioned, checksummed three-man foundation files. They are deliberately not
   yet an engine probe format.
 
@@ -64,13 +66,14 @@ fast Bellman/serialization regression and not a substitute for the full table:
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/omega_tb/four_man_test.ps1
 
-# Also freeze completed KRKN and KWKN counts/hashes and decisive witnesses.
+# Also freeze completed KRKN, KWKN, and diagnostic KCKW artifacts.
 powershell -ExecutionPolicy Bypass -File tools/omega_tb/four_man_test.ps1 `
   -KrknFullPath build/omega-tb/omega-krkn-wdl-v1.omtb4 `
-  -KwknFullPath build/omega-tb/omega-kwkn-wdl-v1.omtb4
+  -KwknFullPath build/omega-tb/omega-kwkn-wdl-v1.omtb4 `
+  -KckwFullPath .build-omega-tb/omega-kckw-wdl-v1.omtb4
 ```
 
-Generate the full KRKC, KRKN, and KWKN WDL files offline:
+Generate the full KRKC, KRKN, KWKN, and diagnostic KCKW WDL files offline:
 
 ```powershell
 python tools/omega_tb/three_man_wdl.py --material krk --output build/omega-tb
@@ -90,6 +93,11 @@ powershell -ExecutionPolicy Bypass -File tools/omega_tb/four_man_build.ps1
   --output build/omega-tb/omega-kwkn-wdl-v1.omtb4
 .\.build-omega-tb\four_man_wdl.exe --summary `
   build/omega-tb/omega-kwkn-wdl-v1.omtb4
+.\.build-omega-tb\four_man_wdl.exe --material kckw --self-test --verify-counts
+.\.build-omega-tb\four_man_wdl.exe --material kckw --full --verify `
+  --output .build-omega-tb/omega-kckw-wdl-v1.omtb4
+.\.build-omega-tb\four_man_wdl.exe --summary `
+  .build-omega-tb/omega-kckw-wdl-v1.omtb4
 
 # Probe one or more records after validating the complete container.
 .\.build-omega-tb\four_man_wdl.exe --probe build/omega-tb/omega-krkc-wdl-v1.omtb4 `
@@ -105,7 +113,7 @@ of RAM (192 MiB is a comfortable process limit) and about 55 MiB of free disk
 while the checksummed file is atomically replaced. It is intentionally
 single-threaded and deterministic. The first verified full solve plus Bellman
 pass completed in 46.16 seconds on the development machine; KWKN completed in
-41.02 seconds. Use
+41.02 seconds and KCKW in 60.81 seconds. Use
 `--small 1000000` to benchmark another machine before a full build.
 
 ## Exact populations
@@ -117,6 +125,7 @@ pass completed in 46.16 seconds on the development machine; KWKN completed in
 | KRKC | 27,594,696 | 22,607,206 | 2,909 | 22,576,396 | 27,901 |
 | KRKN | 27,594,696 | 23,034,346 | 2,564 | 23,005,864 | 25,918 |
 | KWKN | 27,594,696 | 24,078,355 | 17,131 | 23,997,362 | 63,862 |
+| KCKW | 27,594,696 | 23,651,215 | 4,647 | 23,631,170 | 15,398 |
 
 WDL is stored from the side-to-move perspective. `invalid` occupies the
 historically illegal index slots. Each generated payload is one byte per D4
@@ -138,12 +147,16 @@ slot plus one JSON header line.
 - Indexing includes every labelled spatial placement. Historically illegal
   positions receive the reserved `invalid` code; this avoids a second sparse
   legality index.
-- KCK/KNK capture results intentionally follow the current automatic
+- KCK/KNK/KWK capture results intentionally follow the current automatic
   insufficient-material policy. Changing that rule requires a new rules
   fingerprint and regeneration.
 - KWKN is exact theoretical WDL, but its decisive records are diagnostic-only
   at runtime. See `KWKN_THEORY.md` for turn-stratified populations and the
   limits of interpreting WDL without DTM/DTZ.
+- KCKW is an offline diagnostic only. It is not part of `OMTBPROD`, the
+  all-or-nothing runtime material set, or engine evaluation. See
+  `KCKW_THEORY.md` for its frozen hashes, turn/material-side populations,
+  paired-placement counts, and decisive witnesses.
 - Native/Python parity is sampled by default to keep normal verification fast;
   use `test-native-parity.ps1 -Exhaustive` for every indexed three-man state.
 

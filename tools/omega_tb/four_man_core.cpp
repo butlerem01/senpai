@@ -28,18 +28,47 @@ constexpr const char * Kwkn_Rules =
     "omega-104-v1;d4-first-piece-v1;historical-legality-v1;"
     "kwkn-theoretical-wdl;wizard-v1;knight-v1;"
     "kwk-insufficient-material-v1;knk-insufficient-material-v1";
+constexpr const char * Kckw_Rules =
+    "omega-104-v1;d4-first-piece-v1;historical-legality-v1;"
+    "kckw-theoretical-wdl;champion-v1;wizard-v1;"
+    "kck-insufficient-material-v1;kwk-insufficient-material-v1";
 
 const char * four_man_rules(FourManMaterial material) {
     switch (material) {
         case FourManMaterial::Krkc: return Krkc_Rules;
         case FourManMaterial::Krkn: return Krkn_Rules;
         case FourManMaterial::Kwkn: return Kwkn_Rules;
+        case FourManMaterial::Kckw: return Kckw_Rules;
     }
     throw std::logic_error("unknown four-man material rules");
 }
 
 const char * minor_name(FourManMaterial material) {
-    return material == FourManMaterial::Krkc ? "champion" : "knight";
+    if (material == FourManMaterial::Krkc) return "champion";
+    if (material == FourManMaterial::Kckw) return "wizard";
+    return "knight";
+}
+
+const char * primary_name(FourManMaterial material) {
+    if (material == FourManMaterial::Kwkn) return "wizard";
+    if (material == FourManMaterial::Kckw) return "champion";
+    return "rook";
+}
+
+const char * primary_king_name(FourManMaterial material) {
+    if (material == FourManMaterial::Kwkn) return "wizard_king";
+    if (material == FourManMaterial::Kckw) return "champion_king";
+    return "rook_king";
+}
+
+bool uses_capture_policy(FourManMaterial material) {
+    return material == FourManMaterial::Kwkn || material == FourManMaterial::Kckw;
+}
+
+const char * capture_policy(FourManMaterial material) {
+    if (material == FourManMaterial::Kwkn) return "kwk-knk-insufficient-material-v1";
+    if (material == FourManMaterial::Kckw) return "kck-kwk-insufficient-material-v1";
+    throw std::logic_error("material uses a KRK dependency rather than a capture policy");
 }
 
 std::uint8_t square_from_coordinate(const std::array<Coordinate, Square_Count> & coordinates,
@@ -586,6 +615,7 @@ const char * four_man_material_name(FourManMaterial material) {
         case FourManMaterial::Krkc: return "KRKC";
         case FourManMaterial::Krkn: return "KRKN";
         case FourManMaterial::Kwkn: return "KWKN";
+        case FourManMaterial::Kckw: return "KCKW";
     }
     throw std::logic_error("unknown four-man material name");
 }
@@ -594,7 +624,8 @@ FourManMaterial parse_four_man_material(const std::string & name) {
     if (name == "krkc" || name == "KRKC") return FourManMaterial::Krkc;
     if (name == "krkn" || name == "KRKN") return FourManMaterial::Krkn;
     if (name == "kwkn" || name == "KWKN") return FourManMaterial::Kwkn;
-    throw std::invalid_argument("four-man material must be krkc, krkn, or kwkn");
+    if (name == "kckw" || name == "KCKW") return FourManMaterial::Kckw;
+    throw std::invalid_argument("four-man material must be krkc, krkn, kwkn, or kckw");
 }
 
 void write_four_man_file(const std::string & path, const std::vector<std::uint8_t> & payload,
@@ -617,12 +648,12 @@ void write_four_man_file(const std::string & path, const std::vector<std::uint8_
     const std::string rules = four_man_rules(material);
     const std::string rules_sha = sha256(rules);
     const std::string minor = minor_name(material);
-    const bool kwkn = material == FourManMaterial::Kwkn;
+    const bool capture_boundary = uses_capture_policy(material);
     std::ostringstream header;
     header << "{\"magic\":\"OMTB4WDL\",\"version\":1,\"material\":\""
            << four_man_material_name(material) << "\""
-           << ",\"labelled_order\":[\"" << (kwkn ? "wizard_king" : "rook_king")
-           << "\",\"" << (kwkn ? "wizard" : "rook") << "\",\"" << minor
+           << ",\"labelled_order\":[\"" << primary_king_name(material)
+           << "\",\"" << primary_name(material) << "\",\"" << minor
            << "_king\",\"" << minor << "\",\"turn\"]"
            << ",\"index\":\"D4-first-piece-v1\",\"square_count\":104"
            << ",\"dense_state_count\":" << Four_Man_State_Count
@@ -632,7 +663,7 @@ void write_four_man_file(const std::string & path, const std::vector<std::uint8_
            << ",\"legal_count\":" << legal_count
            << ",\"rules\":\"" << rules << "\""
            << ",\"rules_sha256\":\"" << rules_sha << "\""
-           << (kwkn ? ",\"capture_policy_sha256\":\""
+           << (capture_boundary ? ",\"capture_policy_sha256\":\""
                     : ",\"krk_payload_sha256\":\"")
            << dependency_sha256 << "\""
            << ",\"codes\":{\"invalid\":0,\"loss\":2,\"draw\":3,\"win\":4}"
@@ -668,10 +699,10 @@ FourManTable read_four_man_file(const std::string & path) {
     if (json_string(header, "index") != "D4-first-piece-v1")
         throw std::runtime_error("four-man table metadata mismatch");
     const std::string minor = minor_name(material);
-    const bool kwkn = material == FourManMaterial::Kwkn;
+    const bool capture_boundary = uses_capture_policy(material);
     const std::string labelled_order = "\"labelled_order\":[\"" +
-        std::string(kwkn ? "wizard_king" : "rook_king") + "\",\"" +
-        std::string(kwkn ? "wizard" : "rook") + "\",\"" + minor +
+        std::string(primary_king_name(material)) + "\",\"" +
+        std::string(primary_name(material)) + "\",\"" + minor +
         "_king\",\"" + minor + "\",\"turn\"]";
     if (header.find(labelled_order) == std::string::npos)
         throw std::runtime_error("four-man labelled-piece order mismatch");
@@ -702,14 +733,15 @@ FourManTable read_four_man_file(const std::string & path) {
         json_unsigned(header, "draw_count") != draw ||
         json_unsigned(header, "win_count") != win)
         throw std::runtime_error("four-man outcome counts mismatch");
-    const std::string dependency_key = kwkn
+    const std::string dependency_key = capture_boundary
         ? "capture_policy_sha256" : "krk_payload_sha256";
     const std::string dependency_sha = json_string(header, dependency_key);
     if (dependency_sha.size() != 64)
         throw std::runtime_error("four-man dependency checksum is missing");
-    if (kwkn && dependency_sha != sha256(std::string("kwk-knk-insufficient-material-v1")))
-        throw std::runtime_error("KWKN capture-policy checksum mismatch");
-    return FourManTable { material, std::move(payload) };
+    if (capture_boundary && dependency_sha != sha256(std::string(capture_policy(material))))
+        throw std::runtime_error(std::string(four_man_material_name(material)) +
+                                 " capture-policy checksum mismatch");
+    return FourManTable { material, std::move(payload), dependency_sha };
 }
 
 void inspect_four_man_file(const std::string & path) {
