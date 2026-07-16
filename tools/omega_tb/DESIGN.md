@@ -101,6 +101,9 @@ The full table passed Bellman verification plus exhaustive D4 and Champion
 label-swap invariance. It confirms that two Champions can force mate from most
 legal records while retaining exact drawn placements. KCCK is likewise absent
 from production and evaluation. See `KCCK_DESIGN.md` and `KCCK_THEORY.md`.
+Any mechanism analysis of its exact draws is separately constrained by
+`KCCK_DRAW_DESIGN.md`; local corner/capture flags must not be mistaken for
+proved fortress classes without the residual draw-graph analysis.
 
 The next same-side-leaper experiment is KWWK. Its contract must stratify
 opposite-color and same-color Wizard pairs and reconstruct raw color-class

@@ -100,7 +100,8 @@ could guide play, add DTM or rule-aware DTZ and test the 100-ply boundary.
 The highest-value follow-ups are:
 
 1. add distance-to-mate to measure whether the nominal wins are practical;
-2. classify the 93,247 turn-independent drawn placements by saving mechanism;
+2. classify the 93,247 turn-independent drawn placements by saving mechanism
+   under the frozen `KCCK_DRAW_DESIGN.md` contract;
 3. solve KWWK with separate opposite-color and same-color Wizard strata;
 4. turn representative win, draw, capture-escape, and fortress records into
    engine-evaluation regressions without treating table populations as piece
