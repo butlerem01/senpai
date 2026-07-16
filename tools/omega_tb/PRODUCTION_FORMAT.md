@@ -15,6 +15,7 @@ files which pass the same strict reader.
   - KRKC: rook-side king, rook, Champion-side king, Champion.
   - KRKN: rook-side king, rook, Knight-side king, Knight.
   - KWKN: Wizard-side king, Wizard, Knight-side king, Knight.
+  - KCKW: Champion-side king, Champion, Wizard-side king, Wizard.
 - Historically illegal dense slots use the `invalid` WDL code.
 - Current legal/index populations are fixed in the header validator:
 
@@ -25,6 +26,7 @@ files which pass the same strict reader.
 | KRKC | 27,594,696 | 22,607,206 |
 | KRKN | 27,594,696 | 23,034,346 |
 | KWKN | 27,594,696 | 24,078,355 |
+| KCKW | 27,594,696 | 23,651,215 |
 
 The canonical SHA-256 rules fingerprint covers geometry, index version,
 historical legality, King/Rook/Champion/Knight moves, the automatic 100-ply draw,
@@ -44,6 +46,13 @@ KWK/KNK theoretical capture boundary are part of its identity:
 
 ```text
 67de2569c248dfb80bb308fee09fa4deebf4225fdb3880a1507b21656b204ff7
+```
+
+KCKW likewise freezes Champion/Wizard geometry and its KCK/KWK capture
+boundary:
+
+```text
+f46be111c8f52a8b22777a83bd463fe2ad7368a260fed23b0fd8956d751415d7
 ```
 
 ## WDL and DTZ payloads
@@ -70,7 +79,7 @@ through `encode_theoretical_wdl()` before `write_table()`. The conversion
 rejects `unknown` rather than silently storing it as a production loss.
 
 KCK is additionally validated against current rule policy: every legal state
-must be a draw. KRKC, KRKN, and KWKN use the same container and
+must be a draw. KRKC, KRKN, KWKN, and KCKW use the same container and
 material-specific semantic metadata. Only an
 `OMTB4WDL` artifact marked `complete=true` with `boundary=full` is eligible
 for production conversion.
@@ -81,7 +90,8 @@ for production conversion.
 its frozen rules/index metadata, outcome populations and payload checksum
 before explicitly remapping the four-valued source codes to WDL5. Both
 rook-based four-man families also require the exact KRK source dependency used
-during generation. KWKN instead validates its embedded capture-policy checksum:
+during generation. KWKN and KCKW instead validate their embedded
+capture-policy checksums:
 
 ```powershell
 python tools/omega_tb/convert_to_production.py `
@@ -101,17 +111,28 @@ python tools/omega_tb/convert_to_production.py `
 python tools/omega_tb/convert_to_production.py `
   --input build/omega-tb/omega-kwkn-wdl-v1.omtb4 `
   --output .build-omega-tb/production/omega-kwkn-wdl-v1.omtb
+
+python tools/omega_tb/convert_to_production.py `
+  --input .build-omega-tb/omega-kckw-wdl-v1.omtb4 `
+  --output .build-omega-tb/production/omega-kckw-wdl-v1.omtb
 ```
 
 `OmegaTablebasePath` names a directory containing the fixed production
 filenames `omega-krk-wdl-v1.omtb`, `omega-kck-wdl-v1.omtb`,
-`omega-krkc-wdl-v1.omtb`, `omega-krkn-wdl-v1.omtb`, and
-`omega-kwkn-wdl-v1.omtb`. Loading is
+`omega-krkc-wdl-v1.omtb`, `omega-krkn-wdl-v1.omtb`,
+`omega-kwkn-wdl-v1.omtb`, and `omega-kckw-wdl-v1.omtb`. Loading is
 all-or-nothing.
 
-Run `test-production-conversion.ps1` to repeat the conversions, check
-byte-for-byte determinism, and load the full outputs through the native C++
-reader.
+`build-production-set.ps1` assembles and natively validates all six files in
+`$PWD\.build-omega-tb\production`. Set CoreChess's Senpai engine option
+`OmegaTablebasePath` to that directory's absolute path. This is an intentional
+five-to-six-file migration: a legacy five-file directory is incomplete for
+this runtime and is rejected without replacing an already loaded valid set.
+
+`build-production-set.ps1` performs the complete six-family conversion and
+native re-read, and also freezes the real KCKW source and production container
+hashes. The retained `test-production-conversion.ps1` is the smaller legacy
+KRK/KRKC determinism check.
 
 ## Fixed 256-byte header
 
@@ -164,7 +185,8 @@ destination table unchanged on native load failure.
 
 ## Tests
 
-Python tests cover KRK/KCK round trips, optional DTZ, KRKC/KRKN/KWKN frozen metadata,
+Python tests cover KRK/KCK round trips, optional DTZ,
+KRKC/KRKN/KWKN/KCKW frozen metadata,
 invalid WDL codes, KCK policy violations, material/rules mismatch, header and
 payload corruption, and truncation:
 
@@ -175,3 +197,13 @@ python -m unittest tools/omega_tb/tests/test_production_format.py -v
 `tests/production_format.cpp` covers the equivalent native loader/writer,
 checks the cross-language rules digest, and is picked up automatically by
 `test-msvc.ps1`.
+
+For a release gate against the real assembled payloads, run:
+
+```powershell
+$env:OMEGA_FULL_TABLEBASE_PATH = (Resolve-Path .build-omega-tb/production).Path
+powershell -ExecutionPolicy Bypass -File test-msvc.ps1
+```
+
+The runtime test then probes the frozen KCKW draw, win, and loss witnesses from
+the real file and confirms that only the draw reaches search adjudication.

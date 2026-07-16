@@ -26,6 +26,12 @@ Frozen artifact facts:
   `adb94009588fe013d37c5984717e63638fb0cb35ad816924b1c6b3cf5973b66b`
 - Capture-policy SHA-256:
   `e1feaf717c6f4ba6abed046a2577ecd00714ea2c4c3e0b3aa6f7fa745d0c364f`
+- Production rules SHA-256:
+  `f46be111c8f52a8b22777a83bd463fe2ad7368a260fed23b0fd8956d751415d7`
+- Remapped production payload SHA-256:
+  `fedd4701f498e0871cff7b8c6aa263dc0c0daf7110bb4c73b8a02b62e73981d4`
+- Complete production container SHA-256:
+  `189c55def880086582fd2af97aeb436d9409a89c23c6da4598b06e950f420c77`
 
 Reproduction commands from the repository root:
 
@@ -36,6 +42,9 @@ powershell -ExecutionPolicy Bypass -File tools/omega_tb/four_man_build.ps1
   --output .build-omega-tb/omega-kckw-wdl-v1.omtb4
 .\.build-omega-tb\four_man_wdl.exe --summary `
   .build-omega-tb/omega-kckw-wdl-v1.omtb4
+python tools/omega_tb/convert_to_production.py `
+  --input .build-omega-tb/omega-kckw-wdl-v1.omtb4 `
+  --output .build-omega-tb/production/omega-kckw-wdl-v1.omtb
 ```
 
 WDL is always relative to the side to move. The exact turn split is:
@@ -95,6 +104,8 @@ both KCK and KWK are policy draws. Decisive records therefore arise from mate
 nets and forced non-capture geometry, not from assigning either lone leaper a
 bare-king mating win.
 
-The table contains neither DTM nor 100-ply-aware DTZ. It remains an offline
-diagnostic artifact: no production tablebase material set, runtime probe, or
-engine evaluation term consumes KCKW records on this branch.
+The table contains neither DTM nor 100-ply-aware DTZ. The verified source can
+be converted into the checked production container and loaded by the runtime
+probe. Search consumes exact KCKW draws only; decisive records remain visible
+to diagnostics but fall through to normal search. No engine evaluation term
+consumes KCKW records.

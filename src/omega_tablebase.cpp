@@ -478,6 +478,23 @@ bool index_position(const Pos & pos, Indexed_Position & indexed) {
       return true;
    }
 
+   if (total == 4 && champions == 1 && wizards == 1) {
+      const Side champion_side = pos.count(Champion, White) == 1 ? White : Black;
+      const Side wizard_side = pos.count(Wizard, White) == 1 ? White : Black;
+      if (champion_side == wizard_side) return false;
+      indexed.material = production_format::Material::KCKW;
+      indexed.squares[0] = static_cast<std::uint8_t>(pos.king(champion_side));
+      indexed.squares[1] = static_cast<std::uint8_t>(
+         bit::first(pos.pieces(Champion, champion_side))
+      );
+      indexed.squares[2] = static_cast<std::uint8_t>(pos.king(wizard_side));
+      indexed.squares[3] = static_cast<std::uint8_t>(
+         bit::first(pos.pieces(Wizard, wizard_side))
+      );
+      indexed.turn = pos.turn() == champion_side ? 0 : 1;
+      return true;
+   }
+
    return false;
 }
 
@@ -490,6 +507,7 @@ struct Runtime_Tablebases::Table_Set {
    production_format::Table krkc;
    production_format::Table krkn;
    production_format::Table kwkn;
+   production_format::Table kckw;
 
    const production_format::Table * table(production_format::Material material) const {
       switch (material) {
@@ -498,6 +516,7 @@ struct Runtime_Tablebases::Table_Set {
          case production_format::Material::KRKC: return &krkc;
          case production_format::Material::KRKN: return &krkn;
          case production_format::Material::KWKN: return &kwkn;
+         case production_format::Material::KCKW: return &kckw;
          default:                                 return nullptr;
       }
    }
@@ -512,6 +531,7 @@ const char * production_file_name(production_format::Material material) {
       case production_format::Material::KRKC: return "omega-krkc-wdl-v1.omtb";
       case production_format::Material::KRKN: return "omega-krkn-wdl-v1.omtb";
       case production_format::Material::KWKN: return "omega-kwkn-wdl-v1.omtb";
+      case production_format::Material::KCKW: return "omega-kckw-wdl-v1.omtb";
       default:                                 return "";
    }
 }
@@ -542,6 +562,7 @@ Configure_Result Runtime_Tablebases::configure(const std::string & requested_dir
       production_format::Material::KRKC,
       production_format::Material::KRKN,
       production_format::Material::KWKN,
+      production_format::Material::KCKW,
    };
 
    std::uint64_t payload_bytes = 0;
@@ -554,6 +575,7 @@ Configure_Result Runtime_Tablebases::configure(const std::string & requested_dir
          case production_format::Material::KRKC: table = &next->krkc; break;
          case production_format::Material::KRKN: table = &next->krkn; break;
          case production_format::Material::KWKN: table = &next->kwkn; break;
+         case production_format::Material::KCKW: table = &next->kckw; break;
          default: break;
       }
 
@@ -589,7 +611,7 @@ Configure_Result Runtime_Tablebases::configure(const std::string & requested_dir
 
    std::atomic_store(&p_tables, std::shared_ptr<const Table_Set>(next));
    result.ok = true;
-   result.message = "Omega tablebases loaded: KRK, KCK, KRKC, KRKN, KWKN (" +
+   result.message = "Omega tablebases loaded: KRK, KCK, KRKC, KRKN, KWKN, KCKW (" +
                     std::to_string(payload_bytes / (1024 * 1024)) + " MiB payload";
    if (any_dtz) result.message += "; DTZ payload present but not used by search";
    result.message += ")";
@@ -665,6 +687,7 @@ std::uint32_t dense_index(
       case production_format::Material::KRKC:
       case production_format::Material::KRKN:
       case production_format::Material::KWKN:
+      case production_format::Material::KCKW:
          return retained.four.rank(squares.data(), turn);
       default:
          throw std::invalid_argument("material has no Omega D4 index");

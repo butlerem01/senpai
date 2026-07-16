@@ -16,7 +16,7 @@ heuristic four-man score scaler**.
   in `Pos::is_draw()`.
 - A standalone C++17 exact KRKC/KRKN/KWKN/KCKW/KCCK theoretical-WDL generator
   (`four_man_*.{hpp,cpp,ps1}`). KRKC/KRKN consume the checksummed KRK
-  dependency. KWKN and diagnostic-only KCKW instead freeze their one-leaper
+  dependency. KWKN and KCKW instead freeze their one-leaper
   capture-to-draw policies in the artifact header. Diagnostic KCCK generalizes
   ownership to two labelled, same-side Champions and freezes either Champion's
   capture as a KCK draw. All five use on-demand
@@ -170,11 +170,32 @@ WDL is stored from the side-to-move perspective. `invalid` occupies the
 historically illegal index slots. Each generated payload is one byte per D4
 slot plus one JSON header line.
 
+## Assemble the CoreChess runtime directory
+
+After generating all six source artifacts above, run this from the repository
+root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/omega_tb/build-production-set.ps1
+```
+
+The script strictly converts and natively re-reads every artifact, then writes
+the complete set to the exact directory `$PWD\.build-omega-tb\production`.
+In CoreChess, set Senpai's `OmegaTablebasePath` option to that directory's
+absolute path. If source artifacts live elsewhere, the script accepts
+`-KrkInput`, `-KckInput`, `-KrkcInput`, `-KrknInput`, `-KwknInput`, and
+`-KckwInput`.
+
+This is an intentional migration from five required files to six. A directory
+made for the earlier KWKN build must gain `omega-kckw-wdl-v1.omtb`; otherwise
+the new engine rejects the incomplete replacement atomically (and retains a
+previously loaded valid six-table set).
+
 ## Current limitations
 
 - Runtime probing is enabled through the UCI string option
-  `OmegaTablebasePath`. The directory must contain the fixed KRK, KCK, and
-  KRKC, KRKN, and KWKN `OMTBPROD` filenames documented in
+  `OmegaTablebasePath`. The directory must contain the fixed KRK, KCK, KRKC,
+  KRKN, KWKN, and KCKW `OMTBPROD` filenames documented in
   `PRODUCTION_FORMAT.md`.
 - Search consumes exact tablebase draws only. Theoretical win/loss records
   deliberately fall through to normal search until DTZ can account for the
@@ -192,10 +213,10 @@ slot plus one JSON header line.
 - KWKN is exact theoretical WDL, but its decisive records are diagnostic-only
   at runtime. See `KWKN_THEORY.md` for turn-stratified populations and the
   limits of interpreting WDL without DTM/DTZ.
-- KCKW is an offline diagnostic only. It is not part of `OMTBPROD`, the
-  all-or-nothing runtime material set, or engine evaluation. See
-  `KCKW_THEORY.md` for its frozen hashes, turn/material-side populations,
-  paired-placement counts, and decisive witnesses.
+- KCKW uses the same conservative runtime policy as KWKN: exact draw records
+  may adjudicate search, while decisive W/L records remain diagnostic-only
+  until a 100-ply-safe DTZ policy exists. See `KCKW_THEORY.md` for its frozen
+  hashes, populations, and decisive witnesses.
 - KCCK is also an offline diagnostic only. Its complete WDL solve confirms
   that two Champions can mate, while the exact DTM companion proves a median
   of 18 plies, a maximum of 40, and no fresh-clock cursed wins. Verified drawn

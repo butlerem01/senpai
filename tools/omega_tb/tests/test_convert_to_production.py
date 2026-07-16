@@ -10,6 +10,8 @@ sys.path.insert(0, str(TOOLS))
 
 from convert_to_production import (
     FOUR_MAN_ORDERS,
+    KCKW_CAPTURE_POLICY_SHA256,
+    KCKW_RULES,
     KRKN_RULES,
     KWKN_CAPTURE_POLICY_SHA256,
     KWKN_RULES,
@@ -124,6 +126,43 @@ def write_kwkn_source(path: Path, payload: bytes, **changes):
     )
 
 
+def source_kckw_payload():
+    spec = material_spec("KCKW")
+    invalid = spec.state_count - spec.legal_count
+    return bytes([SOURCE_CODES["invalid"]]) * invalid + bytes([SOURCE_CODES["draw"]]) * spec.legal_count
+
+
+def write_kckw_source(path: Path, payload: bytes, **changes):
+    spec = material_spec("KCKW")
+    counts = {name: payload.count(code) for name, code in SOURCE_CODES.items()}
+    header = {
+        "magic": "OMTB4WDL",
+        "version": 1,
+        "material": "KCKW",
+        "labelled_order": FOUR_MAN_ORDERS["KCKW"],
+        "index": "D4-first-piece-v1",
+        "square_count": 104,
+        "dense_state_count": spec.state_count,
+        "state_count": spec.state_count,
+        "complete": True,
+        "boundary": "full",
+        "legal_count": spec.legal_count,
+        "rules": KCKW_RULES,
+        "rules_sha256": hashlib.sha256(KCKW_RULES.encode("ascii")).hexdigest(),
+        "capture_policy_sha256": KCKW_CAPTURE_POLICY_SHA256,
+        "codes": SOURCE_CODES,
+        "payload_sha256": hashlib.sha256(payload).hexdigest(),
+        "counts": counts,
+    }
+    for name, count in counts.items():
+        header[f"{name}_count"] = count
+    header.update(changes)
+    path.write_bytes(
+        json.dumps(header, sort_keys=True, separators=(",", ":")).encode("ascii")
+        + b"\n" + payload
+    )
+
+
 class ConvertToProductionTests(unittest.TestCase):
     def test_full_krk_conversion_and_code_remap(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -207,6 +246,27 @@ class ConvertToProductionTests(unittest.TestCase):
             )
 
             write_kwkn_source(source, payload, capture_policy_sha256="0" * 64)
+            with self.assertRaisesRegex(ValueError, "capture-policy"):
+                read_source_artifact(source)
+
+    def test_full_kckw_conversion_has_no_krk_dependency(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "omega-kckw-wdl-v1.omtb4"
+            payload = source_kckw_payload()
+            write_kckw_source(source, payload)
+            artifact = read_source_artifact(source)
+            self.assertEqual("KCKW", artifact.material)
+
+            output = root / "omega-kckw-wdl-v1.omtb"
+            convert_artifact(source, output)
+            table = read_table(output, "KCKW")
+            self.assertEqual(
+                (3_943_481, 0, 0, 23_651_215, 0, 0),
+                table.header.outcome_counts,
+            )
+
+            write_kckw_source(source, payload, capture_policy_sha256="0" * 64)
             with self.assertRaisesRegex(ValueError, "capture-policy"):
                 read_source_artifact(source)
 

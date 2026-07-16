@@ -12,8 +12,8 @@ class Pos;
 
 namespace omega_tb {
 
-// The path option names a directory containing five checked production files
-// (KRK, KCK, KRKC, KRKN, and KWKN). A reload is all-or-nothing so a bad or
+// The path option names a directory containing six checked production files
+// (KRK, KCK, KRKC, KRKN, KWKN, and KCKW). A reload is all-or-nothing so a bad or
 // incomplete directory cannot replace a table set already serving search.
 const char * production_file_name(production_format::Material material);
 
@@ -57,7 +57,7 @@ bool probe_search_draw(const Pos & pos, Probe * result = nullptr);
 
 // Exposed for frozen native parity tests and offline diagnostics.  Squares
 // use Senpai's native Omega numbering (a1..a10, b1..b10, ..., corners 100..103)
-// and turn is role-relative: strong/rook side is zero.
+// and turn is role-relative: strong/primary side is zero.
 std::uint32_t dense_index(production_format::Material material,
                           const std::array<std::uint8_t, 4> & squares,
                           std::uint8_t turn);

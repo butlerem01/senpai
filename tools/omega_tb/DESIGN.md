@@ -6,7 +6,7 @@ Tables normalize by material role rather than colour. Three-man order is
 strong-side king, role piece, bare king, side-to-move bit. KRKC/KRKN order is
 rook-side king, rook, minor-side king, minor, side-to-move bit. KWKN order is
 Wizard-side king, Wizard, Knight-side king, Knight, side-to-move bit. The
-diagnostic KCKW experiment uses Champion-side king, Champion, Wizard-side
+KCKW uses Champion-side king, Champion, Wizard-side
 king, Wizard, side-to-move bit. Diagnostic KCCK uses attacker king,
 Champion A, defender king, Champion B, side-to-move bit; both labelled
 Champions belong to the attacker. The
@@ -66,7 +66,7 @@ stabilizer and six retain one reflection. A generic block contains
 The reported `Kw2/Rj6` versus `Ke5/Ch4` position is permanently fixed at dense
 index `26,750,996`, protecting compatibility with the retained v1 design.
 
-## Implemented four-man dependencies and diagnostic leaper studies
+## Implemented four-man dependencies and leaper studies
 
 Within KRKC, quiet moves remain in-class. Captures leave the family:
 
@@ -89,10 +89,9 @@ checksum in the source artifact.
 KCKW reuses the no-KRK graph boundary with the Champion as the primary leaper
 and Wizard as the opposing leaper. Either capture leaves KCK or KWK, both
 automatic draws under the current engine rule. Its material-specific rules and
-capture-policy hashes are validated by the offline container reader. KCKW is a
-geometry diagnostic only: it is deliberately absent from the production
-format, runtime material set, and evaluator. See `KCKW_DESIGN.md` for its
-acceptance contract and `KCKW_THEORY.md` for the frozen solve.
+capture-policy hashes are validated by the offline container reader and strict
+production converter. See `KCKW_DESIGN.md` for its acceptance contract and
+`KCKW_THEORY.md` for the frozen solve.
 
 KCCK generalizes ownership rather than merely renaming a defender-side piece:
 the attacker moves either labelled Champion, while the bare defender moves
@@ -140,9 +139,10 @@ probing must combine DTZ with the remaining `100 - halfmove_clock` budget.
 ## Production runtime boundary
 
 `OMTBPROD` provides fixed metadata, rules and payload hashes, and a strict
-native reader. `OmegaTablebasePath` atomically loads KRK, KCK, KRKC, KRKN, and
-KWKN as one set; a missing or invalid replacement retains the previous set.
-KCKW and KCCK remain outside this production boundary.
+native reader. `OmegaTablebasePath` atomically loads KRK, KCK, KRKC, KRKN,
+KWKN, and KCKW as one set; a missing or invalid replacement retains the
+previous set.
+KCCK remains outside this production boundary.
 Runtime indexing is role-normalized and read-only. Search consumes only exact
 draw records. Most win/loss records remain diagnostic until a later distance
 pass can respect the automatic 100-ply boundary and provide root ordering.

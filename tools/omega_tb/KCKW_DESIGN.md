@@ -48,5 +48,7 @@ All six offline gates passed for the source artifact documented in
 `KCKW_THEORY.md`: the exact legal population is 23,651,215, the full Bellman
 recheck passed, and the summary contains turn/material-side counts plus
 terminal, nonterminal, and turn-independent witnesses for both material sides.
-The production format, runtime tablebase set, and engine evaluation remain
-unchanged.
+The verified source may now be converted through the strict `OMTBPROD` bridge
+and loaded as the sixth member of the atomic runtime set. Runtime search
+consumes only exact draw records; decisive W/L remains diagnostic pending a
+100-ply-safe DTZ policy. Engine evaluation remains unchanged.

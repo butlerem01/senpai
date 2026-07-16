@@ -111,9 +111,9 @@ replacement, and UCI book bypasses. Native and companion opening perft agree at 
 1,600, and 67,202 nodes through depths 1-3.
 
 An evaluator-independent exact endgame foundation lives in `tools/omega_tb`.
-It provides verified KRK, KCK, KRKC, KRKN, and KWKN theoretical WDL, geometry
+It provides verified KRK, KCK, KRKC, KRKN, KWKN, and KCKW theoretical WDL, geometry
 and graph parity checks, and a checksummed production format. Set the UCI
-string option `OmegaTablebasePath` to a directory containing all five fixed
+string option `OmegaTablebasePath` to a directory containing all six fixed
 production files.
 Search consumes exact draws only; theoretical wins and losses fall back to
 normal search until DTZ and the 100-ply conversion boundary are implemented.

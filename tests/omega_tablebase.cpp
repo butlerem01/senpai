@@ -4,6 +4,7 @@
 #include <array>
 #include <cassert>
 #include <cstdio>
+#include <cstdlib>
 #include <direct.h>
 #include <map>
 #include <string>
@@ -83,7 +84,7 @@ struct Cleanup {
       omega_tb::G_Tablebases.configure("");
       const fmt::Material materials[] {
          fmt::Material::KRK, fmt::Material::KCK, fmt::Material::KRKC,
-         fmt::Material::KRKN, fmt::Material::KWKN,
+         fmt::Material::KRKN, fmt::Material::KWKN, fmt::Material::KCKW,
       };
       for (fmt::Material material : materials) {
          std::remove(fixture_path(material).c_str());
@@ -173,6 +174,21 @@ int main() {
    const Pos kwkn_same_side = make(
       "10/10/10/9W/4k5/3N6/10/1K8/10/10[-/-/-/-] w - - 0 1"
    );
+   const Pos kckw_draw = make(
+      "10/10/10/9C/4k5/3w6/10/1K8/10/10[-/-/-/-] w - - 0 1"
+   );
+   const Pos kckw_win = make(
+      "10/10/10/w9/10/10/10/10/K9/C9[k/-/-/-] w - - 0 1"
+   );
+   const Pos kckw_loss = make(
+      "w9/10/10/10/10/10/10/10/K9/C9[k/-/-/-] b - - 0 1"
+   );
+   const Pos kckw_swapped_draw = make(
+      "10/10/10/9c/4K5/3W6/10/1k8/10/10[-/-/-/-] b - - 0 1"
+   );
+   const Pos kckw_same_side = make(
+      "10/10/10/9C/4k5/10/3W6/1K8/10/10[-/-/-/-] w - - 0 1"
+   );
    const Pos krk_stalemate = make(
       "R9/1K8/10/10/10/10/10/10/10/10[-/-/-/k] b - - 0 1"
    );
@@ -189,6 +205,11 @@ int main() {
    assert(is_legal(kwkn_win));
    assert(is_legal(kwkn_swapped_draw));
    assert(is_legal(kwkn_same_side));
+   assert(is_legal(kckw_draw));
+   assert(is_legal(kckw_win));
+   assert(is_legal(kckw_loss));
+   assert(is_legal(kckw_swapped_draw));
+   assert(is_legal(kckw_same_side));
    assert(is_legal(krk_stalemate));
    assert(is_stalemate(krk_stalemate));
    assert(!krk_stalemate.is_draw());
@@ -221,6 +242,17 @@ int main() {
       fmt::Material::KWKN, {{ 1, 4, 100, 0 }}, 0
    );
    assert(kwkn_win_index == 1143704);
+   const std::uint32_t kckw_draw_index = omega_tb::dense_index(
+      fmt::Material::KCKW, {{ 12, 96, 45, 34 }}, 0
+   );
+   const std::uint32_t kckw_win_index = omega_tb::dense_index(
+      fmt::Material::KCKW, {{ 1, 0, 100, 6 }}, 0
+   );
+   const std::uint32_t kckw_loss_index = omega_tb::dense_index(
+      fmt::Material::KCKW, {{ 1, 0, 100, 9 }}, 1
+   );
+   assert(kckw_win_index == 1081900);
+   assert(kckw_loss_index == 1081907);
 
    assert(_mkdir(Fixture_Directory.c_str()) == 0);
    Cleanup cleanup;
@@ -241,6 +273,11 @@ int main() {
    write_fixture(fmt::Material::KWKN, {
       { kwkn_draw_index, fmt::Wdl::Draw },
       { kwkn_win_index, fmt::Wdl::Win },
+   });
+   write_fixture(fmt::Material::KCKW, {
+      { kckw_draw_index, fmt::Wdl::Draw },
+      { kckw_win_index, fmt::Wdl::Win },
+      { kckw_loss_index, fmt::Wdl::Loss },
    });
 
    const omega_tb::Configure_Result loaded =
@@ -301,6 +338,32 @@ int main() {
    assert(probe.index == kwkn_win_index);
    assert(!omega_tb::probe_search_draw(kwkn_win));
 
+   assert(omega_tb::G_Tablebases.probe(kckw_draw, probe));
+   assert(probe.material == fmt::Material::KCKW);
+   assert(probe.wdl == fmt::Wdl::Draw);
+   assert(probe.index == kckw_draw_index);
+   assert(omega_tb::probe_search_draw(kckw_draw));
+
+   assert(omega_tb::G_Tablebases.probe(kckw_swapped_draw, probe));
+   assert(probe.material == fmt::Material::KCKW);
+   assert(probe.wdl == fmt::Wdl::Draw);
+   assert(probe.index == kckw_draw_index);
+   assert(omega_tb::probe_search_draw(kckw_swapped_draw));
+   assert(!omega_tb::G_Tablebases.probe(kckw_same_side, probe));
+
+   // KCKW decisive records are likewise visible only to diagnostics. Search
+   // ignores both W and L until a draw-rule-safe DTZ policy exists.
+   assert(omega_tb::G_Tablebases.probe(kckw_win, probe));
+   assert(probe.material == fmt::Material::KCKW);
+   assert(probe.wdl == fmt::Wdl::Win);
+   assert(probe.index == kckw_win_index);
+   assert(!omega_tb::probe_search_draw(kckw_win));
+   assert(omega_tb::G_Tablebases.probe(kckw_loss, probe));
+   assert(probe.material == fmt::Material::KCKW);
+   assert(probe.wdl == fmt::Wdl::Loss);
+   assert(probe.index == kckw_loss_index);
+   assert(!omega_tb::probe_search_draw(kckw_loss));
+
    // Terminal native rules precede the table: stalemate and the current
    // halfmove-clock draw gate are not replaced by a production WDL result.
    assert(omega_tb::G_Tablebases.probe(krk_stalemate, probe));
@@ -311,12 +374,12 @@ int main() {
 
    // A failed reload keeps the fully validated table set currently visible to
    // search threads, and disabling is explicit and atomic.
-   assert(std::remove(fixture_path(fmt::Material::KWKN).c_str()) == 0);
-   const omega_tb::Configure_Result missing_kwkn =
+   assert(std::remove(fixture_path(fmt::Material::KCKW).c_str()) == 0);
+   const omega_tb::Configure_Result missing_kckw =
       omega_tb::G_Tablebases.configure(Fixture_Directory);
-   assert(!missing_kwkn.ok && missing_kwkn.retained_previous);
-   assert(missing_kwkn.message.find("omega-kwkn-wdl-v1.omtb") != std::string::npos);
-   assert(omega_tb::G_Tablebases.probe(kwkn_draw, probe));
+   assert(!missing_kckw.ok && missing_kckw.retained_previous);
+   assert(missing_kckw.message.find("omega-kckw-wdl-v1.omtb") != std::string::npos);
+   assert(omega_tb::G_Tablebases.probe(kckw_draw, probe));
 
    const omega_tb::Configure_Result failed =
       omega_tb::G_Tablebases.configure("omega-tablebase-directory-does-not-exist");
@@ -328,6 +391,28 @@ int main() {
    assert(disabled.ok && disabled.disabled);
    assert(!omega_tb::G_Tablebases.loaded());
    assert(!omega_tb::G_Tablebases.probe(krk_draw, probe));
+
+   // Release gating can point this test at a converted full six-table set.
+   // The real KCKW artifact must retain its frozen draw and decisive witnesses,
+   // while only the draw is consumable by search.
+   const char * full_path = std::getenv("OMEGA_FULL_TABLEBASE_PATH");
+   if (full_path != nullptr && full_path[0] != '\0') {
+      const omega_tb::Configure_Result full = omega_tb::G_Tablebases.configure(full_path);
+      assert(full.ok && !full.disabled && !full.retained_previous);
+      assert(omega_tb::G_Tablebases.probe(kckw_draw, probe));
+      assert(probe.material == fmt::Material::KCKW);
+      assert(probe.index == kckw_draw_index);
+      assert(probe.wdl == fmt::Wdl::Draw);
+      assert(omega_tb::probe_search_draw(kckw_draw));
+      assert(omega_tb::G_Tablebases.probe(kckw_win, probe));
+      assert(probe.index == 1081900);
+      assert(probe.wdl == fmt::Wdl::Win);
+      assert(!omega_tb::probe_search_draw(kckw_win));
+      assert(omega_tb::G_Tablebases.probe(kckw_loss, probe));
+      assert(probe.index == 1081907);
+      assert(probe.wdl == fmt::Wdl::Loss);
+      assert(!omega_tb::probe_search_draw(kckw_loss));
+   }
 
    return 0;
 }

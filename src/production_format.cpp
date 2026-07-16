@@ -60,6 +60,14 @@ const char Kwkn_Rules_Description[] =
    "insufficient-k-plus-one-nbcw-v1;kwkn-theoretical-wdl-v1;"
    "wdl5-dtz16-v1";
 
+// KCKW similarly freezes both fairy-piece geometries and the KCK/KWK
+// capture-to-draw boundaries used by the exact source solve.
+const char Kckw_Rules_Description[] =
+   "omega-104-v1;d4-first-piece-v1;historical-legality-v1;"
+   "king-v1;champion-v1;wizard-v1;100-ply-auto-draw-v1;"
+   "insufficient-k-plus-one-nbcw-v1;kckw-theoretical-wdl-v1;"
+   "wdl5-dtz16-v1";
+
 struct Material_Spec {
    Material material;
    std::uint8_t piece_count;
@@ -90,6 +98,10 @@ const Material_Spec Specs[] {
      {{ Piece_King, Piece_Wizard, Piece_King, Piece_Knight }},
      {{ Role_Zero, Role_Zero, Role_One, Role_One }},
      27594696ULL, 24078355ULL },
+   { Material::KCKW, 4,
+     {{ Piece_King, Piece_Champion, Piece_King, Piece_Wizard }},
+     {{ Role_Zero, Role_Zero, Role_One, Role_One }},
+     27594696ULL, 23651215ULL },
 };
 
 const Material_Spec * spec_for(Material material) {
@@ -376,7 +388,9 @@ const char * rules_description() {
 }
 
 const char * rules_description(Material material) {
-   return material == Material::KWKN ? Kwkn_Rules_Description : Rules_Description;
+   if (material == Material::KWKN) return Kwkn_Rules_Description;
+   if (material == Material::KCKW) return Kckw_Rules_Description;
+   return Rules_Description;
 }
 
 std::array<std::uint8_t, 32> canonical_rules_fingerprint() {

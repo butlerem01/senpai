@@ -7,9 +7,9 @@
 #include <string>
 #include <vector>
 
-// Standalone production tablebase container reader/writer.  Nothing in the
-// search or evaluator calls this API yet; it is the checked binary boundary
-// shared with tools/omega_tb/production_format.py.
+// Production tablebase container reader/writer. Runtime probing uses its
+// checked read-only boundary; the offline writer mirrors
+// tools/omega_tb/production_format.py.
 namespace omega_tb {
 namespace production_format {
 
@@ -20,6 +20,7 @@ enum class Material : std::uint8_t {
    KRKC = 3,
    KRKN = 4,
    KWKN = 5,
+   KCKW = 6,
 };
 
 enum class Wdl : std::uint8_t {
