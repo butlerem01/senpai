@@ -15,9 +15,10 @@ constexpr std::uint32_t Krkc_Legal_Count = 22'607'206;
 constexpr std::uint32_t Krkn_Legal_Count = 23'034'346;
 constexpr std::uint32_t Kwkn_Legal_Count = 24'078'355;
 constexpr std::uint32_t Kckw_Legal_Count = 23'651'215;
+constexpr std::uint32_t Kcck_Legal_Count = 23'638'870;
 constexpr std::uint32_t Three_Man_State_Count = 273'816;
 
-enum class FourManMaterial : std::uint8_t { Krkc, Krkn, Kwkn, Kckw };
+enum class FourManMaterial : std::uint8_t { Krkc, Krkn, Kwkn, Kckw, Kcck };
 
 constexpr std::uint8_t Invalid = 0;
 constexpr std::uint8_t Unknown = 1;

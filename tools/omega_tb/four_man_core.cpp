@@ -32,6 +32,10 @@ constexpr const char * Kckw_Rules =
     "omega-104-v1;d4-first-piece-v1;historical-legality-v1;"
     "kckw-theoretical-wdl;champion-v1;wizard-v1;"
     "kck-insufficient-material-v1;kwk-insufficient-material-v1";
+constexpr const char * Kcck_Rules =
+    "omega-104-v1;d4-first-piece-v1;historical-legality-v1;"
+    "kcck-theoretical-wdl;champion-a-v1;champion-b-v1;"
+    "same-side-labels-v1;kck-insufficient-material-v1";
 
 const char * four_man_rules(FourManMaterial material) {
     switch (material) {
@@ -39,6 +43,7 @@ const char * four_man_rules(FourManMaterial material) {
         case FourManMaterial::Krkn: return Krkn_Rules;
         case FourManMaterial::Kwkn: return Kwkn_Rules;
         case FourManMaterial::Kckw: return Kckw_Rules;
+        case FourManMaterial::Kcck: return Kcck_Rules;
     }
     throw std::logic_error("unknown four-man material rules");
 }
@@ -46,28 +51,43 @@ const char * four_man_rules(FourManMaterial material) {
 const char * minor_name(FourManMaterial material) {
     if (material == FourManMaterial::Krkc) return "champion";
     if (material == FourManMaterial::Kckw) return "wizard";
+    if (material == FourManMaterial::Kcck) return "champion_b";
     return "knight";
 }
 
 const char * primary_name(FourManMaterial material) {
     if (material == FourManMaterial::Kwkn) return "wizard";
     if (material == FourManMaterial::Kckw) return "champion";
+    if (material == FourManMaterial::Kcck) return "champion_a";
     return "rook";
 }
 
 const char * primary_king_name(FourManMaterial material) {
     if (material == FourManMaterial::Kwkn) return "wizard_king";
     if (material == FourManMaterial::Kckw) return "champion_king";
+    if (material == FourManMaterial::Kcck) return "attacker_king";
     return "rook_king";
 }
 
+const char * opposing_king_name(FourManMaterial material) {
+    if (material == FourManMaterial::Krkc) return "champion_king";
+    if (material == FourManMaterial::Krkn || material == FourManMaterial::Kwkn)
+        return "knight_king";
+    if (material == FourManMaterial::Kckw) return "wizard_king";
+    if (material == FourManMaterial::Kcck) return "defender_king";
+    throw std::logic_error("unknown opposing king name");
+}
+
 bool uses_capture_policy(FourManMaterial material) {
-    return material == FourManMaterial::Kwkn || material == FourManMaterial::Kckw;
+    return material == FourManMaterial::Kwkn || material == FourManMaterial::Kckw ||
+           material == FourManMaterial::Kcck;
 }
 
 const char * capture_policy(FourManMaterial material) {
     if (material == FourManMaterial::Kwkn) return "kwk-knk-insufficient-material-v1";
     if (material == FourManMaterial::Kckw) return "kck-kwk-insufficient-material-v1";
+    if (material == FourManMaterial::Kcck)
+        return "either-champion-capture-to-kck-draw-v1";
     throw std::logic_error("material uses a KRK dependency rather than a capture policy");
 }
 
@@ -616,6 +636,7 @@ const char * four_man_material_name(FourManMaterial material) {
         case FourManMaterial::Krkn: return "KRKN";
         case FourManMaterial::Kwkn: return "KWKN";
         case FourManMaterial::Kckw: return "KCKW";
+        case FourManMaterial::Kcck: return "KCCK";
     }
     throw std::logic_error("unknown four-man material name");
 }
@@ -625,7 +646,8 @@ FourManMaterial parse_four_man_material(const std::string & name) {
     if (name == "krkn" || name == "KRKN") return FourManMaterial::Krkn;
     if (name == "kwkn" || name == "KWKN") return FourManMaterial::Kwkn;
     if (name == "kckw" || name == "KCKW") return FourManMaterial::Kckw;
-    throw std::invalid_argument("four-man material must be krkc, krkn, kwkn, or kckw");
+    if (name == "kcck" || name == "KCCK") return FourManMaterial::Kcck;
+    throw std::invalid_argument("four-man material must be krkc, krkn, kwkn, kckw, or kcck");
 }
 
 void write_four_man_file(const std::string & path, const std::vector<std::uint8_t> & payload,
@@ -653,8 +675,8 @@ void write_four_man_file(const std::string & path, const std::vector<std::uint8_
     header << "{\"magic\":\"OMTB4WDL\",\"version\":1,\"material\":\""
            << four_man_material_name(material) << "\""
            << ",\"labelled_order\":[\"" << primary_king_name(material)
-           << "\",\"" << primary_name(material) << "\",\"" << minor
-           << "_king\",\"" << minor << "\",\"turn\"]"
+           << "\",\"" << primary_name(material) << "\",\""
+           << opposing_king_name(material) << "\",\"" << minor << "\",\"turn\"]"
            << ",\"index\":\"D4-first-piece-v1\",\"square_count\":104"
            << ",\"dense_state_count\":" << Four_Man_State_Count
            << ",\"state_count\":" << payload.size()
@@ -702,8 +724,9 @@ FourManTable read_four_man_file(const std::string & path) {
     const bool capture_boundary = uses_capture_policy(material);
     const std::string labelled_order = "\"labelled_order\":[\"" +
         std::string(primary_king_name(material)) + "\",\"" +
-        std::string(primary_name(material)) + "\",\"" + minor +
-        "_king\",\"" + minor + "\",\"turn\"]";
+        std::string(primary_name(material)) + "\",\"" +
+        std::string(opposing_king_name(material)) + "\",\"" + minor +
+        "\",\"turn\"]";
     if (header.find(labelled_order) == std::string::npos)
         throw std::runtime_error("four-man labelled-piece order mismatch");
     if (json_unsigned(header, "dense_state_count") != Four_Man_State_Count ||

@@ -2,7 +2,8 @@ param(
     [int]$SmallStates = 100000,
     [string]$KrknFullPath = "",
     [string]$KwknFullPath = "",
-    [string]$KckwFullPath = ""
+    [string]$KckwFullPath = "",
+    [string]$KcckFullPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -28,6 +29,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "KWKN self-test failed" }
     & $generator --material kckw --self-test --verify-counts
     if ($LASTEXITCODE -ne 0) { throw "KCKW self-test failed" }
+    & $generator --material kcck --self-test --verify-counts
+    if ($LASTEXITCODE -ne 0) { throw "KCCK self-test failed" }
 
     $smallKrkc = Join-Path $temporary "omega-krkc-small.omtb4"
     & $generator --material krkc --small $SmallStates --krk $krk --verify --output $smallKrkc
@@ -60,6 +63,14 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "small KCKW file verification failed" }
     & $generator --probe $smallKckw --material kckw --index 0
     if ($LASTEXITCODE -ne 0) { throw "small KCKW file probe failed" }
+
+    $smallKcck = Join-Path $temporary "omega-kcck-small.omtb4"
+    & $generator --material kcck --small $SmallStates --verify --output $smallKcck
+    if ($LASTEXITCODE -ne 0) { throw "small KCCK solve failed" }
+    & $generator --inspect $smallKcck
+    if ($LASTEXITCODE -ne 0) { throw "small KCCK file verification failed" }
+    & $generator --probe $smallKcck --material kcck --index 0
+    if ($LASTEXITCODE -ne 0) { throw "small KCCK file probe failed" }
 
     if ($SmallStates -eq 100000) {
         $reader = [IO.File]::OpenText($smallKrkc)
@@ -96,6 +107,15 @@ try {
             $kckwHeader.counts.win -ne 0 -or
             $kckwHeader.payload_sha256 -ne "149e6e18a47857c6a2a44c98a8cb00fa63630883f47ba4bc49665c089b6c95a1") {
             throw "small KCKW deterministic regression counts changed"
+        }
+
+        $reader = [IO.File]::OpenText($smallKcck)
+        try { $kcckHeader = ($reader.ReadLine() | ConvertFrom-Json) } finally { $reader.Dispose() }
+        if ($kcckHeader.legal_count -ne 87535 -or $kcckHeader.counts.invalid -ne 12465 -or
+            $kcckHeader.counts.loss -ne 71 -or $kcckHeader.counts.draw -ne 87207 -or
+            $kcckHeader.counts.win -ne 257 -or
+            $kcckHeader.payload_sha256 -ne "5a4d3882ce9f4b117d19919ac77aecd1d667271356e24611fd2dc58ae703537c") {
+            throw "small KCCK deterministic regression counts changed"
         }
     }
 
@@ -202,7 +222,53 @@ try {
         }
     }
 
-    Write-Host "Four-man KRKC/KRKN/KWKN/KCKW bounded and requested full-artifact tests passed"
+    if (-not [string]::IsNullOrWhiteSpace($KcckFullPath)) {
+        $KcckFullPath = [IO.Path]::GetFullPath($KcckFullPath)
+        if (-not (Test-Path -LiteralPath $KcckFullPath -PathType Leaf)) {
+            throw "Missing full KCCK artifact: $KcckFullPath"
+        }
+        & $generator --inspect $KcckFullPath
+        if ($LASTEXITCODE -ne 0) { throw "full KCCK file verification failed" }
+        $reader = [IO.File]::OpenText($KcckFullPath)
+        try { $fullHeader = ($reader.ReadLine() | ConvertFrom-Json) } finally { $reader.Dispose() }
+        if (-not $fullHeader.complete -or $fullHeader.state_count -ne 27594696 -or
+            $fullHeader.legal_count -ne 23638870 -or $fullHeader.counts.invalid -ne 3955826 -or
+            $fullHeader.counts.loss -ne 11146894 -or $fullHeader.counts.draw -ne 1852083 -or
+            $fullHeader.counts.win -ne 10639893 -or
+            $fullHeader.payload_sha256 -ne "35f9d8bcb3b283dec2f918fcc4c5d62355edc2dee3ee297e16dd42a91940678e" -or
+            $fullHeader.rules_sha256 -ne "ac44f4152d0c619468addc65c580c064a1e8c5bc6c31509f50243739e8f4431f" -or
+            $fullHeader.capture_policy_sha256 -ne "286a4e80294c4118093c8223b3414859c3a8f634ae401ee49cecb4b636c7172b") {
+            throw "full KCCK deterministic regression metadata changed"
+        }
+        if ((Get-FileHash -LiteralPath $KcckFullPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne
+            "bff047fab9141666ae13f80db17ae2d5d5a808bdd115b131180e529bf493a244") {
+            throw "full KCCK container checksum changed"
+        }
+        $probes = @(& $generator --probe $KcckFullPath --material kcck `
+            --state 1,0,100,11,1 --state 1,0,100,2,1)
+        if ($LASTEXITCODE -ne 0 -or
+            $probes -notcontains "index=1081911 wdl=loss code=2" -or
+            $probes -notcontains "index=1081893 wdl=draw code=3") {
+            throw "full KCCK mate/stalemate fixtures changed"
+        }
+        $summary = @(& $generator --summary $KcckFullPath)
+        if ($LASTEXITCODE -ne 0 -or
+            $summary -notcontains "attacker-to-move invalid=3064208 loss=0 draw=93247 win=10639893" -or
+            $summary -notcontains "defender-to-move invalid=891618 loss=11146894 draw=1758836 win=0" -or
+            $summary -notcontains "material-side-wins attacker=21786787 defender=0 draws=1852083 decisive=21786787" -or
+            $summary -notcontains "turn-paired-placements both-legal=10733140 attacker-wins-both=9872538 defender-wins-both=0 split-decisive=0 decisive-draw-mixed=767355 draws-both=93247 at-least-one-invalid=3064208" -or
+            $summary -notcontains "KCCK label-swap-orbits invalid=1978509 loss=5574617 draw=926142 win=5321116 fixed=6072" -or
+            $summary -notcontains "KCCK exhaustive D4 and Champion-label swap invariance: PASS" -or
+            -not ($summary -match "terminal-checkmate") -or
+            -not ($summary -match "mate-in-one-win") -or
+            -not ($summary -match "nonterminal-forced-win") -or
+            -not ($summary -match "nonterminal-forced-loss") -or
+            -not ($summary -match "turn-independent-attacker-win")) {
+            throw "full KCCK populations, symmetry, or decisive witnesses changed"
+        }
+    }
+
+    Write-Host "Four-man KRKC/KRKN/KWKN/KCKW/KCCK bounded and requested full-artifact tests passed"
 } finally {
     if (Test-Path -LiteralPath $temporary) {
         Remove-Item -LiteralPath $temporary -Recurse -Force
