@@ -102,6 +102,11 @@ label-swap invariance. It confirms that two Champions can force mate from most
 legal records while retaining exact drawn placements. KCCK is likewise absent
 from production and evaluation. See `KCCK_DESIGN.md` and `KCCK_THEORY.md`.
 
+The next same-side-leaper experiment is KWWK. Its contract must stratify
+opposite-color and same-color Wizard pairs and reconstruct raw color-class
+populations carefully because the full D4 quotient identifies the two Wizard
+colors. See `KWWK_DESIGN.md`; no KWWK solver or runtime support is present yet.
+
 The standalone C++17 four-man pass reuses the same attractor algorithm and
 on-demand predecessor strategy. It does not infer a blanket draw from the
 material signature: concrete positions may already be mate or retain a forced
