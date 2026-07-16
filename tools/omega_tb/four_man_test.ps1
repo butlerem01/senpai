@@ -1,6 +1,7 @@
 param(
     [int]$SmallStates = 100000,
-    [string]$KrknFullPath = ""
+    [string]$KrknFullPath = "",
+    [string]$KwknFullPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -22,6 +23,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "KRKC self-test failed" }
     & $generator --material krkn --self-test --verify-counts --krk $krk
     if ($LASTEXITCODE -ne 0) { throw "KRKN self-test failed" }
+    & $generator --material kwkn --self-test --verify-counts
+    if ($LASTEXITCODE -ne 0) { throw "KWKN self-test failed" }
 
     $smallKrkc = Join-Path $temporary "omega-krkc-small.omtb4"
     & $generator --material krkc --small $SmallStates --krk $krk --verify --output $smallKrkc
@@ -38,6 +41,14 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "small KRKN file verification failed" }
     & $generator --probe $smallKrkn --material krkn --index 0
     if ($LASTEXITCODE -ne 0) { throw "small KRKN file probe failed" }
+
+    $smallKwkn = Join-Path $temporary "omega-kwkn-small.omtb4"
+    & $generator --material kwkn --small $SmallStates --verify --output $smallKwkn
+    if ($LASTEXITCODE -ne 0) { throw "small KWKN solve failed" }
+    & $generator --inspect $smallKwkn
+    if ($LASTEXITCODE -ne 0) { throw "small KWKN file verification failed" }
+    & $generator --probe $smallKwkn --material kwkn --index 0
+    if ($LASTEXITCODE -ne 0) { throw "small KWKN file probe failed" }
 
     if ($SmallStates -eq 100000) {
         $reader = [IO.File]::OpenText($smallKrkc)
@@ -56,6 +67,15 @@ try {
             $krknHeader.counts.win -ne 0 -or
             $krknHeader.payload_sha256 -ne "29e4149b1594929a2047b7650da5ae34cfd0eccbecc59a5988264e7db183da58") {
             throw "small KRKN deterministic regression counts changed"
+        }
+
+        $reader = [IO.File]::OpenText($smallKwkn)
+        try { $kwknHeader = ($reader.ReadLine() | ConvertFrom-Json) } finally { $reader.Dispose() }
+        if ($kwknHeader.legal_count -ne 90753 -or $kwknHeader.counts.invalid -ne 9247 -or
+            $kwknHeader.counts.loss -ne 0 -or $kwknHeader.counts.draw -ne 90753 -or
+            $kwknHeader.counts.win -ne 0 -or
+            $kwknHeader.payload_sha256 -ne "233f142577620eb3225e7815d4e96a0c956a13246e8ef9d2ce04fdd3647333c8") {
+            throw "small KWKN deterministic regression counts changed"
         }
     }
 
@@ -83,7 +103,43 @@ try {
         }
     }
 
-    Write-Host "Four-man KRKC/KRKN bounded and requested full-artifact tests passed"
+
+    if (-not [string]::IsNullOrWhiteSpace($KwknFullPath)) {
+        $KwknFullPath = [IO.Path]::GetFullPath($KwknFullPath)
+        if (-not (Test-Path -LiteralPath $KwknFullPath -PathType Leaf)) {
+            throw "Missing full KWKN artifact: $KwknFullPath"
+        }
+        & $generator --inspect $KwknFullPath
+        if ($LASTEXITCODE -ne 0) { throw "full KWKN file verification failed" }
+        $reader = [IO.File]::OpenText($KwknFullPath)
+        try { $fullHeader = ($reader.ReadLine() | ConvertFrom-Json) } finally { $reader.Dispose() }
+        if (-not $fullHeader.complete -or $fullHeader.state_count -ne 27594696 -or
+            $fullHeader.legal_count -ne 24078355 -or $fullHeader.counts.invalid -ne 3516341 -or
+            $fullHeader.counts.loss -ne 17131 -or $fullHeader.counts.draw -ne 23997362 -or
+            $fullHeader.counts.win -ne 63862 -or
+            $fullHeader.payload_sha256 -ne "8aedc0255122da32dc6c5684e673b5454eee55878caefc1908b429993cd6e2b8") {
+            throw "full KWKN deterministic regression counts changed"
+        }
+        $probes = @(& $generator --probe $KwknFullPath --material kwkn `
+            --state 88,97,102,0,1)
+        if ($LASTEXITCODE -ne 0 -or -not ($probes -match "wdl=loss code=2")) {
+            throw "full KWKN checkmate fixture changed"
+        }
+        $summary = @(& $generator --summary $KwknFullPath)
+        if ($LASTEXITCODE -ne 0 -or
+            $summary -notcontains "wizard-to-move invalid=1916208 loss=12239 draw=11853479 win=15422" -or
+            $summary -notcontains "knight-to-move invalid=1600133 loss=4892 draw=12143883 win=48440" -or
+            -not ($summary -match "terminal-checkmate") -or
+            -not ($summary -match "mate-in-one-win") -or
+            -not ($summary -match "nonterminal-forced-win") -or
+            -not ($summary -match "nonterminal-forced-loss") -or
+            -not ($summary -match "turn-independent-wizard-win") -or
+            -not ($summary -match "turn-independent-knight-win")) {
+            throw "full KWKN turn populations or decisive witnesses changed"
+        }
+    }
+
+    Write-Host "Four-man KRKC/KRKN/KWKN bounded and requested full-artifact tests passed"
 } finally {
     if (Test-Path -LiteralPath $temporary) {
         Remove-Item -LiteralPath $temporary -Recurse -Force

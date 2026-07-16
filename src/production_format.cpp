@@ -36,6 +36,7 @@ constexpr std::uint8_t Piece_King = 1;
 constexpr std::uint8_t Piece_Rook = 2;
 constexpr std::uint8_t Piece_Champion = 3;
 constexpr std::uint8_t Piece_Knight = 4;
+constexpr std::uint8_t Piece_Wizard = 5;
 constexpr std::uint8_t Role_None = 0xFF;
 constexpr std::uint8_t Role_Zero = 0;
 constexpr std::uint8_t Role_One = 1;
@@ -48,6 +49,16 @@ const char Rules_Description[] =
    "omega-104-v1;d4-first-piece-v1;historical-legality-v1;"
    "king-v1;rook-v1;champion-v1;knight-v1;100-ply-auto-draw-v1;"
    "insufficient-k-plus-one-nbcw-v1;wdl5-dtz16-v1";
+
+// KWKN is theoretical WDL over the same board/index container, but its
+// identity also freezes the detached-corner Wizard geometry and the
+// KWK/KNK capture boundaries used by the standalone retrograde solver.
+// Keep the legacy description above byte-for-byte stable for existing files.
+const char Kwkn_Rules_Description[] =
+   "omega-104-v1;d4-first-piece-v1;historical-legality-v1;"
+   "king-v1;wizard-v1;knight-v1;100-ply-auto-draw-v1;"
+   "insufficient-k-plus-one-nbcw-v1;kwkn-theoretical-wdl-v1;"
+   "wdl5-dtz16-v1";
 
 struct Material_Spec {
    Material material;
@@ -75,6 +86,10 @@ const Material_Spec Specs[] {
      {{ Piece_King, Piece_Rook, Piece_King, Piece_Knight }},
      {{ Role_Zero, Role_Zero, Role_One, Role_One }},
      27594696ULL, 23034346ULL },
+   { Material::KWKN, 4,
+     {{ Piece_King, Piece_Wizard, Piece_King, Piece_Knight }},
+     {{ Role_Zero, Role_Zero, Role_One, Role_One }},
+     27594696ULL, 24078355ULL },
 };
 
 const Material_Spec * spec_for(Material material) {
@@ -335,7 +350,7 @@ std::array<std::uint8_t, Header_Size> build_header(
       header[90 + index] = static_cast<std::uint8_t>(index);
       put_u64(header, 96 + index * 8, counts[index]);
    }
-   const auto rules = canonical_rules_fingerprint();
+   const auto rules = canonical_rules_fingerprint(spec.material);
    std::copy(rules.begin(), rules.end(), header.begin() + Rules_Offset);
    Sha256 payload_hash;
    payload_hash.update(wdl.data(), wdl.size());
@@ -360,16 +375,26 @@ const char * rules_description() {
    return Rules_Description;
 }
 
+const char * rules_description(Material material) {
+   return material == Material::KWKN ? Kwkn_Rules_Description : Rules_Description;
+}
+
 std::array<std::uint8_t, 32> canonical_rules_fingerprint() {
    return sha256(reinterpret_cast<const std::uint8_t *>(Rules_Description),
                  std::strlen(Rules_Description));
+}
+
+std::array<std::uint8_t, 32> canonical_rules_fingerprint(Material material) {
+   const char * description = rules_description(material);
+   return sha256(reinterpret_cast<const std::uint8_t *>(description),
+                 std::strlen(description));
 }
 
 Load_Requirements canonical_requirements(Material material, bool require_dtz) {
    Load_Requirements result;
    result.material = material;
    result.require_dtz = require_dtz;
-   result.rules_fingerprint = canonical_rules_fingerprint();
+   result.rules_fingerprint = canonical_rules_fingerprint(material);
    return result;
 }
 
@@ -544,7 +569,7 @@ bool read_file(const std::string & path,
       return false;
    }
    if (!equal_slice(header, Rules_Offset, requirements.rules_fingerprint.data(), 32)
-    || requirements.rules_fingerprint != canonical_rules_fingerprint()) {
+    || requirements.rules_fingerprint != canonical_rules_fingerprint(material)) {
       error = "production rules fingerprint mismatch";
       return false;
    }

@@ -13,9 +13,10 @@ constexpr std::uint32_t Regular_Squares = 100;
 constexpr std::uint32_t Four_Man_State_Count = 27'594'696;
 constexpr std::uint32_t Krkc_Legal_Count = 22'607'206;
 constexpr std::uint32_t Krkn_Legal_Count = 23'034'346;
+constexpr std::uint32_t Kwkn_Legal_Count = 24'078'355;
 constexpr std::uint32_t Three_Man_State_Count = 273'816;
 
-enum class FourManMaterial : std::uint8_t { Krkc, Krkn };
+enum class FourManMaterial : std::uint8_t { Krkc, Krkn, Kwkn };
 
 constexpr std::uint8_t Invalid = 0;
 constexpr std::uint8_t Unknown = 1;
@@ -73,6 +74,9 @@ public:
     const std::vector<std::uint8_t> & knight_moves(std::uint8_t square) const {
         return knight_moves_[square];
     }
+    const std::vector<std::uint8_t> & wizard_moves(std::uint8_t square) const {
+        return wizard_moves_[square];
+    }
     const std::array<std::vector<std::uint8_t>, 4> & rook_rays(std::uint8_t square) const {
         return rook_rays_[square];
     }
@@ -80,6 +84,7 @@ public:
     bool king_attacks(std::uint8_t first, std::uint8_t second) const;
     bool champion_attacks(std::uint8_t first, std::uint8_t second) const;
     bool knight_attacks(std::uint8_t first, std::uint8_t second) const;
+    bool wizard_attacks(std::uint8_t first, std::uint8_t second) const;
     bool rook_attacks(std::uint8_t first, std::uint8_t second,
                       const std::array<std::uint8_t, 2> & blockers) const;
 
@@ -89,6 +94,7 @@ private:
     std::array<std::vector<std::uint8_t>, Square_Count> king_moves_{};
     std::array<std::vector<std::uint8_t>, Square_Count> champion_moves_{};
     std::array<std::vector<std::uint8_t>, Square_Count> knight_moves_{};
+    std::array<std::vector<std::uint8_t>, Square_Count> wizard_moves_{};
     std::array<std::array<std::vector<std::uint8_t>, 4>, Square_Count> rook_rays_{};
 };
 

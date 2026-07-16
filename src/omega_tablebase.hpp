@@ -12,8 +12,8 @@ class Pos;
 
 namespace omega_tb {
 
-// The path option names a directory containing four checked production
-// files (KRK, KCK, KRKC, and KRKN).  A reload is all-or-nothing so a bad or
+// The path option names a directory containing five checked production files
+// (KRK, KCK, KRKC, KRKN, and KWKN). A reload is all-or-nothing so a bad or
 // incomplete directory cannot replace a table set already serving search.
 const char * production_file_name(production_format::Material material);
 

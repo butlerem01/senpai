@@ -290,11 +290,34 @@ CHAMPION_DELTAS = frozenset({
     (+2, +2), (+2, -2), (-2, +2), (-2, -2),
 })
 
+WIZARD_DELTAS = frozenset({
+    (+1, +1), (+1, -1), (-1, +1), (-1, -1),
+    (+1, +3), (+1, -3), (-1, +3), (-1, -3),
+    (+3, +1), (+3, -1), (-3, +1), (-3, -1),
+})
+
+KNIGHT_DELTAS = frozenset({
+    (+1, +2), (+1, -2), (-1, +2), (-1, -2),
+    (+2, +1), (+2, -1), (-2, +1), (-2, -1),
+})
+
 
 def champion_attacks(first: int, second: int) -> bool:
     x1, y1 = COORDINATES[first]
     x2, y2 = COORDINATES[second]
     return (x2 - x1, y2 - y1) in CHAMPION_DELTAS
+
+
+def wizard_attacks(first: int, second: int) -> bool:
+    x1, y1 = COORDINATES[first]
+    x2, y2 = COORDINATES[second]
+    return (x2 - x1, y2 - y1) in WIZARD_DELTAS
+
+
+def knight_attacks(first: int, second: int) -> bool:
+    x1, y1 = COORDINATES[first]
+    x2, y2 = COORDINATES[second]
+    return (x2 - x1, y2 - y1) in KNIGHT_DELTAS
 
 
 def rook_between(first: int, second: int) -> frozenset[int] | None:
@@ -324,6 +347,14 @@ KING_MOVES: Tuple[Tuple[int, ...], ...] = tuple(
 )
 CHAMPION_MOVES: Tuple[Tuple[int, ...], ...] = tuple(
     tuple(target for target in range(SQUARES) if target != origin and champion_attacks(origin, target))
+    for origin in range(SQUARES)
+)
+WIZARD_MOVES: Tuple[Tuple[int, ...], ...] = tuple(
+    tuple(target for target in range(SQUARES) if target != origin and wizard_attacks(origin, target))
+    for origin in range(SQUARES)
+)
+KNIGHT_MOVES: Tuple[Tuple[int, ...], ...] = tuple(
+    tuple(target for target in range(SQUARES) if target != origin and knight_attacks(origin, target))
     for origin in range(SQUARES)
 )
 

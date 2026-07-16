@@ -11,6 +11,7 @@ from production_format import (
     HEADER_SIZE,
     LOSS,
     RULES_FINGERPRINT,
+    KWKN_RULES_FINGERPRINT,
     WIN,
     encode_theoretical_wdl,
     material_spec,
@@ -124,6 +125,17 @@ class ProductionFormatTests(unittest.TestCase):
         self.assertEqual(27_594_696, spec.state_count)
         self.assertEqual(23_034_346, spec.legal_count)
         self.assertEqual(4, spec.piece_count)
+
+    def test_kwkn_shape_and_material_specific_rules_are_frozen(self):
+        spec = material_spec("KWKN")
+        self.assertEqual(27_594_696, spec.state_count)
+        self.assertEqual(24_078_355, spec.legal_count)
+        self.assertEqual(4, spec.piece_count)
+        self.assertEqual(
+            "67de2569c248dfb80bb308fee09fa4deebf4225fdb3880a1507b21656b204ff7",
+            KWKN_RULES_FINGERPRINT.hex(),
+        )
+        self.assertNotEqual(RULES_FINGERPRINT, KWKN_RULES_FINGERPRINT)
 
 
 if __name__ == "__main__":

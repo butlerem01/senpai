@@ -41,12 +41,13 @@ public:
           limit_(limit), verbose_(verbose) {
         if (limit_ == 0 || limit_ > index_.state_count())
             throw std::invalid_argument("four-man state limit is out of range");
-        status_.assign(limit_, Invalid);
-        remaining_.assign(limit_, 0);
-        queue_.reserve(limit_ == index_.state_count() ? expected_legal_count() : limit_);
     }
 
     const std::vector<std::uint8_t> & solve() {
+        if (!status_.empty()) throw std::logic_error("four-man solver may only run once");
+        status_.assign(limit_, Invalid);
+        remaining_.assign(limit_, 0);
+        queue_.reserve(limit_ == index_.state_count() ? expected_legal_count() : limit_);
         const auto started = std::chrono::steady_clock::now();
         legal_count_ = 0;
         for (std::uint32_t dense = 0; dense < limit_; ++dense) {
@@ -172,15 +173,15 @@ public:
         if (geometry_.king_attacks(state.rook_king, state.minor_king)) return false;
         if (state.turn == Minor_To_Move)
             return !minor_attacks(state.minor, state.rook_king);
-        return !geometry_.rook_attacks(state.rook, state.minor_king,
-                                       { state.rook_king, state.minor });
+        return !primary_attacks(state.rook, state.minor_king,
+                                { state.rook_king, state.minor });
     }
 
     bool in_check(const State4 & state) const {
         if (state.turn == Rook_To_Move)
             return minor_attacks(state.minor, state.rook_king);
-        return geometry_.rook_attacks(state.rook, state.minor_king,
-                                      { state.rook_king, state.minor });
+        return primary_attacks(state.rook, state.minor_king,
+                               { state.rook_king, state.minor });
     }
 
     Successors successors(const State4 & state) const {
@@ -209,26 +210,44 @@ public:
                 if (target == state.rook || target == state.minor_king) continue;
                 if (target == state.minor) {
                     if (geometry_.king_attacks(target, state.minor_king)) continue;
-                    const State3 dependency { target, state.rook, state.minor_king, Weak_To_Move };
-                    add_external(krk_.probe(dependency));
+                    if (primary_is_rook()) {
+                        const State3 dependency {
+                            target, state.rook, state.minor_king, Weak_To_Move
+                        };
+                        add_external(krk_.probe(dependency));
+                    } else {
+                        add_external(Draw); // K+Wizard versus bare King.
+                    }
                 } else {
                     add_child(State4 { target, state.rook, state.minor_king,
                                        state.minor, Minor_To_Move });
                 }
             }
-            for (const auto & ray : geometry_.rook_rays(state.rook)) {
-                for (std::uint8_t target : ray) {
-                    if (target == state.rook_king || target == state.minor_king ||
-                        target == state.minor) {
-                        if (target == state.minor) {
-                            const State3 dependency { state.rook_king, target,
-                                                      state.minor_king, Weak_To_Move };
-                            add_external(krk_.probe(dependency));
+            if (primary_is_rook()) {
+                for (const auto & ray : geometry_.rook_rays(state.rook)) {
+                    for (std::uint8_t target : ray) {
+                        if (target == state.rook_king || target == state.minor_king ||
+                            target == state.minor) {
+                            if (target == state.minor) {
+                                const State3 dependency { state.rook_king, target,
+                                                          state.minor_king, Weak_To_Move };
+                                add_external(krk_.probe(dependency));
+                            }
+                            break;
                         }
-                        break;
+                        add_child(State4 { state.rook_king, target, state.minor_king,
+                                           state.minor, Minor_To_Move });
                     }
-                    add_child(State4 { state.rook_king, target, state.minor_king,
-                                       state.minor, Minor_To_Move });
+                }
+            } else {
+                for (std::uint8_t target : primary_moves(state.rook)) {
+                    if (target == state.rook_king || target == state.minor_king) continue;
+                    if (target == state.minor) {
+                        add_external(Draw); // K+Wizard versus bare King.
+                    } else {
+                        add_child(State4 { state.rook_king, target, state.minor_king,
+                                           state.minor, Minor_To_Move });
+                    }
                 }
             }
         } else {
@@ -276,10 +295,19 @@ public:
                 add_parent(State4 { origin, state.rook, state.minor_king,
                                     state.minor, Rook_To_Move });
             }
-            for (const auto & ray : geometry_.rook_rays(state.rook)) {
-                for (std::uint8_t origin : ray) {
+            if (primary_is_rook()) {
+                for (const auto & ray : geometry_.rook_rays(state.rook)) {
+                    for (std::uint8_t origin : ray) {
+                        if (origin == state.rook_king || origin == state.minor_king ||
+                            origin == state.minor) break;
+                        add_parent(State4 { state.rook_king, origin, state.minor_king,
+                                            state.minor, Rook_To_Move });
+                    }
+                }
+            } else {
+                for (std::uint8_t origin : primary_moves(state.rook)) {
                     if (origin == state.rook_king || origin == state.minor_king ||
-                        origin == state.minor) break;
+                        origin == state.minor) continue;
                     add_parent(State4 { state.rook_king, origin, state.minor_king,
                                         state.minor, Rook_To_Move });
                 }
@@ -327,7 +355,29 @@ private:
     std::uint64_t legal_count_ = 0;
 
     std::uint32_t expected_legal_count() const {
-        return material_ == FourManMaterial::Krkc ? Krkc_Legal_Count : Krkn_Legal_Count;
+        switch (material_) {
+            case FourManMaterial::Krkc: return Krkc_Legal_Count;
+            case FourManMaterial::Krkn: return Krkn_Legal_Count;
+            case FourManMaterial::Kwkn: return Kwkn_Legal_Count;
+        }
+        throw std::logic_error("unknown four-man legal population");
+    }
+
+    bool primary_is_rook() const {
+        return material_ != FourManMaterial::Kwkn;
+    }
+
+    bool primary_attacks(std::uint8_t from, std::uint8_t to,
+                         const std::array<std::uint8_t, 2> & blockers) const {
+        return primary_is_rook()
+            ? geometry_.rook_attacks(from, to, blockers)
+            : geometry_.wizard_attacks(from, to);
+    }
+
+    const std::vector<std::uint8_t> & primary_moves(std::uint8_t square) const {
+        if (primary_is_rook())
+            throw std::logic_error("rook moves require blocker-aware ray generation");
+        return geometry_.wizard_moves(square);
     }
 
     bool minor_attacks(std::uint8_t from, std::uint8_t to) const {
@@ -372,22 +422,38 @@ void self_test(const Geometry & geometry, const D4Indexer & four_index,
     const std::array<std::array<std::uint8_t, 2>, 4> corner_knight_moves {{
         {{ 1, 10 }}, {{ 80, 91 }}, {{ 89, 98 }}, {{ 8, 19 }}
     }};
+    const std::array<std::array<std::uint8_t, 3>, 4> corner_wizard_moves {{
+        {{ 0, 2, 20 }}, {{ 70, 90, 92 }}, {{ 79, 97, 99 }}, {{ 7, 9, 29 }}
+    }};
     for (std::uint8_t corner = 0; corner < 4; ++corner) {
-        const auto & actual = geometry.knight_moves(100 + corner);
-        if (actual.size() != corner_knight_moves[corner].size() ||
-            !std::equal(actual.begin(), actual.end(), corner_knight_moves[corner].begin()))
+        const auto & knight_actual = geometry.knight_moves(100 + corner);
+        if (knight_actual.size() != corner_knight_moves[corner].size() ||
+            !std::equal(knight_actual.begin(), knight_actual.end(),
+                        corner_knight_moves[corner].begin()))
             throw std::logic_error("Omega detached-corner Knight geometry changed");
+        const auto & wizard_actual = geometry.wizard_moves(100 + corner);
+        if (wizard_actual.size() != corner_wizard_moves[corner].size() ||
+            !std::equal(wizard_actual.begin(), wizard_actual.end(),
+                        corner_wizard_moves[corner].begin()))
+            throw std::logic_error("Omega detached-corner Wizard geometry changed");
     }
     for (std::uint8_t from = 0; from < Square_Count; ++from) {
         for (std::uint8_t to = 0; to < Square_Count; ++to) {
-            const bool attacks = geometry.knight_attacks(from, to);
-            if (attacks != geometry.knight_attacks(to, from))
+            const bool knight_attacks = geometry.knight_attacks(from, to);
+            const bool wizard_attacks = geometry.wizard_attacks(from, to);
+            if (knight_attacks != geometry.knight_attacks(to, from))
                 throw std::logic_error("Knight attack relation is not symmetric");
+            if (wizard_attacks != geometry.wizard_attacks(to, from))
+                throw std::logic_error("Wizard attack relation is not symmetric");
             for (int transform = 0; transform < 8; ++transform) {
-                if (attacks != geometry.knight_attacks(
+                if (knight_attacks != geometry.knight_attacks(
                         geometry.transforms()[transform][from],
                         geometry.transforms()[transform][to]))
                     throw std::logic_error("D4 transform changed Knight geometry");
+                if (wizard_attacks != geometry.wizard_attacks(
+                        geometry.transforms()[transform][from],
+                        geometry.transforms()[transform][to]))
+                    throw std::logic_error("D4 transform changed Wizard geometry");
             }
         }
     }
@@ -436,6 +502,15 @@ void self_test(const Geometry & geometry, const D4Indexer & four_index,
         if (!probe.is_legal(mate) || !probe.in_check(mate) || moves.has_move)
             throw std::logic_error("concrete KRKC checkmate move generation failed");
     }
+    if (material == FourManMaterial::Kwkn) {
+        FourManSolver probe(geometry, four_index, *krk, material,
+                            four_index.state_count(), false);
+        // Ki8/Wj7 mates Kw3 while a remote Na0 cannot answer the leaper check.
+        const State4 mate { 88, 97, 102, 0, Minor_To_Move };
+        const Successors moves = probe.successors(mate);
+        if (!probe.is_legal(mate) || !probe.in_check(mate) || moves.has_move)
+            throw std::logic_error("concrete KWKN detached-corner mate failed");
+    }
     std::cout << "four-man indexing, geometry, SHA-256, and dependency self-test: PASS\n";
 }
 
@@ -456,8 +531,12 @@ std::uint64_t count_legal_states(const Geometry & geometry, const D4Indexer & in
                 ? geometry.champion_attacks(squares[3], squares[0])
                 : geometry.knight_attacks(squares[3], squares[0]);
             if (attacks) continue;
-        } else if (geometry.rook_attacks(squares[1], squares[2], { squares[0], squares[3] })) {
-            continue;
+        } else {
+            const bool attacks = material == FourManMaterial::Kwkn
+                ? geometry.wizard_attacks(squares[1], squares[2])
+                : geometry.rook_attacks(squares[1], squares[2],
+                                        { squares[0], squares[3] });
+            if (attacks) continue;
         }
         ++legal;
     }
@@ -503,13 +582,132 @@ const char * outcome_name(std::uint8_t outcome) {
     throw std::logic_error("unsupported four-man WDL code");
 }
 
+std::string square_name(std::uint8_t square) {
+    if (square < Regular_Squares) {
+        std::string result;
+        result += static_cast<char>('a' + square / 10);
+        result += static_cast<char>('0' + square % 10);
+        return result;
+    }
+    return std::string("w") + static_cast<char>('1' + square - Regular_Squares);
+}
+
+std::string state_name(const State4 & state) {
+    std::ostringstream out;
+    out << "WK=" << square_name(state.rook_king)
+        << ",W=" << square_name(state.rook)
+        << ",NK=" << square_name(state.minor_king)
+        << ",N=" << square_name(state.minor)
+        << ",turn=" << (state.turn == Rook_To_Move ? "wizard" : "knight");
+    return out.str();
+}
+
+void summarize_kwkn_file(const std::string & path) {
+    const FourManTable table = read_four_man_file(path);
+    if (table.material != FourManMaterial::Kwkn ||
+        table.payload.size() != Four_Man_State_Count)
+        throw std::invalid_argument("--summary requires a complete KWKN artifact");
+
+    std::array<std::array<std::uint64_t, 5>, 2> counts{};
+    for (std::uint32_t dense = 0; dense < table.payload.size(); ++dense) {
+        const std::uint8_t outcome = table.payload[dense];
+        if (outcome >= counts[0].size())
+            throw std::logic_error("KWKN summary encountered an unsupported WDL code");
+        ++counts[dense & 1U][outcome];
+    }
+    for (std::uint8_t turn = 0; turn < 2; ++turn) {
+        std::cout << (turn == Rook_To_Move ? "wizard-to-move" : "knight-to-move")
+                  << " invalid=" << counts[turn][Invalid]
+                  << " loss=" << counts[turn][Loss]
+                  << " draw=" << counts[turn][Draw]
+                  << " win=" << counts[turn][Win] << '\n';
+    }
+
+    Geometry geometry;
+    D4Indexer four_index(geometry, 4);
+    D4Indexer three_index(geometry, 3);
+    KrkTable unused_krk(geometry, three_index);
+    FourManSolver graph(geometry, four_index, unused_krk,
+                        FourManMaterial::Kwkn, four_index.state_count(), false);
+
+    bool found_mate = false;
+    bool found_mate_in_one = false;
+    bool found_deeper_win = false;
+    bool found_nonterminal_loss = false;
+    bool found_robust_wizard_win = false;
+    bool found_robust_knight_win = false;
+    for (std::uint32_t dense = 0; dense < table.payload.size(); ++dense) {
+        const std::uint8_t outcome = table.payload[dense];
+        if (outcome != Loss && outcome != Win) continue;
+        const State4 state = graph.unrank(dense);
+        const Successors moves = graph.successors(state);
+        if (outcome == Loss && !moves.has_move && graph.in_check(state) && !found_mate) {
+            std::cout << "terminal-checkmate index=" << dense << ' '
+                      << state_name(state) << '\n';
+            found_mate = true;
+        }
+        if (outcome == Loss && moves.has_move && !found_nonterminal_loss) {
+            std::cout << "nonterminal-forced-loss index=" << dense << ' '
+                      << state_name(state) << '\n';
+            found_nonterminal_loss = true;
+        }
+        if (outcome == Win) {
+            for (std::uint32_t child : moves.same_class) {
+                if (table.payload[child] != Loss) continue;
+                const State4 child_state = graph.unrank(child);
+                const Successors child_moves = graph.successors(child_state);
+                if (!child_moves.has_move && graph.in_check(child_state) && !found_mate_in_one) {
+                    std::cout << "mate-in-one-win index=" << dense << ' '
+                              << state_name(state) << " child=" << child << '\n';
+                    found_mate_in_one = true;
+                } else if (child_moves.has_move && !found_deeper_win) {
+                    std::cout << "nonterminal-forced-win index=" << dense << ' '
+                              << state_name(state) << " child=" << child << '\n';
+                    found_deeper_win = true;
+                }
+            }
+        }
+        if (found_mate && found_mate_in_one && found_deeper_win && found_nonterminal_loss)
+            break;
+    }
+    if (!found_mate || !found_mate_in_one || !found_deeper_win || !found_nonterminal_loss)
+        throw std::logic_error("KWKN summary could not find every decisive witness class");
+
+    for (std::uint32_t dense = 0; dense < table.payload.size(); dense += 2) {
+        const std::uint8_t wizard_turn = table.payload[dense];
+        const std::uint8_t knight_turn = table.payload[dense + 1];
+        const bool wizard_wins_both = wizard_turn == Win && knight_turn == Loss;
+        const bool knight_wins_both = wizard_turn == Loss && knight_turn == Win;
+        if ((!wizard_wins_both || found_robust_wizard_win) &&
+            (!knight_wins_both || found_robust_knight_win)) continue;
+        const State4 wizard_state = graph.unrank(dense);
+        const State4 knight_state = graph.unrank(dense + 1);
+        if (!graph.successors(wizard_state).has_move ||
+            !graph.successors(knight_state).has_move) continue;
+        if (wizard_wins_both && !found_robust_wizard_win) {
+            std::cout << "turn-independent-wizard-win indices=" << dense << ','
+                      << dense + 1 << ' ' << state_name(wizard_state) << '\n';
+            found_robust_wizard_win = true;
+        }
+        if (knight_wins_both && !found_robust_knight_win) {
+            std::cout << "turn-independent-knight-win indices=" << dense << ','
+                      << dense + 1 << ' ' << state_name(wizard_state) << '\n';
+            found_robust_knight_win = true;
+        }
+        if (found_robust_wizard_win && found_robust_knight_win) break;
+    }
+    if (!found_robust_wizard_win || !found_robust_knight_win)
+        throw std::logic_error("KWKN summary could not find both turn-independent win classes");
+}
+
 void usage() {
     std::cout
         << "four_man_wdl --self-test [--krk omega-krk-wdl-v1.omtb3]\n"
         << "four_man_wdl --verify-counts\n"
-        << "four_man_wdl --material krkc|krkn --small STATES --krk FILE [--verify] [--output FILE]\n"
-        << "four_man_wdl --material krkc|krkn --full --krk FILE [--verify] [--output FILE]\n"
+        << "four_man_wdl --material krkc|krkn|kwkn --small STATES [--krk FILE] [--verify] [--output FILE]\n"
+        << "four_man_wdl --material krkc|krkn|kwkn --full [--krk FILE] [--verify] [--output FILE]\n"
         << "four_man_wdl --inspect FILE\n"
+        << "four_man_wdl --summary FILE\n"
         << "four_man_wdl --probe FILE [--state RK,R,MK,M,TURN] [--index DENSE]...\n";
 }
 
@@ -530,6 +728,7 @@ int main(int argc, char ** argv) {
         std::string krk_path;
         std::string output_path;
         std::string inspect_path;
+        std::string summary_path;
         std::string probe_path;
         std::vector<State4> probe_states;
         std::vector<std::uint32_t> probe_indices;
@@ -549,6 +748,7 @@ int main(int argc, char ** argv) {
             else if (option == "--krk") krk_path = value("--krk");
             else if (option == "--output") output_path = value("--output");
             else if (option == "--inspect") inspect_path = value("--inspect");
+            else if (option == "--summary") summary_path = value("--summary");
             else if (option == "--probe") probe_path = value("--probe");
             else if (option == "--state") probe_states.push_back(parse_state(value("--state")));
             else if (option == "--index") probe_indices.push_back(parse_index(value("--index"), "--index"));
@@ -562,6 +762,10 @@ int main(int argc, char ** argv) {
 
         if (!inspect_path.empty()) {
             inspect_four_man_file(inspect_path);
+            return 0;
+        }
+        if (!summary_path.empty()) {
+            summarize_kwkn_file(summary_path);
             return 0;
         }
         if (!probe_path.empty()) {
@@ -596,15 +800,18 @@ int main(int argc, char ** argv) {
         if (!krk_path.empty()) krk.load(krk_path);
 
         if (run_self_test)
-            self_test(geometry, four_index, three_index, krk.loaded() ? &krk : nullptr,
-                      material);
+            self_test(geometry, four_index, three_index, &krk, material);
         if (verify_counts) {
             const std::uint64_t legal = count_legal_states(geometry, four_index, material);
             const std::uint64_t expected = material == FourManMaterial::Krkc
-                ? Krkc_Legal_Count : Krkn_Legal_Count;
+                ? Krkc_Legal_Count
+                : material == FourManMaterial::Krkn ? Krkn_Legal_Count
+                                                    : Kwkn_Legal_Count;
             if (legal != expected)
                 throw std::logic_error(std::string(four_man_material_name(material)) +
-                                       " legal-state population changed");
+                                       " legal-state population changed: expected " +
+                                       std::to_string(expected) + ", found " +
+                                       std::to_string(legal));
             std::cout << four_man_material_name(material)
                       << " legal-state count: " << legal << " PASS\n";
         }
@@ -612,7 +819,7 @@ int main(int argc, char ** argv) {
             if (!run_self_test && !verify_counts) usage();
             return (run_self_test || verify_counts) ? 0 : 2;
         }
-        if (!krk.loaded())
+        if (material != FourManMaterial::Kwkn && !krk.loaded())
             throw std::invalid_argument("--krk is required for exact four-man generation");
 
         const std::uint32_t limit = full ? four_index.state_count() : small;
@@ -636,8 +843,11 @@ int main(int argc, char ** argv) {
         if (verify)
             std::cout << four_man_material_name(material) << " Bellman verification: PASS\n";
         if (!output_path.empty()) {
+            const std::string dependency = material == FourManMaterial::Kwkn
+                ? sha256(std::string("kwk-knk-insufficient-material-v1"))
+                : krk.payload_sha256();
             write_four_man_file(output_path, payload, solver.legal_count(), complete,
-                                krk.payload_sha256(), material);
+                                dependency, material);
             std::cout << "wrote " << output_path << '\n';
         }
         return 0;

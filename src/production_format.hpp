@@ -19,6 +19,7 @@ enum class Material : std::uint8_t {
    KCK = 2,
    KRKC = 3,
    KRKN = 4,
+   KWKN = 5,
 };
 
 enum class Wdl : std::uint8_t {
@@ -54,7 +55,9 @@ struct Load_Requirements {
 };
 
 const char * rules_description();
+const char * rules_description(Material material);
 std::array<std::uint8_t, 32> canonical_rules_fingerprint();
+std::array<std::uint8_t, 32> canonical_rules_fingerprint(Material material);
 Load_Requirements canonical_requirements(Material material, bool require_dtz = false);
 
 std::uint64_t state_count(Material material);

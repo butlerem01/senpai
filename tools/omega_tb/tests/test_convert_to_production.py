@@ -11,6 +11,8 @@ sys.path.insert(0, str(TOOLS))
 from convert_to_production import (
     FOUR_MAN_ORDERS,
     KRKN_RULES,
+    KWKN_CAPTURE_POLICY_SHA256,
+    KWKN_RULES,
     SOURCE_CODES,
     THREE_MAN_ORDER,
     THREE_MAN_RULES,
@@ -72,6 +74,43 @@ def write_krkn_source(path: Path, payload: bytes, krk_payload_sha256: str, **cha
         "rules": KRKN_RULES,
         "rules_sha256": hashlib.sha256(KRKN_RULES.encode("ascii")).hexdigest(),
         "krk_payload_sha256": krk_payload_sha256,
+        "codes": SOURCE_CODES,
+        "payload_sha256": hashlib.sha256(payload).hexdigest(),
+        "counts": counts,
+    }
+    for name, count in counts.items():
+        header[f"{name}_count"] = count
+    header.update(changes)
+    path.write_bytes(
+        json.dumps(header, sort_keys=True, separators=(",", ":")).encode("ascii")
+        + b"\n" + payload
+    )
+
+
+def source_kwkn_payload():
+    spec = material_spec("KWKN")
+    invalid = spec.state_count - spec.legal_count
+    return bytes([SOURCE_CODES["invalid"]]) * invalid + bytes([SOURCE_CODES["draw"]]) * spec.legal_count
+
+
+def write_kwkn_source(path: Path, payload: bytes, **changes):
+    spec = material_spec("KWKN")
+    counts = {name: payload.count(code) for name, code in SOURCE_CODES.items()}
+    header = {
+        "magic": "OMTB4WDL",
+        "version": 1,
+        "material": "KWKN",
+        "labelled_order": FOUR_MAN_ORDERS["KWKN"],
+        "index": "D4-first-piece-v1",
+        "square_count": 104,
+        "dense_state_count": spec.state_count,
+        "state_count": spec.state_count,
+        "complete": True,
+        "boundary": "full",
+        "legal_count": spec.legal_count,
+        "rules": KWKN_RULES,
+        "rules_sha256": hashlib.sha256(KWKN_RULES.encode("ascii")).hexdigest(),
+        "capture_policy_sha256": KWKN_CAPTURE_POLICY_SHA256,
         "codes": SOURCE_CODES,
         "payload_sha256": hashlib.sha256(payload).hexdigest(),
         "counts": counts,
@@ -149,6 +188,27 @@ class ConvertToProductionTests(unittest.TestCase):
             write_source(wrong_dependency, bytes(changed_dependency))
             with self.assertRaisesRegex(ValueError, "different KRK dependency"):
                 convert_artifact(source, output, wrong_dependency)
+
+    def test_full_kwkn_conversion_has_no_krk_dependency(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "omega-kwkn-wdl-v1.omtb4"
+            payload = source_kwkn_payload()
+            write_kwkn_source(source, payload)
+            artifact = read_source_artifact(source)
+            self.assertEqual("KWKN", artifact.material)
+
+            output = root / "omega-kwkn-wdl-v1.omtb"
+            convert_artifact(source, output)
+            table = read_table(output, "KWKN")
+            self.assertEqual(
+                (3_516_341, 0, 0, 24_078_355, 0, 0),
+                table.header.outcome_counts,
+            )
+
+            write_kwkn_source(source, payload, capture_policy_sha256="0" * 64)
+            with self.assertRaisesRegex(ValueError, "capture-policy"):
+                read_source_artifact(source)
 
 
 if __name__ == "__main__":

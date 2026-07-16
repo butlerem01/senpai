@@ -12,7 +12,7 @@ five-valued WDL order shifted by three::
     invalid=0, loss=1, blessed-loss=2, draw=3, cursed-win=4, win=5
 
 DTZ is optional unsigned little-endian uint16, one value per dense index.
-KRK, KCK, KRKC, and KRKN use the same checked container.
+KRK, KCK, KRKC, KRKN, and KWKN use the same checked container.
 """
 
 from __future__ import annotations
@@ -62,6 +62,7 @@ PIECE_KING = 1
 PIECE_ROOK = 2
 PIECE_CHAMPION = 3
 PIECE_KNIGHT = 4
+PIECE_WIZARD = 5
 ROLE_NONE = 0xFF
 ROLE_ZERO = 0
 ROLE_ONE = 1
@@ -70,6 +71,7 @@ MATERIAL_KRK = 1
 MATERIAL_KCK = 2
 MATERIAL_KRKC = 3
 MATERIAL_KRKN = 4
+MATERIAL_KWKN = 5
 
 RULES_DESCRIPTION = (
     "omega-104-v1;d4-first-piece-v1;historical-legality-v1;"
@@ -78,6 +80,18 @@ RULES_DESCRIPTION = (
 )
 RULES_FINGERPRINT = hashlib.sha256(RULES_DESCRIPTION.encode("ascii")).digest()
 RULES_FINGERPRINT_HEX = RULES_FINGERPRINT.hex()
+
+# Existing four materials retain their original fingerprint.  KWKN has a
+# material-specific identity that freezes Wizard geometry plus its KWK/KNK
+# theoretical capture boundaries.
+KWKN_RULES_DESCRIPTION = (
+    "omega-104-v1;d4-first-piece-v1;historical-legality-v1;"
+    "king-v1;wizard-v1;knight-v1;100-ply-auto-draw-v1;"
+    "insufficient-k-plus-one-nbcw-v1;kwkn-theoretical-wdl-v1;"
+    "wdl5-dtz16-v1"
+)
+KWKN_RULES_FINGERPRINT = hashlib.sha256(KWKN_RULES_DESCRIPTION.encode("ascii")).digest()
+KWKN_RULES_FINGERPRINT_HEX = KWKN_RULES_FINGERPRINT.hex()
 
 RULES_OFFSET = 144
 PAYLOAD_HASH_OFFSET = 176
@@ -120,6 +134,12 @@ MATERIALS: Mapping[str, MaterialSpec] = {
         (PIECE_KING, PIECE_ROOK, PIECE_KING, PIECE_KNIGHT),
         (ROLE_ZERO, ROLE_ZERO, ROLE_ONE, ROLE_ONE),
         27_594_696, 23_034_346,
+    ),
+    "KWKN": MaterialSpec(
+        "KWKN", MATERIAL_KWKN, 4,
+        (PIECE_KING, PIECE_WIZARD, PIECE_KING, PIECE_KNIGHT),
+        (ROLE_ZERO, ROLE_ZERO, ROLE_ONE, ROLE_ONE),
+        27_594_696, 24_078_355,
     ),
 }
 MATERIALS_BY_CODE = {spec.code: spec for spec in MATERIALS.values()}
@@ -167,6 +187,12 @@ def material_spec(material: Union[str, int]) -> MaterialSpec:
         return MATERIALS[str(material).upper()]
     except KeyError as exc:
         raise ValueError(f"unsupported material signature: {material}") from exc
+
+
+def rules_fingerprint(material: Union[str, int]) -> bytes:
+    return (KWKN_RULES_FINGERPRINT
+            if material_spec(material).name == "KWKN"
+            else RULES_FINGERPRINT)
 
 
 def encode_theoretical_wdl(foundation_wdl: Union[bytes, bytearray, memoryview]) -> bytes:
@@ -279,7 +305,7 @@ def _build_header(spec: MaterialSpec, wdl: bytes, dtz: bytes) -> bytes:
     header[90:96] = bytes(WDL_CODES)
     for index, count in enumerate(counts):
         struct.pack_into("<Q", header, 96 + index * 8, count)
-    header[RULES_OFFSET:RULES_OFFSET + 32] = RULES_FINGERPRINT
+    header[RULES_OFFSET:RULES_OFFSET + 32] = rules_fingerprint(spec.name)
     header[PAYLOAD_HASH_OFFSET:PAYLOAD_HASH_OFFSET + 32] = payload_hash
     header[HEADER_HASH_OFFSET:HEADER_HASH_OFFSET + 32] = _header_digest(header)
     return bytes(header)
@@ -314,7 +340,7 @@ def write_table(path: Path, material: Union[str, int],
 
 
 def read_table(path: Path, expected_material: Optional[Union[str, int]] = None,
-               expected_rules_fingerprint: bytes = RULES_FINGERPRINT,
+               expected_rules_fingerprint: Optional[bytes] = None,
                require_dtz: bool = False) -> Table:
     """Read and fully validate a production tablebase file."""
 
@@ -382,9 +408,12 @@ def read_table(path: Path, expected_material: Optional[Union[str, int]] = None,
             raise ValueError("production DTZ offset/size mismatch")
 
         rules = header_bytes[RULES_OFFSET:RULES_OFFSET + 32]
-        if rules != bytes(expected_rules_fingerprint):
+        canonical_rules = rules_fingerprint(spec.name)
+        requested_rules = canonical_rules if expected_rules_fingerprint is None \
+            else bytes(expected_rules_fingerprint)
+        if rules != requested_rules:
             raise ValueError("production rules fingerprint mismatch")
-        if rules != RULES_FINGERPRINT:
+        if rules != canonical_rules:
             raise ValueError("unsupported production rules fingerprint")
 
         outcome_counts = tuple(

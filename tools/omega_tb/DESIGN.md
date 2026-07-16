@@ -3,11 +3,12 @@
 ## Rules and role normalization
 
 Tables normalize by material role rather than colour. Three-man order is
-strong-side king, role piece, bare king, side-to-move bit. Four-man order is
-rook-side king, rook, minor-side king, minor, side-to-move bit, with the minor
-fixed by the material signature (`KRKC` or `KRKN`). The material-specific rules
-fingerprint covers the 104-square geometry, historical-legality test, Champion
-or Knight movement, and current insufficient-material policy.
+strong-side king, role piece, bare king, side-to-move bit. KRKC/KRKN order is
+rook-side king, rook, minor-side king, minor, side-to-move bit. KWKN order is
+Wizard-side king, Wizard, Knight-side king, Knight, side-to-move bit. The
+material-specific rules fingerprint covers the 104-square geometry,
+historical-legality test, relevant leaper movement, and current
+insufficient-material policy.
 
 A stored placement is historically legal when the side that just moved is not
 in check. The current side may be in check, so legal checkmate and stalemate
@@ -54,11 +55,12 @@ stabilizer and six retain one reflection. A generic block contains
 | D4-canonical placements with turn | 27,594,696 |
 | Legal KRKC D4-canonical states | 22,607,206 |
 | Legal KRKN D4-canonical states | 23,034,346 |
+| Legal KWKN D4-canonical states | 24,078,355 |
 
 The reported `Kw2/Rj6` versus `Ke5/Ch4` position is permanently fixed at dense
 index `26,750,996`, protecting compatibility with the retained v1 design.
 
-## Implemented four-man dependencies: KRKC and KRKN
+## Implemented four-man dependencies: KRKC, KRKN, and KWKN
 
 Within KRKC, quiet moves remain in-class. Captures leave the family:
 
@@ -69,6 +71,14 @@ KRKN uses the identical role-normalized graph construction with Knight jumps,
 including jumps between the detached corners and their two adjacent regular
 squares. `R x N` probes KRK, while `N x R` is a KNK draw under the current
 insufficient-material policy.
+
+KWKN uses the same role-normalized graph with the Wizard as the primary
+leaper and the Knight as the opposing leaper. Wizard and Knight moves include
+all detached-corner connections and commute with all eight D4 transforms.
+Either side capturing the opposing leaper leaves KWK or KNK, which is an
+external draw under the current automatic insufficient-material rule. KWKN
+therefore has no KRK file dependency; the capture policy has its own frozen
+checksum in the source artifact.
 
 The standalone C++17 four-man pass reuses the same attractor algorithm and
 on-demand predecessor strategy. It does not infer a blanket draw from the
@@ -94,9 +104,11 @@ After theoretical WDL, a separate DTZ pass must produce five-valued results
 the only zeroing moves; KRK without captures uses distance to mate. Runtime
 probing must combine DTZ with the remaining `100 - halfmove_clock` budget.
 
-## Production boundary not yet crossed
+## Production runtime boundary
 
-No search hook, UCI option, table loader, or tablebase score band is introduced
-in this foundation. A later production integration needs a memory-mapped file
-format, payload/rules verification, missing-table fallback, root DTZ ordering,
-and multithreaded read-only probe tests.
+`OMTBPROD` provides fixed metadata, rules and payload hashes, and a strict
+native reader. `OmegaTablebasePath` atomically loads KRK, KCK, KRKC, KRKN, and
+KWKN as one set; a missing or invalid replacement retains the previous set.
+Runtime indexing is role-normalized and read-only. Search consumes only exact
+draw records. Win/loss records remain diagnostic until a later DTZ pass can
+respect the automatic 100-ply boundary and provide root ordering.
