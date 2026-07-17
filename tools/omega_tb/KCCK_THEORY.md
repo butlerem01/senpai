@@ -1,19 +1,21 @@
-# KCCK exact theoretical-WDL result
+# KCCK exact WDL and distance-to-mate result
 
 ## Answer
 
 King plus two Champions **can** force mate against a bare king in Omega
 Chess, and does so from most legal KCCK records. The official
 [Omega Chess strategy page](https://www.omegachess.com/strategy) lists two
-Champions as mating easily. The exact solve confirms the mating capability,
-but cannot yet confirm "easily": distance was not solved, and 1,852,083 of
-23,638,870 legal labelled records are draws. The published claim is therefore
-**confirmed and qualified**, not contradicted.
+Champions as mating easily. The exact WDL and DTM solves confirm both the
+mating capability and the short conversion claim: the maximum is 40 plies,
+the median is 18, and every theoretical win fits inside a fresh 100-ply
+no-progress window. Because 1,852,083 of 23,638,870 legal labelled records are
+draws, the published claim is still **confirmed and qualified**, not universal.
+Here "short" is an exact optimal-distance statement; it does not establish
+that the technique is easy for a human to discover or execute.
 
-This is a complete theoretical-WDL result, not a sample. It says whether mate
-can eventually be forced with perfect play and no move-count limit. It does
-not yet say how long conversion takes, how practical the win is, or whether a
-win survives Omega Chess's automatic 100-ply rule.
+These are complete tablebase results, not samples. WDL says whether mate can
+eventually be forced with perfect play; DTM says how many plies it takes when
+the attacker minimizes and the defender maximizes the distance.
 
 ## Frozen result
 
@@ -51,10 +53,10 @@ are historically legal:
 | opposite sides win | 0 |
 
 Thus the qualification is substantive: verified all-draw placements exist,
-not just positions where the defender happens to have an immediate saving
-move. The current WDL layer does not classify draw mechanisms; doing that
-requires following draw-preserving moves and identifying capture escapes,
-cycles, and detached-corner fortresses.
+not merely an artifact of defender-to-move records. The current WDL layer
+does not classify draw mechanisms; doing that requires following
+draw-preserving moves, identifying capture escapes and cycles, and testing
+detached-corner candidates for fortress behavior.
 
 ## Reproducibility
 
@@ -91,18 +93,64 @@ Frozen witnesses include:
 The experiment contract, ownership map, capture boundary, and concrete edge
 fixtures are frozen in `KCCK_DESIGN.md`.
 
+## Exact distance-to-mate result
+
+The accepted `OMTB4DTM` companion resolves every one of the 21,786,787
+decisive records:
+
+| Measure | Plies |
+|---|---:|
+| median | 18 |
+| p90 | 22 |
+| p95 | 23 |
+| p99 | 26 |
+| maximum, attacker to move | 39 |
+| maximum, defender to move | 40 |
+
+There are no theoretical wins beyond 100 plies. KCCK has no pawn move and no
+win-preserving capture: a defender capture exits to drawn KCK. DTM therefore
+directly supplies the rule budget. For a nonterminal root with halfmove clock
+`h < 100`, a theoretical result remains rule-safe exactly when
+`DTM <= 100 - h`; mate at equality takes precedence under Senpai's current
+adjudication order. Every theoretical win is safe from a fresh clock, and all
+remain safe at clocks through 60.
+
+The DTM payload SHA-256 is
+`b702ce64eb13610a9d4a952d8bd9e72340e809775617c6c19b229fcc41de1748`;
+the companion-container SHA-256 is
+`e6f12c4eda6064df9fe81f984d5d86222eb428552507401fae48ad0eed22275c`.
+The companion passed full Bellman, turn-parity, D4, Champion-label-swap,
+serialization, source-binding, and raw-oriented optimal-line replay gates.
+
+A frozen 17,128-root native/independent parity corpus also matched Senpai's
+live KCCK legality, check status, exact labelled successors, both Champion
+capture labels, capture-to-draw behavior, and detached-corner geometry. Its
+SHA-256 is
+`300f9a25f2b6592b0322e79382acd7a9e5d819a7dc8ca8d2c44598b216471729`.
+The independently generated expected-record stream is separately frozen at
+`2c1cf4bf03837b43ac58b1c5acd1fe5e15029eaa974d490e08f1f6f5e44b92ab`.
+
+`KCCK_MATING_ATLAS.md` gives the full histogram, coarse terminal-mate census,
+hardest roots, draw-risk cross-tabs, and a verified 39-ply
+attacker-to-move line.
+
 ## Production boundary and next experiments
 
 This family remains diagnostic-only. It is not in `OMTBPROD`, the runtime
-loader, search, evaluation, or automatic adjudication. Before decisive records
-could guide play, add DTM or rule-aware DTZ and test the 100-ply boundary.
+loader, search, evaluation, or automatic adjudication. Exact DTM now resolves
+the 100-ply question for KCCK, and sampled native four-man graph parity now
+passes. Runtime use still needs direct solver/native integration coverage,
+repetition-safe history handling, and a separate production-format decision.
 
 The highest-value follow-ups are:
 
-1. add distance-to-mate to measure whether the nominal wins are practical;
-2. classify the 93,247 turn-independent drawn placements by saving mechanism
-   under the frozen `KCCK_DRAW_DESIGN.md` contract;
-3. solve KWWK with separate opposite-color and same-color Wizard strata;
-4. turn representative win, draw, capture-escape, and fortress records into
-   engine-evaluation regressions without treating table populations as piece
-   values.
+1. classify all 1,852,083 draw records by saving mechanism under the frozen
+   `KCCK_DRAW_DESIGN.md` contract, with special focus on the 93,247
+   turn-independent drawn placements;
+2. extend the native/independent sample into a direct solver/native
+   three-way or exhaustive graph gate;
+3. expand the coarse terminal census into a diagrammed human mating-pattern
+   atlas;
+4. turn representative win, draw, capture-escape, and fortress-candidate
+   records into engine-evaluation regressions without treating table
+   populations as piece values.

@@ -3,7 +3,8 @@ param(
     [string]$KrknFullPath = "",
     [string]$KwknFullPath = "",
     [string]$KckwFullPath = "",
-    [string]$KcckFullPath = ""
+    [string]$KcckFullPath = "",
+    [string]$KcckDtmFullPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -11,6 +12,40 @@ $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $tools = Join-Path $root "tools\omega_tb"
 $temporary = Join-Path ([IO.Path]::GetTempPath()) ("omega-tb4-" + [Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Force -Path $temporary | Out-Null
+
+function New-MutatedHeaderCopy {
+    param(
+        [Parameter(Mandatory = $true)][string]$Source,
+        [Parameter(Mandatory = $true)][string]$Destination,
+        [Parameter(Mandatory = $true)][string]$Old,
+        [Parameter(Mandatory = $true)][string]$New
+    )
+    $bytes = [IO.File]::ReadAllBytes($Source)
+    $newline = [Array]::IndexOf($bytes, [byte]10)
+    if ($newline -lt 0) { throw "source artifact has no JSON header newline" }
+    $header = [Text.Encoding]::UTF8.GetString($bytes, 0, $newline)
+    if (-not $header.Contains($Old)) { throw "header mutation source text was not found: $Old" }
+    $mutated = $header.Replace($Old, $New)
+    $mutatedBytes = [Text.Encoding]::UTF8.GetBytes($mutated + "`n")
+    $output = New-Object byte[] ($mutatedBytes.Length + $bytes.Length - $newline - 1)
+    [Array]::Copy($mutatedBytes, 0, $output, 0, $mutatedBytes.Length)
+    [Array]::Copy($bytes, $newline + 1, $output, $mutatedBytes.Length,
+        $bytes.Length - $newline - 1)
+    [IO.File]::WriteAllBytes($Destination, $output)
+}
+
+function Test-ArtifactRejected {
+    param(
+        [Parameter(Mandatory = $true)][string]$Generator,
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+    try {
+        & $Generator --inspect $Path 2>$null | Out-Null
+        return $LASTEXITCODE -ne 0
+    } catch {
+        return $true
+    }
+}
 
 try {
     $generator = Join-Path $temporary "four_man_wdl.exe"
@@ -71,6 +106,24 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "small KCCK file verification failed" }
     & $generator --probe $smallKcck --material kcck --index 0
     if ($LASTEXITCODE -ne 0) { throw "small KCCK file probe failed" }
+
+    $badSquareCount = Join-Path $temporary "omega-kcck-bad-square-count.omtb4"
+    New-MutatedHeaderCopy $smallKcck $badSquareCount '"square_count":104' '"square_count":105'
+    if (-not (Test-ArtifactRejected $generator $badSquareCount)) {
+        throw "KCCK reader accepted a mismatched square count"
+    }
+    $badComplete = Join-Path $temporary "omega-kcck-bad-complete.omtb4"
+    New-MutatedHeaderCopy $smallKcck $badComplete '"complete":false' '"complete":true'
+    if (-not (Test-ArtifactRejected $generator $badComplete)) {
+        throw "KCCK reader accepted mismatched completeness"
+    }
+    $badCodes = Join-Path $temporary "omega-kcck-bad-codes.omtb4"
+    New-MutatedHeaderCopy $smallKcck $badCodes `
+        '"codes":{"invalid":0,"loss":2,"draw":3,"win":4}' `
+        '"codes":{"invalid":0,"loss":2,"draw":3,"win":5}'
+    if (-not (Test-ArtifactRejected $generator $badCodes)) {
+        throw "KCCK reader accepted a mismatched WDL code map"
+    }
 
     if ($SmallStates -eq 100000) {
         $reader = [IO.File]::OpenText($smallKrkc)
@@ -265,6 +318,121 @@ try {
             -not ($summary -match "nonterminal-forced-loss") -or
             -not ($summary -match "turn-independent-attacker-win")) {
             throw "full KCCK populations, symmetry, or decisive witnesses changed"
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($KcckDtmFullPath)) {
+        if ([string]::IsNullOrWhiteSpace($KcckFullPath)) {
+            throw "-KcckDtmFullPath requires -KcckFullPath for source binding"
+        }
+        $KcckDtmFullPath = [IO.Path]::GetFullPath($KcckDtmFullPath)
+        if (-not (Test-Path -LiteralPath $KcckDtmFullPath -PathType Leaf)) {
+            throw "Missing full KCCK DTM artifact: $KcckDtmFullPath"
+        }
+        $inspect = @(& $generator --inspect-dtm $KcckDtmFullPath --dtm-wdl $KcckFullPath)
+        if ($LASTEXITCODE -ne 0 -or
+            -not ($inspect -match "states=27594696 decisive=21786787 max=40") -or
+            -not ($inspect -match "sha256=b702ce64eb13610a9d4a952d8bd9e72340e809775617c6c19b229fcc41de1748") -or
+            $inspect -notcontains "KCCK DTM source-WDL checksum, sentinel map, and parity: PASS") {
+            throw "full KCCK DTM inspection or WDL binding changed"
+        }
+        if ((Get-FileHash -LiteralPath $KcckDtmFullPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne
+            "e6f12c4eda6064df9fe81f984d5d86222eb428552507401fae48ad0eed22275c") {
+            throw "full KCCK DTM container checksum changed"
+        }
+        $reader = [IO.File]::OpenText($KcckDtmFullPath)
+        try { $dtmHeader = ($reader.ReadLine() | ConvertFrom-Json) } finally { $reader.Dispose() }
+        if ($dtmHeader.magic -ne "OMTB4DTM" -or $dtmHeader.version -ne 1 -or
+            -not $dtmHeader.complete -or $dtmHeader.state_count -ne 27594696 -or
+            $dtmHeader.decisive_count -ne 21786787 -or $dtmHeader.max_dtm -ne 40 -or
+            $dtmHeader.within_20 -ne 17251404 -or
+            $dtmHeader.within_40 -ne 21786787 -or
+            $dtmHeader.beyond_100 -ne 0 -or
+            $dtmHeader.source_wdl_payload_sha256 -ne
+                "35f9d8bcb3b283dec2f918fcc4c5d62355edc2dee3ee297e16dd42a91940678e" -or
+            $dtmHeader.payload_sha256 -ne
+                "b702ce64eb13610a9d4a952d8bd9e72340e809775617c6c19b229fcc41de1748") {
+            throw "full KCCK DTM deterministic metadata changed"
+        }
+        $probes = @(& $generator --probe-dtm $KcckDtmFullPath --dtm-wdl $KcckFullPath `
+            --index 94094 --index 93985 --index 1328 --index 1081911 --index 1081893)
+        if ($LASTEXITCODE -ne 0 -or
+            $probes -notcontains "index=94094 AK=a0,Ca=w1,DK=g6,Cb=w3,turn=attacker dtm=39" -or
+            $probes -notcontains "index=93985 AK=a0,Ca=w1,DK=f5,Cb=w3,turn=defender dtm=40" -or
+            $probes -notcontains "index=1328 AK=a0,Ca=b1,DK=a2,Cb=a5,turn=attacker dtm=1" -or
+            $probes -notcontains "index=1081911 AK=a1,Ca=a0,DK=w1,Cb=b1,turn=defender dtm=0" -or
+            $probes -notcontains "index=1081893 AK=a1,Ca=a0,DK=w1,Cb=a2,turn=defender dtm=none") {
+            throw "full KCCK DTM deterministic probes changed"
+        }
+        $boundary60 = @(& $generator --probe-dtm $KcckDtmFullPath `
+            --dtm-wdl $KcckFullPath --halfmove 60 --index 93985)
+        $boundary61 = @(& $generator --probe-dtm $KcckDtmFullPath `
+            --dtm-wdl $KcckFullPath --halfmove 61 --index 93985 --index 94094)
+        $boundary62 = @(& $generator --probe-dtm $KcckDtmFullPath `
+            --dtm-wdl $KcckFullPath --halfmove 62 --index 94094)
+        if ($LASTEXITCODE -ne 0 -or
+            $boundary60 -notcontains
+                "index=93985 AK=a0,Ca=w1,DK=f5,Cb=w3,turn=defender dtm=40 halfmove=60 budget=40 rule=theoretical-result-safe" -or
+            $boundary61 -notcontains
+                "index=93985 AK=a0,Ca=w1,DK=f5,Cb=w3,turn=defender dtm=40 halfmove=61 budget=39 rule=blessed-loss" -or
+            $boundary61 -notcontains
+                "index=94094 AK=a0,Ca=w1,DK=g6,Cb=w3,turn=attacker dtm=39 halfmove=61 budget=39 rule=theoretical-result-safe" -or
+            $boundary62 -notcontains
+                "index=94094 AK=a0,Ca=w1,DK=g6,Cb=w3,turn=attacker dtm=39 halfmove=62 budget=38 rule=cursed-win") {
+            throw "full KCCK DTM 100-ply equality boundary changed"
+        }
+        $line = @(& $generator --line-dtm $KcckDtmFullPath --dtm-wdl $KcckFullPath `
+            --index 94094)
+        if ($LASTEXITCODE -ne 0 -or
+            $line -notcontains
+                "KCCK DTM line root-kind=canonical-index index=94094 AK=a0,Ca=w1,DK=g6,Cb=w3,turn=attacker wdl=win dtm=39" -or
+            $line -notcontains
+                "KCCK DTM line ply=1 move=Ca:w1-b1 preserving=1 optimal=1 index=457 AK=a0,Ca=b1,DK=g6,Cb=w3,turn=defender wdl=loss dtm=38" -or
+            $line -notcontains "KCCK DTM line checkmate plies=39 PASS" -or
+            @($line -match "^KCCK DTM line ply=").Count -ne 39) {
+            throw "full KCCK DTM canonical optimal line changed"
+        }
+        $rotated = @(& $generator --line-dtm $KcckDtmFullPath --dtm-wdl $KcckFullPath `
+            --state 99,102,33,100,0)
+        $rotatedExit = $LASTEXITCODE
+        $swapped = @(& $generator --line-dtm $KcckDtmFullPath --dtm-wdl $KcckFullPath `
+            --state 0,102,66,100,0)
+        $swappedExit = $LASTEXITCODE
+        if ($rotatedExit -ne 0 -or $swappedExit -ne 0 -or
+            $rotated -notcontains
+                "KCCK DTM line root-kind=raw-state index=94094 AK=j9,Ca=w3,DK=d3,Cb=w1,turn=attacker wdl=win dtm=39" -or
+            $rotated -notcontains "KCCK DTM line checkmate plies=39 PASS" -or
+            $swapped -notcontains
+                "KCCK DTM line root-kind=raw-state index=104486 AK=a0,Ca=w3,DK=g6,Cb=w1,turn=attacker wdl=win dtm=39" -or
+            $swapped -notcontains "KCCK DTM line checkmate plies=39 PASS") {
+            throw "full KCCK DTM raw-orientation or Champion-label line parity changed"
+        }
+        $atlas = @(& $generator --atlas-dtm $KcckDtmFullPath --dtm-wdl $KcckFullPath)
+        if ($LASTEXITCODE -ne 0 -or
+            $atlas -notcontains
+                "KCCK atlas attacker-win detached-champions=0 count=9818608 mean=16.307 p50=17 p90=21 p99=23 max=37" -or
+            $atlas -notcontains
+                "KCCK atlas attacker-win detached-champions=2 count=10945 mean=25.492 p50=25 p90=29 p99=29 max=39" -or
+            $atlas -notcontains
+                "KCCK atlas attacker-turn detached-champions=0 wins=9818608 draws=34301 draw-share-percent=0.348" -or
+            $atlas -notcontains
+                "KCCK atlas attacker-turn detached-champions=2 wins=10945 draws=3226 draw-share-percent=22.765" -or
+            $atlas -notcontains
+                "KCCK atlas attacker-win defender-region=interior count=6242222 mean=17.583 p50=17 p90=21 p99=25 max=39" -or
+            $atlas -notcontains
+                "KCCK atlas attacker-win defender-region=detached count=503959 mean=13.588 p50=13 p90=19 p99=21 max=27" -or
+            $atlas -notcontains
+                "KCCK atlas attacker-turn defender-region=interior wins=6242222 draws=46476 draw-share-percent=0.739" -or
+            $atlas -notcontains
+                "KCCK atlas attacker-turn defender-region=detached wins=503959 draws=11611 draw-share-percent=2.252" -or
+            $atlas -notcontains
+                "KCCK atlas mate-shells total=3352 no-attacker-king-zone-control=2120 mutual-champion-support=2616" -or
+            $atlas -notcontains
+                "KCCK atlas mate-orbits d4-and-label-swap=1676 fixed-label-swap=0" -or
+            $atlas -notcontains
+                "KCCK atlas mate-shell region=regular-edge checking-champions=2 count=58" -or
+            $atlas -notcontains "KCCK atlas max-roots attacker=22 defender=22") {
+            throw "full KCCK mating-atlas census changed"
         }
     }
 

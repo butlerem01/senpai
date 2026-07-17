@@ -27,6 +27,9 @@ heuristic four-man score scaler**.
   `wizard_king,wizard,knight_king,knight,turn`; KCKW order is
   `champion_king,champion,wizard_king,wizard,turn`; KCCK order is
   `attacker_king,champion_a,defender_king,champion_b,turn`.
+- A separate checksummed `OMTB4DTM` KCCK companion. It binds to the exact WDL
+  payload, stores ply-accurate mate distances, probes rule budgets, extracts
+  raw-orientation optimal lines, and produces the two-Champion mating atlas.
 - Versioned, checksummed three-man foundation files. They are deliberately not
   yet an engine probe format.
 
@@ -48,6 +51,21 @@ The parity check compares historical legality, current-side check, the native
 insufficient-material result, KxR/KxC capture-to-KK edges, and every quiet
 successor after mapping it through the Python D4 index. A slower complete graph
 comparison is available with `-Exhaustive`.
+
+Build the dedicated native KCCK oracle and compare its exact labelled graph
+against the independent Omega model on the frozen 17,128-root corpus:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File `
+  tools/omega_tb/test-native-kcck-parity.ps1
+```
+
+This corpus covers historical legality, checks, exact successors, Champion A
+and B captures, KCK capture-to-draw behavior, D4/label variants, and
+detached-corner roots. Its SHA-256 is
+`300f9a25f2b6592b0322e79382acd7a9e5d819a7dc8ca8d2c44598b216471729`;
+the independently computed expected-record stream is also frozen at
+`2c1cf4bf03837b43ac58b1c5acd1fe5e15029eaa974d490e08f1f6f5e44b92ab`.
 
 Run the generator directly and optionally write the compact WDL files:
 
@@ -74,7 +92,8 @@ powershell -ExecutionPolicy Bypass -File tools/omega_tb/four_man_test.ps1 `
   -KrknFullPath build/omega-tb/omega-krkn-wdl-v1.omtb4 `
   -KwknFullPath build/omega-tb/omega-kwkn-wdl-v1.omtb4 `
   -KckwFullPath .build-omega-tb/omega-kckw-wdl-v1.omtb4 `
-  -KcckFullPath .build-omega-tb/omega-kcck-wdl-v1.omtb4
+  -KcckFullPath .build-omega-tb/omega-kcck-wdl-v1.omtb4 `
+  -KcckDtmFullPath .build-omega-tb/omega-kcck-dtm-v1.omtb4d
 ```
 
 Generate the full KRKC, KRKN, KWKN, KCKW, and diagnostic KCCK WDL files offline:
@@ -105,6 +124,8 @@ powershell -ExecutionPolicy Bypass -File tools/omega_tb/four_man_build.ps1
 .\.build-omega-tb\four_man_wdl.exe --material kcck --self-test --verify-counts
 .\.build-omega-tb\four_man_wdl.exe --material kcck --full --verify `
   --output .build-omega-tb/omega-kcck-wdl-v1.omtb4
+.\.build-omega-tb\four_man_wdl.exe --material kcck --full --verify `
+  --dtm-output .build-omega-tb/omega-kcck-dtm-v1.omtb4d
 .\.build-omega-tb\four_man_wdl.exe --summary `
   .build-omega-tb/omega-kcck-wdl-v1.omtb4
 
@@ -113,17 +134,24 @@ powershell -ExecutionPolicy Bypass -File tools/omega_tb/four_man_build.ps1
   --state 101,96,45,74,0 --index 26750996
 ```
 
-The full payload is 27,594,696 bytes plus one JSON header line. The generator
+The full WDL payload is 27,594,696 bytes plus one JSON header line. The WDL
+generator
 uses one status byte and one unresolved-successor byte per dense slot, a
 four-byte FIFO entry per solved legal state in the worst case, about 6 MiB for
 the D4 lookup tables, and, for the rook families, the 274 KiB KRK dependency.
-Budget roughly 160 MiB
-of RAM (192 MiB is a comfortable process limit) and about 55 MiB of free disk
-while the checksummed file is atomically replaced. It is intentionally
-single-threaded and deterministic. The first verified full solve plus Bellman
-pass completed in 46.16 seconds on the development machine; KWKN completed in
-41.02 seconds, KCKW in 60.81 seconds, and KCCK plus its exhaustive D4/label
-swap pass in 135.41 seconds. Use
+Budget roughly 160 MiB of RAM (192 MiB is a comfortable process limit) and
+about 55 MiB of free disk while a WDL file is atomically replaced.
+
+The KCCK DTM pass has a larger working set: its fixed full-size vectors occupy
+about 276 MB decimal before the priority queue and D4 data. Budget 512 MiB of
+RAM. The `OMTB4DTM` companion is about 110.38 MB; budget about 120 MB free
+beyond an existing companion, or about 230 MB total during an in-place atomic
+replacement.
+
+Generation is intentionally single-threaded and deterministic. The first
+verified full solve plus Bellman pass completed in 46.16 seconds on the
+development machine; KWKN completed in 41.02 seconds, KCKW in 60.81 seconds,
+and KCCK plus its exhaustive D4/label swap pass in 135.41 seconds. Use
 `--small 1000000` to benchmark another machine before a full build.
 
 ## Exact populations
@@ -169,10 +197,15 @@ slot plus one JSON header line.
   `KCKW_THEORY.md` for its frozen hashes, turn/material-side populations,
   paired-placement counts, and decisive witnesses.
 - KCCK is also an offline diagnostic only. Its complete WDL solve confirms
-  that two Champions can mate with king support but qualifies any universal
-  claim because verified drawn placements remain. See `KCCK_THEORY.md` for
-  full counts, hashes, label-swap proof, and production limits.
-- Native/Python parity is sampled by default to keep normal verification fast;
-  use `test-native-parity.ps1 -Exhaustive` for every indexed three-man state.
+  that two Champions can mate, while the exact DTM companion proves a median
+  of 18 plies, a maximum of 40, and no fresh-clock cursed wins. Verified drawn
+  placements still qualify any universal claim. See `KCCK_THEORY.md`,
+  `KCCK_DTM_DESIGN.md`, and `KCCK_MATING_ATLAS.md` for the contracts, hashes,
+  terminal-mate census, longest line, and production limits.
+- Three-man native/Python parity is sampled by default to keep normal
+  verification fast; use `test-native-parity.ps1 -Exhaustive` for every
+  indexed three-man state. KCCK currently has the separate frozen sampled
+  gate above; direct solver/native three-way or exhaustive coverage remains a
+  pre-production improvement.
 
 See `DESIGN.md` for the retained four-man dependency plan.

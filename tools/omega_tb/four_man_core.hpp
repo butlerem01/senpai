@@ -169,6 +169,8 @@ std::uint64_t json_unsigned(const std::string & header, const std::string & key)
 
 const char * four_man_material_name(FourManMaterial material);
 FourManMaterial parse_four_man_material(const std::string & name);
+std::string four_man_rules_sha256(FourManMaterial material);
+std::string four_man_capture_policy_sha256(FourManMaterial material);
 
 struct FourManTable {
     FourManMaterial material = FourManMaterial::Krkc;

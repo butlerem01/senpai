@@ -650,6 +650,16 @@ FourManMaterial parse_four_man_material(const std::string & name) {
     throw std::invalid_argument("four-man material must be krkc, krkn, kwkn, kckw, or kcck");
 }
 
+std::string four_man_rules_sha256(FourManMaterial material) {
+    return sha256(std::string(four_man_rules(material)));
+}
+
+std::string four_man_capture_policy_sha256(FourManMaterial material) {
+    if (!uses_capture_policy(material))
+        throw std::invalid_argument("four-man material uses a table dependency, not a capture policy");
+    return sha256(std::string(capture_policy(material)));
+}
+
 void write_four_man_file(const std::string & path, const std::vector<std::uint8_t> & payload,
                          std::uint64_t legal_count, bool complete,
                          const std::string & dependency_sha256, FourManMaterial material) {
@@ -720,6 +730,8 @@ FourManTable read_four_man_file(const std::string & path) {
     const FourManMaterial material = parse_four_man_material(json_string(header, "material"));
     if (json_string(header, "index") != "D4-first-piece-v1")
         throw std::runtime_error("four-man table metadata mismatch");
+    if (json_unsigned(header, "square_count") != Square_Count)
+        throw std::runtime_error("four-man square-count metadata mismatch");
     const std::string minor = minor_name(material);
     const bool capture_boundary = uses_capture_policy(material);
     const std::string labelled_order = "\"labelled_order\":[\"" +
@@ -730,8 +742,21 @@ FourManTable read_four_man_file(const std::string & path) {
     if (header.find(labelled_order) == std::string::npos)
         throw std::runtime_error("four-man labelled-piece order mismatch");
     if (json_unsigned(header, "dense_state_count") != Four_Man_State_Count ||
-        json_unsigned(header, "state_count") != payload.size())
+        json_unsigned(header, "state_count") != payload.size() ||
+        payload.size() > Four_Man_State_Count)
         throw std::runtime_error("four-man table state count mismatch");
+    const bool complete = payload.size() == Four_Man_State_Count;
+    const std::string complete_field =
+        std::string("\"complete\":") + (complete ? "true" : "false");
+    const std::string boundary_field =
+        std::string("\"boundary\":\"") +
+        (complete ? "full" : "outside-draw-test") + "\"";
+    if (header.find(complete_field) == std::string::npos ||
+        header.find(boundary_field) == std::string::npos)
+        throw std::runtime_error("four-man completeness/boundary metadata mismatch");
+    if (header.find("\"codes\":{\"invalid\":0,\"loss\":2,\"draw\":3,\"win\":4}") ==
+        std::string::npos)
+        throw std::runtime_error("four-man WDL code-map metadata mismatch");
     const std::string rules = four_man_rules(material);
     if (json_string(header, "rules") != rules ||
         json_string(header, "rules_sha256") != sha256(rules))
@@ -751,6 +776,18 @@ FourManTable read_four_man_file(const std::string & path) {
     const std::uint64_t legal = loss + draw + win;
     if (json_unsigned(header, "legal_count") != legal)
         throw std::runtime_error("four-man legal count mismatch");
+    if (complete) {
+        std::uint64_t expected = 0;
+        switch (material) {
+            case FourManMaterial::Krkc: expected = Krkc_Legal_Count; break;
+            case FourManMaterial::Krkn: expected = Krkn_Legal_Count; break;
+            case FourManMaterial::Kwkn: expected = Kwkn_Legal_Count; break;
+            case FourManMaterial::Kckw: expected = Kckw_Legal_Count; break;
+            case FourManMaterial::Kcck: expected = Kcck_Legal_Count; break;
+        }
+        if (legal != expected)
+            throw std::runtime_error("complete four-man legal population mismatch");
+    }
     if (json_unsigned(header, "invalid_count") != invalid ||
         json_unsigned(header, "loss_count") != loss ||
         json_unsigned(header, "draw_count") != draw ||

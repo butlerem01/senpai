@@ -93,4 +93,6 @@ square numbers:
 Only after every full gate passes may the published mating claim be called
 confirmed, qualified, or contradicted. The artifact remains outside production
 regardless of the answer until a separate runtime decision and 100-ply-safe
-distance policy exist.
+distance policy exist. The accepted follow-up distance policy and companion
+format are frozen separately in `KCCK_DTM_DESIGN.md`; they do not mutate this
+WDL contract.

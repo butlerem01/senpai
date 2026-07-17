@@ -100,7 +100,10 @@ only its king. A legal capture of either Champion exits to a KCK policy draw.
 The full table passed Bellman verification plus exhaustive D4 and Champion
 label-swap invariance. It confirms that two Champions can force mate from most
 legal records while retaining exact drawn placements. KCCK is likewise absent
-from production and evaluation. See `KCCK_DESIGN.md` and `KCCK_THEORY.md`.
+from production and evaluation. Its separate `OMTB4DTM` companion resolves all
+decisive records, has maximum DTM 40, and directly settles the no-progress
+budget because KCCK has no win-preserving zeroing move. See `KCCK_DESIGN.md`,
+`KCCK_DTM_DESIGN.md`, `KCCK_THEORY.md`, and `KCCK_MATING_ATLAS.md`.
 Any mechanism analysis of its exact draws is separately constrained by
 `KCCK_DRAW_DESIGN.md`; local corner/capture flags must not be mistaken for
 proved fortress classes without the residual draw-graph analysis.
@@ -141,5 +144,9 @@ native reader. `OmegaTablebasePath` atomically loads KRK, KCK, KRKC, KRKN, and
 KWKN as one set; a missing or invalid replacement retains the previous set.
 KCKW and KCCK remain outside this production boundary.
 Runtime indexing is role-normalized and read-only. Search consumes only exact
-draw records. Win/loss records remain diagnostic until a later DTZ pass can
-respect the automatic 100-ply boundary and provide root ordering.
+draw records. Most win/loss records remain diagnostic until a later distance
+pass can respect the automatic 100-ply boundary and provide root ordering.
+KCCK now has exact DTM, no fresh-clock cursed wins, and a passing frozen
+17,128-root native/independent graph-parity corpus. It still requires direct
+solver/native integration coverage, history-safe runtime handling, and a
+production-format decision before decisive runtime probing.
