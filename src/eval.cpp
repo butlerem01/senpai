@@ -17,6 +17,7 @@
 #include "libmy.hpp"
 #include "math.hpp"
 #include "omega_eval.hpp"
+#include "omega_nnue.hpp"
 #include "pawn.hpp"
 #include "pos.hpp"
 #include "score.hpp"
@@ -952,6 +953,15 @@ Score eval(const Pos & pos, Side sd) {
 }
 
 static int eval_omega(const Pos & pos) {
+   if (pos.is_draw()) return 0;
+
+   if (var::UseOmegaNNUE) {
+      int stm_score = 0;
+      if (omega_nnue::G_Network.evaluate(pos, stm_score)) {
+         return pos.turn() == White ? stm_score : -stm_score;
+      }
+   }
+
    return omega_eval::evaluate(pos);
 }
 

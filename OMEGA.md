@@ -101,6 +101,25 @@ info string omega book hit a0c2
 The Omega book is inactive in standard chess, infinite analysis, and ponder
 searches. It also has no effect when the current normalized book key is absent.
 
+## Experimental NNUE evaluation
+
+This branch also advertises:
+
+```text
+option name UseOmegaNNUE type check default false
+option name OmegaNNUEFile type string default <empty>
+```
+
+The handcrafted Omega evaluator remains the tested default. A valid
+`OMNNUE1` file can be loaded before or after selecting the Omega variant, and
+`UseOmegaNNUE=true` activates it only for Omega positions. Loading is atomic:
+a rejected replacement retains the previous network, while `<empty>` unloads
+it. Requesting NNUE without a loaded network falls back to the handcrafted
+evaluator. Standard chess is always isolated from this option.
+
+See `NNUE.md` and `tools/omega_nnue/README.md` for the frozen feature map,
+binary contract, trainer, evidence limits, and promotion gates.
+
 ## Verification
 
 Tests in `tests/` cover geometry, OFEN, state and hashing, castling, promotion,

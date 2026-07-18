@@ -20,6 +20,7 @@ bool SMP;
 int  Threads;
 int  Hash;
 bool Chess_960;
+bool UseOmegaNNUE;
 Variant UCI_Variant;
 
 static std::map<std::string, std::string> Var;
@@ -33,7 +34,9 @@ void init() {
    set("Threads", "1");
    set("Hash", "64");
    set("UCI_Chess960", "false");
+   set("UseOmegaNNUE", "false");
    set("UCI_Variant", "chess");
+   set("OmegaNNUEFile", "");
    set("OmegaTablebasePath", "");
    set("OmegaBookFile", "");
 
@@ -48,6 +51,7 @@ void update() {
    SMP       = Threads > 1;
    Hash      = 1 << ml::log_2(get_int("Hash"));
    Chess_960 = get_bool("UCI_Chess960");
+   UseOmegaNNUE = get_bool("UseOmegaNNUE");
    UCI_Variant = variant_from_string(get("UCI_Variant"));
 
    variant_set(UCI_Variant);

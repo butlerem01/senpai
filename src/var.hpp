@@ -19,6 +19,7 @@ extern bool SMP;
 extern int  Threads;
 extern int  Hash;
 extern bool Chess_960;
+extern bool UseOmegaNNUE;
 extern Variant UCI_Variant;
 
 // functions

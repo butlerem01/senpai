@@ -31,14 +31,24 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Native Senpai build failed with exit code $LASTEXITCODE." }
     Copy-Item -Force `
         (Join-Path $output "senpai.exe") `
-        (Join-Path $output "senpai-omega-integrated.exe")
+        (Join-Path $output "senpai-omega-nnue.exe")
 
     & cl.exe @common (Join-Path $source "omega.cpp") "/Fe:$(Join-Path $output 'senpai-omega-companion.exe')"
     if ($LASTEXITCODE -ne 0) { throw "Omega companion build failed with exit code $LASTEXITCODE." }
+
+    Copy-Item -Force `
+        (Join-Path $root "OMEGA.md") `
+        (Join-Path $output "OMEGA.md")
+    Copy-Item -Force `
+        (Join-Path $root "NNUE.md") `
+        (Join-Path $output "NNUE.md")
+    Copy-Item -Force `
+        (Join-Path $root "INTEGRATED.md") `
+        (Join-Path $output "INTEGRATED.md")
 } finally {
     Pop-Location
 }
 
 Write-Host "Built: $(Join-Path $output 'senpai.exe')"
-Write-Host "Built: $(Join-Path $output 'senpai-omega-integrated.exe')"
+Write-Host "Built: $(Join-Path $output 'senpai-omega-nnue.exe')"
 Write-Host "Built: $(Join-Path $output 'senpai-omega-companion.exe')"

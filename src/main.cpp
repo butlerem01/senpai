@@ -22,6 +22,7 @@
 #include "math.hpp"
 #include "move.hpp"
 #include "omega_book.hpp"
+#include "omega_nnue.hpp"
 #include "omega_tablebase.hpp"
 #include "pawn.hpp"
 #include "pos.hpp"
@@ -35,7 +36,7 @@
 // constants
 
 const std::string Engine_Name    { "Senpai" };
-const std::string Engine_Version { "2.0 Omega Integrated 1" };
+const std::string Engine_Version { "2.0 Omega NNUE 0" };
 
 // prototypes
 
@@ -102,6 +103,8 @@ static void uci_loop() {
          std::cout << "option name " << "Threads" << " type spin default " << var::get("Threads") << " min 1 max 16" << std::endl;
          std::cout << "option name " << "UCI_Chess960" << " type check default " << var::get("UCI_Chess960") << std::endl;
          std::cout << "option name " << "UCI_Variant" << " type combo default chess var chess var omega" << std::endl;
+         std::cout << "option name UseOmegaNNUE type check default " << var::get("UseOmegaNNUE") << std::endl;
+         std::cout << "option name OmegaNNUEFile type string default <empty>" << std::endl;
          std::cout << "option name OmegaBookFile type string default <empty>" << std::endl;
          std::cout << "option name OmegaTablebasePath type string default <empty>" << std::endl;
 
@@ -165,6 +168,56 @@ static void uci_loop() {
 
          if (name == "Clear Hash") {
             tt::G_TT.clear();
+         } else if (name == "OmegaNNUEFile") {
+            const std::string path = value == "<empty>" ? std::string() : value;
+            const omega_nnue::Configure_Result result =
+               omega_nnue::G_Network.configure(path);
+            std::cout << "info string " << result.message << std::endl;
+            if (result.ok) {
+               var::set("OmegaNNUEFile", path);
+               tt::G_TT.clear();
+               if (var::UseOmegaNNUE) {
+                  if (omega_nnue::G_Network.loaded()) {
+                     if (var::UCI_Variant == Omega) {
+                        std::cout << "info string Omega NNUE evaluation active"
+                                  << std::endl;
+                     } else {
+                        std::cout << "info string Omega NNUE loaded; "
+                                     "activates for omega" << std::endl;
+                     }
+                  } else {
+                     std::cout << "info string Omega NNUE unavailable; "
+                                  "handcrafted fallback active" << std::endl;
+                  }
+               }
+            }
+         } else if (name == "UseOmegaNNUE") {
+            if (value != "true" && value != "false") {
+               std::cout << "info string Invalid UseOmegaNNUE value "
+                         << value << std::endl;
+               continue;
+            }
+
+            var::set("UseOmegaNNUE", value);
+            var::update();
+            tt::G_TT.clear();
+
+            if (!var::UseOmegaNNUE) {
+               std::cout << "info string Omega NNUE disabled; "
+                            "handcrafted evaluation active" << std::endl;
+            } else if (omega_nnue::G_Network.loaded()) {
+               if (var::UCI_Variant == Omega) {
+                  std::cout << "info string Omega NNUE evaluation active"
+                            << std::endl;
+               } else {
+                  std::cout << "info string Omega NNUE loaded; "
+                               "activates for omega" << std::endl;
+               }
+            } else {
+               std::cout << "info string Omega NNUE requested without a "
+                            "loaded network; handcrafted fallback active"
+                         << std::endl;
+            }
          } else if (name == "OmegaBookFile") {
             const std::string path = value == "<empty>" ? std::string() : value;
             const omega_book::Configure_Result result = omega_book::G_Book.configure(path);

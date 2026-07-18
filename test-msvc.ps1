@@ -92,6 +92,33 @@ if ($LASTEXITCODE -ne 0) {
     throw "UCI opening-book protocol test failed with exit code $LASTEXITCODE"
 }
 
+& (Join-Path $tests "uci_nnue.ps1") `
+    -EnginePath $engine `
+    -FixtureWriterPath (Join-Path $executables "omega_nnue.exe")
+if ($LASTEXITCODE -ne 0) {
+    throw "UCI Omega NNUE protocol test failed with exit code $LASTEXITCODE"
+}
+
+$python = Get-Command python.exe -ErrorAction SilentlyContinue
+$numpyAvailable = $false
+if ($null -ne $python) {
+    & $python.Source -c "import numpy" 2>$null
+    $numpyAvailable = $LASTEXITCODE -eq 0
+}
+
+if ($numpyAvailable) {
+    & $python.Source `
+        (Join-Path $root "tools\omega_nnue\train.py") `
+        "--self-test" `
+        "--quiet" `
+        "--cpp-evaluator" (Join-Path $executables "omega_nnue.exe")
+    if ($LASTEXITCODE -ne 0) {
+        throw "Python/C++ Omega NNUE parity test failed with exit code $LASTEXITCODE"
+    }
+} else {
+    Write-Host "Skipping Python/C++ NNUE parity test: Python with NumPy is unavailable"
+}
+
 if ($env:OMEGA_FULL_TABLEBASE_PATH) {
     & (Join-Path $tests "uci_kcck_dtm.ps1") `
         -EnginePath $engine `
