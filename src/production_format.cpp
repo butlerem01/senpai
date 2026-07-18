@@ -68,6 +68,15 @@ const char Kckw_Rules_Description[] =
    "insufficient-k-plus-one-nbcw-v1;kckw-theoretical-wdl-v1;"
    "wdl5-dtz16-v1";
 
+// KCCK freezes two labelled Champions owned by role zero.  Champion-label
+// exchange is an exact source invariant, while keeping the labels in the
+// container preserves the shared D4-first-piece index.
+const char Kcck_Rules_Description[] =
+   "omega-104-v1;d4-first-piece-v1;historical-legality-v1;"
+   "king-v1;champion-a-v1;champion-b-v1;same-side-labels-v1;"
+   "100-ply-auto-draw-v1;insufficient-k-plus-one-nbcw-v1;"
+   "kcck-theoretical-wdl-v1;wdl5-dtz16-v1";
+
 struct Material_Spec {
    Material material;
    std::uint8_t piece_count;
@@ -102,6 +111,10 @@ const Material_Spec Specs[] {
      {{ Piece_King, Piece_Champion, Piece_King, Piece_Wizard }},
      {{ Role_Zero, Role_Zero, Role_One, Role_One }},
      27594696ULL, 23651215ULL },
+   { Material::KCCK, 4,
+     {{ Piece_King, Piece_Champion, Piece_King, Piece_Champion }},
+     {{ Role_Zero, Role_Zero, Role_One, Role_Zero }},
+     27594696ULL, 23638870ULL },
 };
 
 const Material_Spec * spec_for(Material material) {
@@ -390,6 +403,7 @@ const char * rules_description() {
 const char * rules_description(Material material) {
    if (material == Material::KWKN) return Kwkn_Rules_Description;
    if (material == Material::KCKW) return Kckw_Rules_Description;
+   if (material == Material::KCCK) return Kcck_Rules_Description;
    return Rules_Description;
 }
 

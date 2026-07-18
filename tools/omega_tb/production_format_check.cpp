@@ -19,7 +19,8 @@ fmt::Material parse_material(const std::string & value) {
    if (value == "KRKN") return fmt::Material::KRKN;
    if (value == "KWKN") return fmt::Material::KWKN;
    if (value == "KCKW") return fmt::Material::KCKW;
-   throw std::runtime_error("material must be KRK, KCK, KRKC, KRKN, KWKN, or KCKW");
+   if (value == "KCCK") return fmt::Material::KCCK;
+   throw std::runtime_error("material must be KRK, KCK, KRKC, KRKN, KWKN, KCKW, or KCCK");
 }
 
 std::array<std::uint64_t, 6> parse_counts(const std::string & value) {
@@ -63,7 +64,7 @@ int main(int argc, char ** argv) {
          else throw std::runtime_error("unknown option: " + option);
       }
       if (input.empty() || material_name.empty() || expected_counts_text.empty())
-         throw std::runtime_error("usage: production_format_check --input FILE --material KRK|KCK|KRKC|KRKN|KWKN|KCKW --counts i,l,bl,d,cw,w");
+         throw std::runtime_error("usage: production_format_check --input FILE --material KRK|KCK|KRKC|KRKN|KWKN|KCKW|KCCK --counts i,l,bl,d,cw,w");
 
       const fmt::Material material = parse_material(material_name);
       const auto expected_counts = parse_counts(expected_counts_text);

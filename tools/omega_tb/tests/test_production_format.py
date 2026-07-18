@@ -9,6 +9,7 @@ sys.path.insert(0, str(TOOLS))
 from production_format import (
     DRAW,
     HEADER_SIZE,
+    KCCK_RULES_FINGERPRINT,
     KCKW_RULES_FINGERPRINT,
     LOSS,
     RULES_FINGERPRINT,
@@ -149,6 +150,19 @@ class ProductionFormatTests(unittest.TestCase):
         )
         self.assertNotEqual(RULES_FINGERPRINT, KCKW_RULES_FINGERPRINT)
         self.assertNotEqual(KWKN_RULES_FINGERPRINT, KCKW_RULES_FINGERPRINT)
+
+    def test_kcck_shape_and_material_specific_rules_are_frozen(self):
+        spec = material_spec("KCCK")
+        self.assertEqual(27_594_696, spec.state_count)
+        self.assertEqual(23_638_870, spec.legal_count)
+        self.assertEqual(4, spec.piece_count)
+        self.assertEqual((0, 0, 1, 0), spec.roles)
+        self.assertEqual(
+            "96c23dfcdec7d37442006fb52f728ad86cbbff31cb34a561854685981af90940",
+            KCCK_RULES_FINGERPRINT.hex(),
+        )
+        self.assertNotEqual(RULES_FINGERPRINT, KCCK_RULES_FINGERPRINT)
+        self.assertNotEqual(KCKW_RULES_FINGERPRINT, KCCK_RULES_FINGERPRINT)
 
 
 if __name__ == "__main__":

@@ -38,6 +38,7 @@ FOUR_MAN_ORDERS = {
     "KRKN": ["rook_king", "rook", "knight_king", "knight", "turn"],
     "KWKN": ["wizard_king", "wizard", "knight_king", "knight", "turn"],
     "KCKW": ["champion_king", "champion", "wizard_king", "wizard", "turn"],
+    "KCCK": ["attacker_king", "champion_a", "defender_king", "champion_b", "turn"],
 }
 # Retain the public name used by existing tests and scripts.
 FOUR_MAN_ORDER = FOUR_MAN_ORDERS["KRKC"]
@@ -71,6 +72,15 @@ KCKW_RULES = (
 KCKW_CAPTURE_POLICY = "kck-kwk-insufficient-material-v1"
 KCKW_CAPTURE_POLICY_SHA256 = hashlib.sha256(
     KCKW_CAPTURE_POLICY.encode("ascii")
+).hexdigest()
+KCCK_RULES = (
+    "omega-104-v1;d4-first-piece-v1;historical-legality-v1;"
+    "kcck-theoretical-wdl;champion-a-v1;champion-b-v1;"
+    "same-side-labels-v1;kck-insufficient-material-v1"
+)
+KCCK_CAPTURE_POLICY = "either-champion-capture-to-kck-draw-v1"
+KCCK_CAPTURE_POLICY_SHA256 = hashlib.sha256(
+    KCCK_CAPTURE_POLICY.encode("ascii")
 ).hexdigest()
 
 
@@ -139,13 +149,14 @@ def read_source_artifact(path: Path) -> SourceArtifact:
         expected_rules = THREE_MAN_RULES
     else:
         if material not in FOUR_MAN_ORDERS:
-            raise ValueError("OMTB4WDL must contain KRKC, KRKN, KWKN, or KCKW")
+            raise ValueError("OMTB4WDL must contain KRKC, KRKN, KWKN, KCKW, or KCCK")
         expected_order = FOUR_MAN_ORDERS[material]
         expected_rules = {
             "KRKC": FOUR_MAN_RULES,
             "KRKN": KRKN_RULES,
             "KWKN": KWKN_RULES,
             "KCKW": KCKW_RULES,
+            "KCCK": KCCK_RULES,
         }[material]
         if header.get("complete") is not True or header.get("boundary") != "full":
             raise ValueError("production conversion requires a complete full-boundary OMTB4WDL table")
@@ -185,10 +196,11 @@ def read_source_artifact(path: Path) -> SourceArtifact:
             value = header.get(f"{name}_count")
             if type(value) is not int or value != counts[name]:
                 raise ValueError(f"source {name} count field mismatch")
-        if material in ("KWKN", "KCKW"):
+        if material in ("KWKN", "KCKW", "KCCK"):
             expected_policy = {
                 "KWKN": KWKN_CAPTURE_POLICY_SHA256,
                 "KCKW": KCKW_CAPTURE_POLICY_SHA256,
+                "KCCK": KCCK_CAPTURE_POLICY_SHA256,
             }[material]
             if header.get("capture_policy_sha256") != expected_policy:
                 raise ValueError(f"source {material} capture-policy checksum mismatch")

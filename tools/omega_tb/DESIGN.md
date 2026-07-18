@@ -140,13 +140,13 @@ probing must combine DTZ with the remaining `100 - halfmove_clock` budget.
 
 `OMTBPROD` provides fixed metadata, rules and payload hashes, and a strict
 native reader. `OmegaTablebasePath` atomically loads KRK, KCK, KRKC, KRKN,
-KWKN, and KCKW as one set; a missing or invalid replacement retains the
+KWKN, and KCKW as the required core set. KCCK is an optional checked seventh
+file; a present invalid file or an invalid core replacement retains the
 previous set.
-KCCK remains outside this production boundary.
 Runtime indexing is role-normalized and read-only. Search consumes only exact
 draw records. Most win/loss records remain diagnostic until a later distance
 pass can respect the automatic 100-ply boundary and provide root ordering.
-KCCK now has exact DTM, no fresh-clock cursed wins, and a passing frozen
-17,128-root native/independent graph-parity corpus. It still requires direct
-solver/native integration coverage, history-safe runtime handling, and a
-production-format decision before decisive runtime probing.
+KCCK now has exact draw-only runtime probing, exact DTM, no fresh-clock cursed
+wins, and a passing frozen 17,128-root native/independent graph-parity corpus.
+Decisive runtime probing still requires distance-aware scoring bound to the
+current halfmove-clock and native terminal/history precedence.

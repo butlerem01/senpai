@@ -12,7 +12,7 @@ five-valued WDL order shifted by three::
     invalid=0, loss=1, blessed-loss=2, draw=3, cursed-win=4, win=5
 
 DTZ is optional unsigned little-endian uint16, one value per dense index.
-KRK, KCK, KRKC, KRKN, KWKN, and KCKW use the same checked container.
+KRK, KCK, KRKC, KRKN, KWKN, KCKW, and KCCK use the same checked container.
 """
 
 from __future__ import annotations
@@ -73,6 +73,7 @@ MATERIAL_KRKC = 3
 MATERIAL_KRKN = 4
 MATERIAL_KWKN = 5
 MATERIAL_KCKW = 6
+MATERIAL_KCCK = 7
 
 RULES_DESCRIPTION = (
     "omega-104-v1;d4-first-piece-v1;historical-legality-v1;"
@@ -102,6 +103,15 @@ KCKW_RULES_DESCRIPTION = (
 )
 KCKW_RULES_FINGERPRINT = hashlib.sha256(KCKW_RULES_DESCRIPTION.encode("ascii")).digest()
 KCKW_RULES_FINGERPRINT_HEX = KCKW_RULES_FINGERPRINT.hex()
+
+KCCK_RULES_DESCRIPTION = (
+    "omega-104-v1;d4-first-piece-v1;historical-legality-v1;"
+    "king-v1;champion-a-v1;champion-b-v1;same-side-labels-v1;"
+    "100-ply-auto-draw-v1;insufficient-k-plus-one-nbcw-v1;"
+    "kcck-theoretical-wdl-v1;wdl5-dtz16-v1"
+)
+KCCK_RULES_FINGERPRINT = hashlib.sha256(KCCK_RULES_DESCRIPTION.encode("ascii")).digest()
+KCCK_RULES_FINGERPRINT_HEX = KCCK_RULES_FINGERPRINT.hex()
 
 RULES_OFFSET = 144
 PAYLOAD_HASH_OFFSET = 176
@@ -157,6 +167,12 @@ MATERIALS: Mapping[str, MaterialSpec] = {
         (ROLE_ZERO, ROLE_ZERO, ROLE_ONE, ROLE_ONE),
         27_594_696, 23_651_215,
     ),
+    "KCCK": MaterialSpec(
+        "KCCK", MATERIAL_KCCK, 4,
+        (PIECE_KING, PIECE_CHAMPION, PIECE_KING, PIECE_CHAMPION),
+        (ROLE_ZERO, ROLE_ZERO, ROLE_ONE, ROLE_ZERO),
+        27_594_696, 23_638_870,
+    ),
 }
 MATERIALS_BY_CODE = {spec.code: spec for spec in MATERIALS.values()}
 
@@ -211,6 +227,8 @@ def rules_fingerprint(material: Union[str, int]) -> bytes:
         return KWKN_RULES_FINGERPRINT
     if name == "KCKW":
         return KCKW_RULES_FINGERPRINT
+    if name == "KCCK":
+        return KCCK_RULES_FINGERPRINT
     return RULES_FINGERPRINT
 
 

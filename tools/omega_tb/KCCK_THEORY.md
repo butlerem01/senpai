@@ -136,11 +136,11 @@ attacker-to-move line.
 
 ## Production boundary and next experiments
 
-This family remains diagnostic-only. It is not in `OMTBPROD`, the runtime
-loader, search, evaluation, or automatic adjudication. Exact DTM now resolves
-the 100-ply question for KCCK, and sampled native four-man graph parity now
-passes. Runtime use still needs direct solver/native integration coverage,
-repetition-safe history handling, and a separate production-format decision.
+KCCK WDL now has a checked `OMTBPROD` conversion and an optional runtime file.
+Search consumes exact draw records only, with native repetition, automatic
+draw, mate, and stalemate taking precedence. Decisive W/L and the separate
+DTM companion remain diagnostic-only: using them requires distance-aware
+search scoring bound to the root's remaining `100 - halfmove_clock` budget.
 
 The highest-value follow-ups are:
 

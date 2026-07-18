@@ -5,6 +5,7 @@ param(
     [string]$KrknInput = "",
     [string]$KwknInput = "",
     [string]$KckwInput = "",
+    [string]$KcckInput = "",
     [string]$OutputDirectory = "",
     [ValidateSet("Release", "Debug")]
     [string]$Configuration = "Release"
@@ -32,11 +33,14 @@ if ([string]::IsNullOrWhiteSpace($KwknInput)) {
 if ([string]::IsNullOrWhiteSpace($KckwInput)) {
     $KckwInput = Join-Path $root ".build-omega-tb\omega-kckw-wdl-v1.omtb4"
 }
+if ([string]::IsNullOrWhiteSpace($KcckInput)) {
+    $KcckInput = Join-Path $root ".build-omega-tb\omega-kcck-wdl-v1.omtb4"
+}
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     $OutputDirectory = Join-Path $root ".build-omega-tb\production"
 }
 
-$sources = @($KrkInput, $KckInput, $KrkcInput, $KrknInput, $KwknInput, $KckwInput)
+$sources = @($KrkInput, $KckInput, $KrkcInput, $KrknInput, $KwknInput, $KckwInput, $KcckInput)
 foreach ($sourcePath in $sources) {
     if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) {
         throw "Missing source artifact: $sourcePath"
@@ -47,6 +51,11 @@ $actualKckwSourceHash = (Get-FileHash -LiteralPath $KckwInput -Algorithm SHA256)
 if ($actualKckwSourceHash -ne $expectedKckwSourceHash) {
     throw "KCKW source container checksum changed: $actualKckwSourceHash"
 }
+$expectedKcckSourceHash = "bff047fab9141666ae13f80db17ae2d5d5a808bdd115b131180e529bf493a244"
+$actualKcckSourceHash = (Get-FileHash -LiteralPath $KcckInput -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actualKcckSourceHash -ne $expectedKcckSourceHash) {
+    throw "KCCK source container checksum changed: $actualKcckSourceHash"
+}
 
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 $converter = Join-Path $tools "convert_to_production.py"
@@ -56,7 +65,8 @@ $jobs = @(
     @{ Material = "KRKC"; Input = $KrkcInput; Output = "omega-krkc-wdl-v1.omtb"; Counts = "4987490,2909,0,22576396,0,27901"; Dependency = $true },
     @{ Material = "KRKN"; Input = $KrknInput; Output = "omega-krkn-wdl-v1.omtb"; Counts = "4560350,2564,0,23005864,0,25918"; Dependency = $true },
     @{ Material = "KWKN"; Input = $KwknInput; Output = "omega-kwkn-wdl-v1.omtb"; Counts = "3516341,17131,0,23997362,0,63862"; Dependency = $false },
-    @{ Material = "KCKW"; Input = $KckwInput; Output = "omega-kckw-wdl-v1.omtb"; Counts = "3943481,4647,0,23631170,0,15398"; Dependency = $false }
+    @{ Material = "KCKW"; Input = $KckwInput; Output = "omega-kckw-wdl-v1.omtb"; Counts = "3943481,4647,0,23631170,0,15398"; Dependency = $false },
+    @{ Material = "KCCK"; Input = $KcckInput; Output = "omega-kcck-wdl-v1.omtb"; Counts = "3955826,11146894,0,1852083,0,10639893"; Dependency = $false }
 )
 
 foreach ($job in $jobs) {
@@ -72,6 +82,12 @@ $actualKckwProductionHash = (Get-FileHash -LiteralPath $kckwOutput -Algorithm SH
 if ($actualKckwProductionHash -ne $expectedKckwProductionHash) {
     throw "KCKW production container checksum changed: $actualKckwProductionHash"
 }
+$kcckOutput = Join-Path $OutputDirectory "omega-kcck-wdl-v1.omtb"
+$expectedKcckProductionHash = "bda9120960587ed9b33c791d7aedd305c979b9c8ff89724c2372eb16c434a9c1"
+$actualKcckProductionHash = (Get-FileHash -LiteralPath $kcckOutput -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actualKcckProductionHash -ne $expectedKcckProductionHash) {
+    throw "KCCK production container checksum changed: $actualKcckProductionHash"
+}
 
 $checker = Join-Path $root ".build-omega-tb\production_format_check.exe"
 & (Join-Path $tools "build-production-format-check.ps1") `
@@ -84,7 +100,7 @@ foreach ($job in $jobs) {
     if ($LASTEXITCODE -ne 0) { throw "native $($job.Material) production validation failed" }
 }
 
-Write-Host "Six-table production directory verified: $([IO.Path]::GetFullPath($OutputDirectory))"
+Write-Host "Seven-table production directory verified: $([IO.Path]::GetFullPath($OutputDirectory))"
 foreach ($job in $jobs) {
     $outputPath = Join-Path $OutputDirectory $job.Output
     $hash = (Get-FileHash -LiteralPath $outputPath -Algorithm SHA256).Hash.ToLowerInvariant()

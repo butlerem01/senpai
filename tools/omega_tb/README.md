@@ -172,7 +172,7 @@ slot plus one JSON header line.
 
 ## Assemble the CoreChess runtime directory
 
-After generating all six source artifacts above, run this from the repository
+After generating all seven source artifacts above, run this from the repository
 root:
 
 ```powershell
@@ -184,7 +184,7 @@ the complete set to the exact directory `$PWD\.build-omega-tb\production`.
 In CoreChess, set Senpai's `OmegaTablebasePath` option to that directory's
 absolute path. If source artifacts live elsewhere, the script accepts
 `-KrkInput`, `-KckInput`, `-KrkcInput`, `-KrknInput`, `-KwknInput`, and
-`-KckwInput`.
+`-KckwInput`, and `-KcckInput`.
 
 This is an intentional migration from five required files to six. A directory
 made for the earlier KWKN build must gain `omega-kckw-wdl-v1.omtb`; otherwise
@@ -196,7 +196,8 @@ previously loaded valid six-table set).
 - Runtime probing is enabled through the UCI string option
   `OmegaTablebasePath`. The directory must contain the fixed KRK, KCK, KRKC,
   KRKN, KWKN, and KCKW `OMTBPROD` filenames documented in
-  `PRODUCTION_FORMAT.md`.
+  `PRODUCTION_FORMAT.md`. KCCK is a checked optional seventh file so existing
+  six-table directories remain compatible.
 - Search consumes exact tablebase draws only. Theoretical win/loss records
   deliberately fall through to normal search until DTZ can account for the
   100-ply conversion boundary.
@@ -217,12 +218,11 @@ previously loaded valid six-table set).
   may adjudicate search, while decisive W/L records remain diagnostic-only
   until a 100-ply-safe DTZ policy exists. See `KCKW_THEORY.md` for its frozen
   hashes, populations, and decisive witnesses.
-- KCCK is also an offline diagnostic only. Its complete WDL solve confirms
-  that two Champions can mate, while the exact DTM companion proves a median
-  of 18 plies, a maximum of 40, and no fresh-clock cursed wins. Verified drawn
-  placements still qualify any universal claim. See `KCCK_THEORY.md`,
-  `KCCK_DTM_DESIGN.md`, and `KCCK_MATING_ATLAS.md` for the contracts, hashes,
-  terminal-mate census, longest line, and production limits.
+- KCCK exact draws may now adjudicate search when the optional production
+  file is loaded. Its decisive W/L and DTM records remain diagnostic-only
+  until search can bind the distance to the current halfmove clock and score
+  the exact result without overriding native terminal/history rules. See
+  `KCCK_THEORY.md`, `KCCK_DTM_DESIGN.md`, and `KCCK_MATING_ATLAS.md`.
 - Three-man native/Python parity is sampled by default to keep normal
   verification fast; use `test-native-parity.ps1 -Exhaustive` for every
   indexed three-man state. KCCK currently has the separate frozen sampled
