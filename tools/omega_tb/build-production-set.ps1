@@ -6,6 +6,7 @@ param(
     [string]$KwknInput = "",
     [string]$KckwInput = "",
     [string]$KcckInput = "",
+    [string]$KcckDtmInput = "",
     [string]$OutputDirectory = "",
     [ValidateSet("Release", "Debug")]
     [string]$Configuration = "Release"
@@ -36,11 +37,14 @@ if ([string]::IsNullOrWhiteSpace($KckwInput)) {
 if ([string]::IsNullOrWhiteSpace($KcckInput)) {
     $KcckInput = Join-Path $root ".build-omega-tb\omega-kcck-wdl-v1.omtb4"
 }
+if ([string]::IsNullOrWhiteSpace($KcckDtmInput)) {
+    $KcckDtmInput = Join-Path $root ".build-omega-tb\omega-kcck-dtm-v1.omtb4d"
+}
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     $OutputDirectory = Join-Path $root ".build-omega-tb\production"
 }
 
-$sources = @($KrkInput, $KckInput, $KrkcInput, $KrknInput, $KwknInput, $KckwInput, $KcckInput)
+$sources = @($KrkInput, $KckInput, $KrkcInput, $KrknInput, $KwknInput, $KckwInput, $KcckInput, $KcckDtmInput)
 foreach ($sourcePath in $sources) {
     if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) {
         throw "Missing source artifact: $sourcePath"
@@ -55,6 +59,11 @@ $expectedKcckSourceHash = "bff047fab9141666ae13f80db17ae2d5d5a808bdd115b131180e5
 $actualKcckSourceHash = (Get-FileHash -LiteralPath $KcckInput -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($actualKcckSourceHash -ne $expectedKcckSourceHash) {
     throw "KCCK source container checksum changed: $actualKcckSourceHash"
+}
+$expectedKcckDtmSourceHash = "e6f12c4eda6064df9fe81f984d5d86222eb428552507401fae48ad0eed22275c"
+$actualKcckDtmSourceHash = (Get-FileHash -LiteralPath $KcckDtmInput -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actualKcckDtmSourceHash -ne $expectedKcckDtmSourceHash) {
+    throw "KCCK DTM source container checksum changed: $actualKcckDtmSourceHash"
 }
 
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
@@ -88,6 +97,16 @@ $actualKcckProductionHash = (Get-FileHash -LiteralPath $kcckOutput -Algorithm SH
 if ($actualKcckProductionHash -ne $expectedKcckProductionHash) {
     throw "KCCK production container checksum changed: $actualKcckProductionHash"
 }
+$kcckDtmOutput = Join-Path $OutputDirectory "omega-kcck-dtm-v1.omtb"
+$dtmConverter = Join-Path $tools "convert_kcck_dtm_to_production.py"
+& python $dtmConverter --dtm-input $KcckDtmInput --source-wdl $KcckInput `
+    --production-wdl $kcckOutput --output $kcckDtmOutput
+if ($LASTEXITCODE -ne 0) { throw "KCCK DTM production conversion failed" }
+$expectedKcckDtmProductionHash = "c15670ebf5ff795be8098c7907ba40261c66965f00de1a9df942e0947c813ce5"
+$actualKcckDtmProductionHash = (Get-FileHash -LiteralPath $kcckDtmOutput -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actualKcckDtmProductionHash -ne $expectedKcckDtmProductionHash) {
+    throw "KCCK DTM production container checksum changed: $actualKcckDtmProductionHash"
+}
 
 $checker = Join-Path $root ".build-omega-tb\production_format_check.exe"
 & (Join-Path $tools "build-production-format-check.ps1") `
@@ -96,13 +115,17 @@ if ($LASTEXITCODE -ne 0) { throw "native production checker build failed" }
 
 foreach ($job in $jobs) {
     $outputPath = Join-Path $OutputDirectory $job.Output
-    & $checker --input $outputPath --material $job.Material --counts $job.Counts
+    $arguments = @("--input", $outputPath, "--material", $job.Material, "--counts", $job.Counts)
+    if ($job.Material -eq "KCCK") { $arguments += @("--dtm", $kcckDtmOutput) }
+    & $checker @arguments
     if ($LASTEXITCODE -ne 0) { throw "native $($job.Material) production validation failed" }
 }
 
-Write-Host "Seven-table production directory verified: $([IO.Path]::GetFullPath($OutputDirectory))"
+Write-Host "Seven-WDL-plus-KCCK-DTM production directory verified: $([IO.Path]::GetFullPath($OutputDirectory))"
 foreach ($job in $jobs) {
     $outputPath = Join-Path $OutputDirectory $job.Output
     $hash = (Get-FileHash -LiteralPath $outputPath -Algorithm SHA256).Hash.ToLowerInvariant()
     Write-Host "  $($job.Material) $hash"
 }
+$dtmHash = (Get-FileHash -LiteralPath $kcckDtmOutput -Algorithm SHA256).Hash.ToLowerInvariant()
+Write-Host "  KCCK-DTM $dtmHash"

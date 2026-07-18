@@ -76,8 +76,41 @@ std::vector<std::uint8_t> kcck_payload() {
    std::vector<std::uint8_t> result(
       static_cast<std::size_t>(fmt::state_count(fmt::Material::KCCK)),
       static_cast<std::uint8_t>(fmt::Wdl::Invalid));
-   std::fill(result.end() - static_cast<std::ptrdiff_t>(fmt::legal_count(fmt::Material::KCCK)),
-             result.end(), static_cast<std::uint8_t>(fmt::Wdl::Draw));
+   std::uint64_t wins = 10639893;
+   std::uint64_t losses = 11146894;
+   std::uint64_t draws = 1852083;
+   for (std::size_t index = 0; index < result.size() && wins != 0; index += 2) {
+      result[index] = static_cast<std::uint8_t>(fmt::Wdl::Win);
+      --wins;
+   }
+   for (std::size_t index = 1; index < result.size() && losses != 0; index += 2) {
+      result[index] = static_cast<std::uint8_t>(fmt::Wdl::Loss);
+      --losses;
+   }
+   for (std::size_t index = 0; index < result.size() && draws != 0; ++index) {
+      if (result[index] == static_cast<std::uint8_t>(fmt::Wdl::Invalid)) {
+         result[index] = static_cast<std::uint8_t>(fmt::Wdl::Draw);
+         --draws;
+      }
+   }
+   assert(wins == 0 && losses == 0 && draws == 0);
+   return result;
+}
+
+std::vector<std::uint16_t> kcck_dtm_payload(
+      const std::vector<std::uint8_t> & wdl) {
+   std::vector<std::uint16_t> result(wdl.size(), fmt::Dtm_No_Distance);
+   bool set_maximum = false;
+   for (std::size_t index = 0; index < wdl.size(); ++index) {
+      const fmt::Wdl outcome = static_cast<fmt::Wdl>(wdl[index]);
+      if (outcome == fmt::Wdl::Win) {
+         result[index] = 1;
+      } else if (outcome == fmt::Wdl::Loss) {
+         result[index] = set_maximum ? 2 : 40;
+         set_maximum = true;
+      }
+   }
+   assert(set_maximum);
    return result;
 }
 
@@ -125,11 +158,14 @@ int main() {
    const std::string kwkn_path = "production-format-kwkn.omtb";
    const std::string kckw_path = "production-format-kckw.omtb";
    const std::string kcck_path = "production-format-kcck.omtb";
+   const std::string kcck_dtm_path = "production-format-kcck-dtm.omtb";
+   const std::string kcck_changed_path = "production-format-kcck-changed.omtb";
    const std::string dtz_path = "production-format-krk-dtz.omtb";
    const std::string payload_corrupt = "production-format-payload-corrupt.omtb";
    const std::string header_corrupt = "production-format-header-corrupt.omtb";
    const std::string truncated = "production-format-truncated.omtb";
    Cleanup cleanup {{ krk_path, kck_path, krkn_path, kwkn_path, kckw_path, kcck_path,
+                      kcck_dtm_path, kcck_changed_path,
                       dtz_path, payload_corrupt, header_corrupt, truncated }};
 
    assert(fmt::state_count(fmt::Material::KRK) == 273816);
@@ -246,9 +282,48 @@ int main() {
    assert(kcck_table.metadata.state_count == 27594696);
    assert(kcck_table.metadata.legal_count == 23638870);
    assert(kcck_table.metadata.outcome_counts[0] == 3955826);
-   assert(kcck_table.metadata.outcome_counts[3] == 23638870);
+   assert(kcck_table.metadata.outcome_counts[0] == 3955826);
+   assert(kcck_table.metadata.outcome_counts[1] == 11146894);
+   assert(kcck_table.metadata.outcome_counts[3] == 1852083);
+   assert(kcck_table.metadata.outcome_counts[5] == 10639893);
    assert(hex(kcck_table.metadata.rules_fingerprint) ==
           "96c23dfcdec7d37442006fb52f728ad86cbbff31cb34a561854685981af90940");
+
+   const std::vector<std::uint16_t> kcck_dtm = kcck_dtm_payload(kcck);
+   assert(fmt::write_dtm_file(kcck_dtm_path, kcck_table, kcck_dtm, error));
+   fmt::Dtm_Table loaded_dtm;
+   assert(fmt::read_dtm_file(kcck_dtm_path, kcck_table, loaded_dtm, error));
+   assert(loaded_dtm.metadata.material == fmt::Material::KCCK);
+   assert(loaded_dtm.metadata.state_count == 27594696);
+   assert(loaded_dtm.metadata.decisive_count == 21786787);
+   assert(loaded_dtm.metadata.maximum_dtm == 40);
+   assert(loaded_dtm.dtm == kcck_dtm);
+
+   // The companion is cryptographically bound to the exact production WDL
+   // payload, not merely to material/count metadata.
+   std::vector<std::uint8_t> changed_kcck = kcck;
+   const auto first_win = std::find(
+      changed_kcck.begin(), changed_kcck.end(),
+      static_cast<std::uint8_t>(fmt::Wdl::Win));
+   const auto first_loss = std::find(
+      changed_kcck.begin(), changed_kcck.end(),
+      static_cast<std::uint8_t>(fmt::Wdl::Loss));
+   assert(first_win != changed_kcck.end() && first_loss != changed_kcck.end());
+   std::iter_swap(first_win, first_loss);
+   assert(fmt::write_file(kcck_changed_path, fmt::Material::KCCK,
+                          changed_kcck, {}, error));
+   fmt::Table changed_kcck_table;
+   assert(fmt::read_file(
+      kcck_changed_path, fmt::canonical_requirements(fmt::Material::KCCK),
+      changed_kcck_table, error));
+   assert(!fmt::read_dtm_file(
+      kcck_dtm_path, changed_kcck_table, loaded_dtm, error));
+   assert(contains(error, "different production WDL"));
+   assert(!fmt::write_dtm_file(
+      "production-format-non-kcck-dtm.omtb", table, kcck_dtm, error));
+   assert(contains(error, "requires a checked KCCK"));
+   std::remove("production-format-non-kcck-dtm.omtb");
+   std::remove("production-format-non-kcck-dtm.omtb.tmp");
 
    // Unsupported codes are rejected before a file is written.
    std::vector<std::uint8_t> bad_code = krk;

@@ -33,6 +33,10 @@ std::string fixture_path(fmt::Material material) {
    return Fixture_Directory + "/" + omega_tb::production_file_name(material);
 }
 
+std::string dtm_fixture_path() {
+   return Fixture_Directory + "/" + omega_tb::kcck_dtm_file_name();
+}
+
 Pos make(const std::string & ofen) {
    return pos_from_fen(ofen, Omega);
 }
@@ -79,6 +83,74 @@ void write_fixture(
    assert(error.empty());
 }
 
+void write_kcck_dtm_fixture(
+   const std::map<std::uint32_t, fmt::Wdl> & outcomes,
+   const std::map<std::uint32_t, std::uint16_t> & distances
+) {
+   std::vector<std::uint8_t> wdl(
+      static_cast<std::size_t>(fmt::state_count(fmt::Material::KCCK)),
+      static_cast<std::uint8_t>(fmt::Wdl::Invalid)
+   );
+   std::uint64_t remaining_wins = 10639893;
+   std::uint64_t remaining_losses = 11146894;
+   std::uint64_t remaining_draws = 1852083;
+   for (const auto & requested : outcomes) {
+      assert(requested.first < wdl.size());
+      assert(wdl[requested.first] == static_cast<std::uint8_t>(fmt::Wdl::Invalid));
+      wdl[requested.first] = static_cast<std::uint8_t>(requested.second);
+      if (requested.second == fmt::Wdl::Win) {
+         assert(remaining_wins != 0);
+         --remaining_wins;
+      } else if (requested.second == fmt::Wdl::Loss) {
+         assert(remaining_losses != 0);
+         --remaining_losses;
+      } else {
+         assert(requested.second == fmt::Wdl::Draw && remaining_draws != 0);
+         --remaining_draws;
+      }
+   }
+   for (std::size_t index = 0; index < wdl.size() && remaining_wins != 0; index += 2) {
+      if (wdl[index] == static_cast<std::uint8_t>(fmt::Wdl::Invalid)) {
+         wdl[index] = static_cast<std::uint8_t>(fmt::Wdl::Win);
+         --remaining_wins;
+      }
+   }
+   for (std::size_t index = 1; index < wdl.size() && remaining_losses != 0; index += 2) {
+      if (wdl[index] == static_cast<std::uint8_t>(fmt::Wdl::Invalid)) {
+         wdl[index] = static_cast<std::uint8_t>(fmt::Wdl::Loss);
+         --remaining_losses;
+      }
+   }
+   for (std::size_t index = 0; index < wdl.size() && remaining_draws != 0; ++index) {
+      if (wdl[index] == static_cast<std::uint8_t>(fmt::Wdl::Invalid)) {
+         wdl[index] = static_cast<std::uint8_t>(fmt::Wdl::Draw);
+         --remaining_draws;
+      }
+   }
+   assert(remaining_wins == 0 && remaining_losses == 0 && remaining_draws == 0);
+
+   std::vector<std::uint16_t> dtm(wdl.size(), fmt::Dtm_No_Distance);
+   for (std::size_t index = 0; index < wdl.size(); ++index) {
+      const fmt::Wdl outcome = static_cast<fmt::Wdl>(wdl[index]);
+      if (outcome == fmt::Wdl::Win) dtm[index] = 1;
+      else if (outcome == fmt::Wdl::Loss) dtm[index] = 2;
+   }
+   for (const auto & requested : distances) {
+      assert(requested.first < dtm.size());
+      dtm[requested.first] = requested.second;
+   }
+
+   std::string error;
+   assert(fmt::write_file(
+      fixture_path(fmt::Material::KCCK), fmt::Material::KCCK, wdl, {}, error));
+   fmt::Table checked_wdl;
+   assert(fmt::read_file(
+      fixture_path(fmt::Material::KCCK),
+      fmt::canonical_requirements(fmt::Material::KCCK),
+      checked_wdl, error));
+   assert(fmt::write_dtm_file(dtm_fixture_path(), checked_wdl, dtm, error));
+}
+
 struct Cleanup {
    ~Cleanup() {
       omega_tb::G_Tablebases.configure("");
@@ -91,6 +163,8 @@ struct Cleanup {
          std::remove(fixture_path(material).c_str());
          std::remove((fixture_path(material) + ".tmp").c_str());
       }
+      std::remove(dtm_fixture_path().c_str());
+      std::remove((dtm_fixture_path() + ".tmp").c_str());
       _rmdir(Fixture_Directory.c_str());
    }
 };
@@ -205,6 +279,18 @@ int main() {
    const Pos kcck_stalemate = make(
       "10/10/10/10/10/10/10/C9/K9/C9[k/-/-/-] b - - 0 1"
    );
+   const Pos kcck_dtm40_clock60 = make(
+      "10/10/10/10/5k4/10/10/10/10/K9[C/-/C/-] b - - 60 1"
+   );
+   const Pos kcck_dtm40_clock61 = make(
+      "10/10/10/10/5k4/10/10/10/10/K9[C/-/C/-] b - - 61 1"
+   );
+   const Pos kcck_dtm1_clock99 = make(
+      "10/10/10/10/C9/10/10/k9/1C8/K9[-/-/-/-] w - - 99 1"
+   );
+   const Pos kcck_checkmate = make(
+      "10/10/10/10/10/10/10/10/KC8/C9[k/-/-/-] b - - 100 1"
+   );
    const Pos krk_stalemate = make(
       "R9/1K8/10/10/10/10/10/10/10/10[-/-/-/k] b - - 0 1"
    );
@@ -232,6 +318,11 @@ int main() {
    assert(is_legal(kcck_win));
    assert(is_legal(kcck_stalemate));
    assert(is_stalemate(kcck_stalemate));
+   assert(is_legal(kcck_dtm40_clock60));
+   assert(is_legal(kcck_dtm40_clock61));
+   assert(is_legal(kcck_dtm1_clock99));
+   assert(is_legal(kcck_checkmate));
+   assert(is_mate(kcck_checkmate));
    assert(is_legal(krk_stalemate));
    assert(is_stalemate(krk_stalemate));
    assert(!krk_stalemate.is_draw());
@@ -284,9 +375,23 @@ int main() {
    const std::uint32_t kcck_stalemate_index = omega_tb::dense_index(
       fmt::Material::KCCK, {{ 1, 0, 100, 2 }}, 1
    );
+   const std::uint32_t kcck_dtm40_index = omega_tb::dense_index(
+      fmt::Material::KCCK, {{ 0, 100, 55, 102 }}, 1
+   );
+   const std::uint32_t kcck_dtm1_index = omega_tb::dense_index(
+      // Runtime labels the lower native Champion square first. The frozen
+      // source's label-swapped index 1328 has the same exact DTM.
+      fmt::Material::KCCK, {{ 0, 5, 2, 11 }}, 0
+   );
+   const std::uint32_t kcck_checkmate_index = omega_tb::dense_index(
+      fmt::Material::KCCK, {{ 1, 0, 100, 11 }}, 1
+   );
    assert(kcck_draw_index == 2512);
    assert(kcck_win_index == 0);
    assert(kcck_stalemate_index == 1081893);
+   assert(kcck_dtm40_index == 93985);
+   assert(kcck_dtm1_index == 199152);
+   assert(kcck_checkmate_index == 1081911);
 
    assert(_mkdir(Fixture_Directory.c_str()) == 0);
    Cleanup cleanup;
@@ -313,16 +418,24 @@ int main() {
       { kckw_win_index, fmt::Wdl::Win },
       { kckw_loss_index, fmt::Wdl::Loss },
    });
-   write_fixture(fmt::Material::KCCK, {
+   write_kcck_dtm_fixture({
       { kcck_draw_index, fmt::Wdl::Draw },
       { kcck_win_index, fmt::Wdl::Win },
       { kcck_stalemate_index, fmt::Wdl::Draw },
+      { kcck_dtm40_index, fmt::Wdl::Loss },
+      { kcck_dtm1_index, fmt::Wdl::Win },
+      { kcck_checkmate_index, fmt::Wdl::Loss },
+   }, {
+      { kcck_win_index, 9 },
+      { kcck_dtm40_index, 40 },
+      { kcck_dtm1_index, 1 },
+      { kcck_checkmate_index, 0 },
    });
 
    const omega_tb::Configure_Result loaded =
       omega_tb::G_Tablebases.configure(Fixture_Directory);
    assert(loaded.ok && !loaded.disabled && !loaded.retained_previous);
-   assert(loaded.message.find(", KCCK") != std::string::npos);
+   assert(loaded.message.find(", KCCK+DTM") != std::string::npos);
    assert(omega_tb::G_Tablebases.loaded());
    assert(omega_tb::G_Tablebases.path() == Fixture_Directory);
 
@@ -404,13 +517,14 @@ int main() {
    assert(probe.index == kckw_loss_index);
    assert(!omega_tb::probe_search_draw(kckw_loss));
 
-   // The optional seventh table recognizes same-side two-Champion material
-   // for either colour. Exact draws are search-safe; decisive WDL remains
-   // diagnostic-only until its DTM and remaining rule budget are integrated.
+   // The optional seventh WDL table recognizes same-side two-Champion
+   // material for either colour. Its separate companion exposes DTM only on
+   // decisive records; draws retain the sentinel.
    assert(omega_tb::G_Tablebases.probe(kcck_draw, probe));
    assert(probe.material == fmt::Material::KCCK);
    assert(probe.wdl == fmt::Wdl::Draw);
    assert(probe.index == kcck_draw_index);
+   assert(!probe.has_dtm);
    assert(omega_tb::probe_search_draw(kcck_draw));
    assert(omega_tb::G_Tablebases.probe(kcck_swapped_draw, probe));
    assert(probe.material == fmt::Material::KCCK);
@@ -422,11 +536,33 @@ int main() {
    assert(probe.material == fmt::Material::KCCK);
    assert(probe.wdl == fmt::Wdl::Win);
    assert(probe.index == kcck_win_index);
+   assert(probe.has_dtm && probe.dtm == 9);
    assert(!omega_tb::probe_search_draw(kcck_win));
+   assert(omega_tb::probe_search_exact(kcck_win));
    assert(omega_tb::G_Tablebases.probe(kcck_stalemate, probe));
    assert(probe.wdl == fmt::Wdl::Draw);
    assert(probe.index == kcck_stalemate_index);
+   assert(!probe.has_dtm);
    assert(!omega_tb::probe_search_draw(kcck_stalemate));
+
+   // DTM equality at the remaining 100-ply budget is safe because native
+   // checkmate wins precedence at clock 100; one less remaining ply is not.
+   assert(omega_tb::G_Tablebases.probe(kcck_dtm40_clock60, probe));
+   assert(probe.wdl == fmt::Wdl::Loss);
+   assert(probe.index == kcck_dtm40_index);
+   assert(probe.has_dtm && probe.dtm == 40);
+   assert(omega_tb::probe_search_exact(kcck_dtm40_clock60, &probe));
+   assert(!omega_tb::probe_search_exact(kcck_dtm40_clock61));
+   assert(omega_tb::G_Tablebases.probe(kcck_dtm1_clock99, probe));
+   assert(probe.wdl == fmt::Wdl::Win);
+   assert(probe.index == kcck_dtm1_index);
+   assert(probe.has_dtm && probe.dtm == 1);
+   assert(omega_tb::probe_search_exact(kcck_dtm1_clock99));
+   assert(omega_tb::G_Tablebases.probe(kcck_checkmate, probe));
+   assert(probe.wdl == fmt::Wdl::Loss);
+   assert(probe.index == kcck_checkmate_index);
+   assert(probe.has_dtm && probe.dtm == 0);
+   assert(!omega_tb::probe_search_exact(kcck_checkmate));
 
    // Terminal native rules precede the table: stalemate and the current
    // halfmove-clock draw gate are not replaced by a production WDL result.
@@ -436,9 +572,21 @@ int main() {
    assert(omega_tb::G_Tablebases.probe(krk_clock_draw, probe));
    assert(!omega_tb::probe_search_draw(krk_clock_draw));
 
-   // KCCK is optional for compatibility with existing six-table directories.
-   // The mandatory KCKW table and the rest of the core remain available when
-   // the optional file is absent.
+   // The DTM companion is independently optional: a seven-WDL directory
+   // retains draw-only KCCK behavior when the companion is absent.
+   assert(std::remove(dtm_fixture_path().c_str()) == 0);
+   const omega_tb::Configure_Result without_dtm =
+      omega_tb::G_Tablebases.configure(Fixture_Directory);
+   assert(without_dtm.ok && !without_dtm.retained_previous);
+   assert(without_dtm.message.find(", KCCK+DTM") == std::string::npos);
+   assert(without_dtm.message.find(", KCCK") != std::string::npos);
+   assert(omega_tb::G_Tablebases.probe(kcck_win, probe));
+   assert(!probe.has_dtm);
+   assert(!omega_tb::probe_search_exact(kcck_win));
+   assert(omega_tb::probe_search_draw(kcck_draw));
+
+   // KCCK WDL itself remains optional for compatibility with existing
+   // six-table directories. KCKW and the other core families stay available.
    assert(std::remove(fixture_path(fmt::Material::KCCK).c_str()) == 0);
    const omega_tb::Configure_Result without_kcck =
       omega_tb::G_Tablebases.configure(Fixture_Directory);
@@ -496,11 +644,27 @@ int main() {
       assert(probe.material == fmt::Material::KCCK);
       assert(probe.index == 0);
       assert(probe.wdl == fmt::Wdl::Win);
+      assert(probe.has_dtm && probe.dtm == 9);
       assert(!omega_tb::probe_search_draw(kcck_win));
+      assert(omega_tb::probe_search_exact(kcck_win));
       assert(omega_tb::G_Tablebases.probe(kcck_stalemate, probe));
       assert(probe.index == 1081893);
       assert(probe.wdl == fmt::Wdl::Draw);
+      assert(!probe.has_dtm);
       assert(!omega_tb::probe_search_draw(kcck_stalemate));
+      assert(omega_tb::G_Tablebases.probe(kcck_dtm40_clock60, probe));
+      assert(probe.index == 93985 && probe.wdl == fmt::Wdl::Loss);
+      assert(probe.has_dtm && probe.dtm == 40);
+      assert(omega_tb::probe_search_exact(kcck_dtm40_clock60));
+      assert(!omega_tb::probe_search_exact(kcck_dtm40_clock61));
+      assert(omega_tb::G_Tablebases.probe(kcck_dtm1_clock99, probe));
+      assert(probe.index == 199152 && probe.wdl == fmt::Wdl::Win);
+      assert(probe.has_dtm && probe.dtm == 1);
+      assert(omega_tb::probe_search_exact(kcck_dtm1_clock99));
+      assert(omega_tb::G_Tablebases.probe(kcck_checkmate, probe));
+      assert(probe.index == 1081911 && probe.wdl == fmt::Wdl::Loss);
+      assert(probe.has_dtm && probe.dtm == 0);
+      assert(!omega_tb::probe_search_exact(kcck_checkmate));
    }
 
    return 0;

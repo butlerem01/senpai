@@ -8,6 +8,7 @@
 #include <fstream>
 #include <limits>
 #include <sstream>
+#include <stdexcept>
 #include <utility>
 
 namespace omega_tb {
@@ -31,6 +32,20 @@ constexpr std::uint8_t Wdl_Encoding = 1;
 constexpr std::uint8_t Dtz_None = 0;
 constexpr std::uint8_t Dtz_Uint16_Le = 1;
 
+constexpr std::size_t Dtm_Header_Size = 352;
+constexpr std::size_t Dtm_Production_Wdl_Hash_Offset = 80;
+constexpr std::size_t Dtm_Source_Wdl_Hash_Offset = 112;
+constexpr std::size_t Dtm_Source_Rules_Hash_Offset = 144;
+constexpr std::size_t Dtm_Source_Capture_Hash_Offset = 176;
+constexpr std::size_t Dtm_Payload_Hash_Offset = 208;
+constexpr std::size_t Dtm_Header_Hash_Offset = 240;
+constexpr std::size_t Dtm_Source_Dtm_Hash_Offset = 272;
+constexpr std::size_t Dtm_Source_Dtm_Container_Hash_Offset = 304;
+constexpr std::size_t Dtm_Reserved_Offset = 336;
+constexpr std::uint16_t Dtm_Version = 1;
+constexpr std::uint8_t Dtm_Uint16_Le = 1;
+constexpr std::uint8_t Dtm_Ply_To_Checkmate = 1;
+
 constexpr std::uint8_t Piece_None = 0;
 constexpr std::uint8_t Piece_King = 1;
 constexpr std::uint8_t Piece_Rook = 2;
@@ -43,6 +58,10 @@ constexpr std::uint8_t Role_One = 1;
 
 const std::array<std::uint8_t, 8> Magic {{
    'O', 'M', 'T', 'B', 'P', 'R', 'O', 'D'
+}};
+
+const std::array<std::uint8_t, 8> Dtm_Magic {{
+   'O', 'M', 'T', 'B', 'D', 'T', 'M', '1'
 }};
 
 const char Rules_Description[] =
@@ -244,46 +263,112 @@ std::array<std::uint8_t, 32> header_hash(std::array<std::uint8_t, Header_Size> h
    return sha256(header.data(), header.size());
 }
 
-void put_u16(std::array<std::uint8_t, Header_Size> & data, std::size_t offset,
+template<std::size_t Size>
+void put_u16(std::array<std::uint8_t, Size> & data, std::size_t offset,
              std::uint16_t value) {
    data[offset] = static_cast<std::uint8_t>(value);
    data[offset + 1] = static_cast<std::uint8_t>(value >> 8);
 }
 
-void put_u32(std::array<std::uint8_t, Header_Size> & data, std::size_t offset,
+template<std::size_t Size>
+void put_u32(std::array<std::uint8_t, Size> & data, std::size_t offset,
              std::uint32_t value) {
    for (int index = 0; index < 4; index++)
       data[offset + static_cast<std::size_t>(index)] = static_cast<std::uint8_t>(value >> (index * 8));
 }
 
-void put_u64(std::array<std::uint8_t, Header_Size> & data, std::size_t offset,
+template<std::size_t Size>
+void put_u64(std::array<std::uint8_t, Size> & data, std::size_t offset,
              std::uint64_t value) {
    for (int index = 0; index < 8; index++)
       data[offset + static_cast<std::size_t>(index)] = static_cast<std::uint8_t>(value >> (index * 8));
 }
 
-std::uint16_t get_u16(const std::array<std::uint8_t, Header_Size> & data, std::size_t offset) {
+template<std::size_t Size>
+std::uint16_t get_u16(const std::array<std::uint8_t, Size> & data, std::size_t offset) {
    return static_cast<std::uint16_t>(data[offset])
         | static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[offset + 1]) << 8);
 }
 
-std::uint32_t get_u32(const std::array<std::uint8_t, Header_Size> & data, std::size_t offset) {
+template<std::size_t Size>
+std::uint32_t get_u32(const std::array<std::uint8_t, Size> & data, std::size_t offset) {
    std::uint32_t value = 0;
    for (int index = 3; index >= 0; index--)
       value = (value << 8) | data[offset + static_cast<std::size_t>(index)];
    return value;
 }
 
-std::uint64_t get_u64(const std::array<std::uint8_t, Header_Size> & data, std::size_t offset) {
+template<std::size_t Size>
+std::uint64_t get_u64(const std::array<std::uint8_t, Size> & data, std::size_t offset) {
    std::uint64_t value = 0;
    for (int index = 7; index >= 0; index--)
       value = (value << 8) | data[offset + static_cast<std::size_t>(index)];
    return value;
 }
 
-bool equal_slice(const std::array<std::uint8_t, Header_Size> & header,
+template<std::size_t Size>
+bool equal_slice(const std::array<std::uint8_t, Size> & header,
                  std::size_t offset, const std::uint8_t * data, std::size_t size) {
    return std::equal(header.begin() + offset, header.begin() + offset + size, data);
+}
+
+std::array<std::uint8_t, 32> dtm_header_hash(
+      std::array<std::uint8_t, Dtm_Header_Size> header) {
+   std::fill(header.begin() + Dtm_Header_Hash_Offset,
+             header.begin() + Dtm_Header_Hash_Offset + 32, 0);
+   return sha256(header.data(), header.size());
+}
+
+std::array<std::uint8_t, 32> digest_from_hex(const char * text) {
+   std::array<std::uint8_t, 32> result {{}};
+   for (std::size_t index = 0; index < result.size(); ++index) {
+      const auto nibble = [](char value) -> std::uint8_t {
+         if (value >= '0' && value <= '9') return static_cast<std::uint8_t>(value - '0');
+         if (value >= 'a' && value <= 'f') return static_cast<std::uint8_t>(value - 'a' + 10);
+         if (value >= 'A' && value <= 'F') return static_cast<std::uint8_t>(value - 'A' + 10);
+         throw std::logic_error("invalid embedded SHA-256 digest");
+      };
+      result[index] = static_cast<std::uint8_t>(
+         (nibble(text[index * 2]) << 4) | nibble(text[index * 2 + 1])
+      );
+   }
+   if (text[64] != '\0') throw std::logic_error("embedded SHA-256 digest has wrong length");
+   return result;
+}
+
+const std::array<std::uint8_t, 32> & kcck_source_wdl_hash() {
+   static const auto digest = digest_from_hex(
+      "35f9d8bcb3b283dec2f918fcc4c5d62355edc2dee3ee297e16dd42a91940678e"
+   );
+   return digest;
+}
+
+const std::array<std::uint8_t, 32> & kcck_source_rules_hash() {
+   static const auto digest = digest_from_hex(
+      "ac44f4152d0c619468addc65c580c064a1e8c5bc6c31509f50243739e8f4431f"
+   );
+   return digest;
+}
+
+const std::array<std::uint8_t, 32> & kcck_source_capture_hash() {
+   static const auto digest = digest_from_hex(
+      "286a4e80294c4118093c8223b3414859c3a8f634ae401ee49cecb4b636c7172b"
+   );
+   return digest;
+}
+
+const std::array<std::uint8_t, 32> & kcck_source_dtm_hash() {
+   static const auto digest = digest_from_hex(
+      "b702ce64eb13610a9d4a952d8bd9e72340e809775617c6c19b229fcc41de1748"
+   );
+   return digest;
+}
+
+const std::array<std::uint8_t, 32> & kcck_source_dtm_container_hash() {
+   static const auto digest = digest_from_hex(
+      "e6f12c4eda6064df9fe81f984d5d86222eb428552507401fae48ad0eed22275c"
+   );
+   return digest;
 }
 
 bool valid_code(std::uint8_t code) {
@@ -384,6 +469,127 @@ std::array<std::uint8_t, Header_Size> build_header(
    std::copy(payload_digest.begin(), payload_digest.end(), header.begin() + Payload_Hash_Offset);
    const auto digest = header_hash(header);
    std::copy(digest.begin(), digest.end(), header.begin() + Header_Hash_Offset);
+   return header;
+}
+
+bool validate_dtm_payload(const Table & wdl,
+                          const std::vector<std::uint16_t> & dtm,
+                          std::uint64_t & decisive_count,
+                          std::uint16_t & maximum_dtm,
+                          std::string & error) {
+   if (wdl.metadata.material != Material::KCCK
+    || wdl.wdl.size() != state_count(Material::KCCK)) {
+      error = "DTM companion requires a checked KCCK production WDL table";
+      return false;
+   }
+   if (dtm.size() != wdl.wdl.size()) {
+      error = "KCCK DTM payload state count mismatch";
+      return false;
+   }
+
+   decisive_count = 0;
+   maximum_dtm = 0;
+   for (std::size_t index = 0; index < dtm.size(); ++index) {
+      const Wdl outcome = static_cast<Wdl>(wdl.wdl[index]);
+      const bool decisive = outcome == Wdl::Loss || outcome == Wdl::Win;
+      const bool has_distance = dtm[index] != Dtm_No_Distance;
+      if (outcome != Wdl::Invalid && outcome != Wdl::Loss
+       && outcome != Wdl::Draw && outcome != Wdl::Win) {
+         error = "KCCK DTM source contains unsupported blessed/cursed WDL";
+         return false;
+      }
+      if (decisive != has_distance) {
+         error = decisive
+               ? "decisive KCCK WDL record has no DTM"
+               : "draw/invalid KCCK WDL record has a DTM";
+         return false;
+      }
+      if (has_distance) {
+         if (dtm[index] > 40) {
+            error = "KCCK DTM exceeds the frozen maximum";
+            return false;
+         }
+         if ((outcome == Wdl::Win && (dtm[index] & 1U) == 0)
+          || (outcome == Wdl::Loss && (dtm[index] & 1U) != 0)) {
+            error = "KCCK DTM parity does not match WDL";
+            return false;
+         }
+         if (dtm[index] == 0 && outcome != Wdl::Loss) {
+            error = "KCCK DTM zero is not a loss";
+            return false;
+         }
+         decisive_count++;
+         maximum_dtm = std::max(maximum_dtm, dtm[index]);
+      }
+   }
+   if (decisive_count != 21786787ULL || maximum_dtm != 40) {
+      error = "KCCK DTM frozen decisive count or maximum changed";
+      return false;
+   }
+   return true;
+}
+
+std::vector<std::uint8_t> encode_dtm(const std::vector<std::uint16_t> & dtm) {
+   std::vector<std::uint8_t> result(dtm.size() * 2);
+   for (std::size_t index = 0; index < dtm.size(); ++index) {
+      result[index * 2] = static_cast<std::uint8_t>(dtm[index]);
+      result[index * 2 + 1] = static_cast<std::uint8_t>(dtm[index] >> 8);
+   }
+   return result;
+}
+
+std::array<std::uint8_t, Dtm_Header_Size> build_dtm_header(
+      const Table & wdl,
+      const std::vector<std::uint8_t> & payload,
+      std::uint64_t decisive_count,
+      std::uint16_t maximum_dtm) {
+   const Material_Spec * spec = spec_for(Material::KCCK);
+   if (spec == nullptr) throw std::logic_error("missing KCCK production specification");
+
+   std::array<std::uint8_t, Dtm_Header_Size> header {{}};
+   std::copy(Dtm_Magic.begin(), Dtm_Magic.end(), header.begin());
+   put_u16(header, 8, Dtm_Version);
+   put_u16(header, 10, static_cast<std::uint16_t>(Dtm_Header_Size));
+   put_u32(header, 12, Endian_Tag);
+   header[16] = static_cast<std::uint8_t>(Material::KCCK);
+   header[17] = spec->piece_count;
+   header[18] = Dtm_Uint16_Le;
+   header[19] = Dtm_Ply_To_Checkmate;
+   put_u16(header, 20, Square_Count);
+   header[22] = Turn_Count;
+   header[23] = Rules_Id;
+   put_u32(header, 24, Index_Id);
+   put_u32(header, 28, 0);
+   put_u64(header, 32, spec->states);
+   put_u64(header, 40, decisive_count);
+   put_u64(header, 48, Dtm_Header_Size);
+   put_u64(header, 56, payload.size());
+   put_u16(header, 64, maximum_dtm);
+   put_u16(header, 66, Dtm_No_Distance);
+   put_u16(header, 68, 0); // terminal checkmate
+   header[70] = Dtm_Ply_To_Checkmate;
+   header[71] = 0;
+   std::copy(spec->pieces.begin(), spec->pieces.end(), header.begin() + 72);
+   std::copy(spec->roles.begin(), spec->roles.end(), header.begin() + 76);
+   std::copy(wdl.metadata.payload_sha256.begin(),
+             wdl.metadata.payload_sha256.end(),
+             header.begin() + Dtm_Production_Wdl_Hash_Offset);
+   std::copy(kcck_source_wdl_hash().begin(), kcck_source_wdl_hash().end(),
+             header.begin() + Dtm_Source_Wdl_Hash_Offset);
+   std::copy(kcck_source_rules_hash().begin(), kcck_source_rules_hash().end(),
+             header.begin() + Dtm_Source_Rules_Hash_Offset);
+   std::copy(kcck_source_capture_hash().begin(), kcck_source_capture_hash().end(),
+             header.begin() + Dtm_Source_Capture_Hash_Offset);
+   std::copy(kcck_source_dtm_hash().begin(), kcck_source_dtm_hash().end(),
+             header.begin() + Dtm_Source_Dtm_Hash_Offset);
+   std::copy(kcck_source_dtm_container_hash().begin(),
+             kcck_source_dtm_container_hash().end(),
+             header.begin() + Dtm_Source_Dtm_Container_Hash_Offset);
+   const auto payload_hash = sha256(payload.data(), payload.size());
+   std::copy(payload_hash.begin(), payload_hash.end(),
+             header.begin() + Dtm_Payload_Hash_Offset);
+   const auto digest = dtm_header_hash(header);
+   std::copy(digest.begin(), digest.end(), header.begin() + Dtm_Header_Hash_Offset);
    return header;
 }
 
@@ -667,6 +873,233 @@ bool read_file(const std::string & path,
    std::copy(header.begin() + Payload_Hash_Offset, header.begin() + Payload_Hash_Offset + 32,
              loaded.metadata.payload_sha256.begin());
    std::copy(header.begin() + Header_Hash_Offset, header.begin() + Header_Hash_Offset + 32,
+             loaded.metadata.header_sha256.begin());
+   table = std::move(loaded);
+   return true;
+}
+
+bool write_dtm_file(const std::string & path,
+                    const Table & wdl,
+                    const std::vector<std::uint16_t> & dtm,
+                    std::string & error) {
+   error.clear();
+   std::uint64_t decisive_count = 0;
+   std::uint16_t maximum_dtm = 0;
+   if (!validate_dtm_payload(wdl, dtm, decisive_count, maximum_dtm, error)) {
+      return false;
+   }
+   const std::vector<std::uint8_t> payload = encode_dtm(dtm);
+   const auto header =
+      build_dtm_header(wdl, payload, decisive_count, maximum_dtm);
+
+   const std::string temporary = path + ".tmp";
+   {
+      std::ofstream stream(temporary, std::ios::binary | std::ios::trunc);
+      if (!stream) {
+         error = io_error("cannot create", temporary);
+         return false;
+      }
+      stream.write(reinterpret_cast<const char *>(header.data()), header.size());
+      stream.write(reinterpret_cast<const char *>(payload.data()),
+                   static_cast<std::streamsize>(payload.size()));
+      stream.flush();
+      if (!stream) {
+         error = io_error("cannot write", temporary);
+         stream.close();
+         std::remove(temporary.c_str());
+         return false;
+      }
+   }
+
+   Dtm_Table verified;
+   if (!read_dtm_file(temporary, wdl, verified, error)) {
+      std::remove(temporary.c_str());
+      return false;
+   }
+   std::remove(path.c_str());
+   if (std::rename(temporary.c_str(), path.c_str()) != 0) {
+      error = io_error("cannot rename DTM companion to", path);
+      std::remove(temporary.c_str());
+      return false;
+   }
+   return true;
+}
+
+bool read_dtm_file(const std::string & path,
+                   const Table & wdl,
+                   Dtm_Table & table,
+                   std::string & error) {
+   error.clear();
+   if (wdl.metadata.material != Material::KCCK
+    || wdl.wdl.size() != state_count(Material::KCCK)) {
+      error = "DTM companion requires a checked KCCK production WDL table";
+      return false;
+   }
+   const Material_Spec * spec = spec_for(Material::KCCK);
+   if (spec == nullptr) {
+      error = "missing KCCK production specification";
+      return false;
+   }
+
+   std::ifstream stream(path, std::ios::binary);
+   if (!stream) {
+      error = io_error("cannot open", path);
+      return false;
+   }
+   std::array<std::uint8_t, Dtm_Header_Size> header {{}};
+   stream.read(reinterpret_cast<char *>(header.data()), header.size());
+   if (stream.gcount() != static_cast<std::streamsize>(header.size())) {
+      error = "truncated production DTM header";
+      return false;
+   }
+   if (!equal_slice(header, 0, Dtm_Magic.data(), Dtm_Magic.size())) {
+      error = "unsupported production DTM magic";
+      return false;
+   }
+   if (get_u16(header, 8) != Dtm_Version
+    || get_u16(header, 10) != Dtm_Header_Size) {
+      error = "unsupported production DTM version";
+      return false;
+   }
+   const auto calculated_header_hash = dtm_header_hash(header);
+   if (!equal_slice(header, Dtm_Header_Hash_Offset,
+                    calculated_header_hash.data(), 32)) {
+      error = "production DTM header checksum mismatch";
+      return false;
+   }
+   if (get_u32(header, 12) != Endian_Tag) {
+      error = "production DTM endianness marker mismatch";
+      return false;
+   }
+   if (header[16] != static_cast<std::uint8_t>(Material::KCCK)
+    || header[17] != spec->piece_count) {
+      error = "production DTM material signature mismatch";
+      return false;
+   }
+   if (header[18] != Dtm_Uint16_Le || header[19] != Dtm_Ply_To_Checkmate
+    || get_u16(header, 66) != Dtm_No_Distance || get_u16(header, 68) != 0
+    || header[70] != Dtm_Ply_To_Checkmate || header[71] != 0) {
+      error = "production DTM distance semantics mismatch";
+      return false;
+   }
+   if (get_u16(header, 20) != Square_Count || header[22] != Turn_Count
+    || header[23] != Rules_Id || get_u32(header, 24) != Index_Id
+    || get_u32(header, 28) != 0) {
+      error = "production DTM geometry/index metadata mismatch";
+      return false;
+   }
+   if (!equal_slice(header, 72, spec->pieces.data(), spec->pieces.size())
+    || !equal_slice(header, 76, spec->roles.data(), spec->roles.size())) {
+      error = "production DTM labelled-piece order mismatch";
+      return false;
+   }
+   if (std::any_of(header.begin() + Dtm_Reserved_Offset, header.end(),
+                   [](std::uint8_t value) { return value != 0; })) {
+      error = "production DTM reserved header bytes are nonzero";
+      return false;
+   }
+   if (!equal_slice(header, Dtm_Production_Wdl_Hash_Offset,
+                    wdl.metadata.payload_sha256.data(), 32)) {
+      error = "production DTM is bound to a different production WDL payload";
+      return false;
+   }
+   if (!equal_slice(header, Dtm_Source_Wdl_Hash_Offset,
+                    kcck_source_wdl_hash().data(), 32)
+    || !equal_slice(header, Dtm_Source_Rules_Hash_Offset,
+                    kcck_source_rules_hash().data(), 32)
+    || !equal_slice(header, Dtm_Source_Capture_Hash_Offset,
+                    kcck_source_capture_hash().data(), 32)
+    || !equal_slice(header, Dtm_Source_Dtm_Hash_Offset,
+                    kcck_source_dtm_hash().data(), 32)
+    || !equal_slice(header, Dtm_Source_Dtm_Container_Hash_Offset,
+                    kcck_source_dtm_container_hash().data(), 32)) {
+      error = "production DTM frozen source binding mismatch";
+      return false;
+   }
+
+   const std::uint64_t states = get_u64(header, 32);
+   const std::uint64_t stored_decisive_count = get_u64(header, 40);
+   const std::uint64_t payload_offset = get_u64(header, 48);
+   const std::uint64_t payload_size = get_u64(header, 56);
+   const std::uint16_t stored_maximum_dtm = get_u16(header, 64);
+   if (states != spec->states || payload_offset != Dtm_Header_Size
+    || payload_size != states * 2) {
+      error = "production DTM state-count or payload-size mismatch";
+      return false;
+   }
+   if (payload_size > std::numeric_limits<std::size_t>::max()) {
+      error = "production DTM payload is too large for this process";
+      return false;
+   }
+   stream.seekg(0, std::ios::end);
+   const std::streamoff file_size = stream.tellg();
+   if (file_size < 0
+    || static_cast<std::uint64_t>(file_size) != Dtm_Header_Size + payload_size) {
+      error = "production DTM file size mismatch";
+      return false;
+   }
+   stream.seekg(Dtm_Header_Size, std::ios::beg);
+   std::vector<std::uint8_t> payload(static_cast<std::size_t>(payload_size));
+   stream.read(reinterpret_cast<char *>(payload.data()),
+               static_cast<std::streamsize>(payload.size()));
+   if (!stream) {
+      error = "truncated production DTM payload";
+      return false;
+   }
+   const auto payload_hash = sha256(payload.data(), payload.size());
+   if (!equal_slice(header, Dtm_Payload_Hash_Offset, payload_hash.data(), 32)) {
+      error = "production DTM payload checksum mismatch";
+      return false;
+   }
+
+   Dtm_Table loaded;
+   loaded.dtm.resize(static_cast<std::size_t>(states));
+   for (std::size_t index = 0; index < loaded.dtm.size(); ++index) {
+      loaded.dtm[index] =
+         static_cast<std::uint16_t>(payload[index * 2])
+       | static_cast<std::uint16_t>(
+            static_cast<std::uint16_t>(payload[index * 2 + 1]) << 8
+         );
+   }
+   std::uint64_t decisive_count = 0;
+   std::uint16_t maximum_dtm = 0;
+   if (!validate_dtm_payload(
+          wdl, loaded.dtm, decisive_count, maximum_dtm, error)) {
+      return false;
+   }
+   if (decisive_count != stored_decisive_count
+    || maximum_dtm != stored_maximum_dtm) {
+      error = "production DTM decisive count or maximum mismatch";
+      return false;
+   }
+
+   loaded.metadata.material = Material::KCCK;
+   loaded.metadata.state_count = states;
+   loaded.metadata.decisive_count = decisive_count;
+   loaded.metadata.maximum_dtm = maximum_dtm;
+   std::copy(header.begin() + Dtm_Production_Wdl_Hash_Offset,
+             header.begin() + Dtm_Production_Wdl_Hash_Offset + 32,
+             loaded.metadata.production_wdl_payload_sha256.begin());
+   std::copy(header.begin() + Dtm_Source_Wdl_Hash_Offset,
+             header.begin() + Dtm_Source_Wdl_Hash_Offset + 32,
+             loaded.metadata.source_wdl_payload_sha256.begin());
+   std::copy(header.begin() + Dtm_Source_Rules_Hash_Offset,
+             header.begin() + Dtm_Source_Rules_Hash_Offset + 32,
+             loaded.metadata.source_rules_sha256.begin());
+   std::copy(header.begin() + Dtm_Source_Capture_Hash_Offset,
+             header.begin() + Dtm_Source_Capture_Hash_Offset + 32,
+             loaded.metadata.source_capture_policy_sha256.begin());
+   std::copy(header.begin() + Dtm_Source_Dtm_Hash_Offset,
+             header.begin() + Dtm_Source_Dtm_Hash_Offset + 32,
+             loaded.metadata.source_dtm_payload_sha256.begin());
+   std::copy(header.begin() + Dtm_Source_Dtm_Container_Hash_Offset,
+             header.begin() + Dtm_Source_Dtm_Container_Hash_Offset + 32,
+             loaded.metadata.source_dtm_container_sha256.begin());
+   std::copy(header.begin() + Dtm_Payload_Hash_Offset,
+             header.begin() + Dtm_Payload_Hash_Offset + 32,
+             loaded.metadata.payload_sha256.begin());
+   std::copy(header.begin() + Dtm_Header_Hash_Offset,
+             header.begin() + Dtm_Header_Hash_Offset + 32,
              loaded.metadata.header_sha256.begin());
    table = std::move(loaded);
    return true;

@@ -12,8 +12,9 @@ from most legal records. This companion experiment asks:
 3. which exact positions and optimal continuations can seed a human-readable
    two-Champion mating atlas.
 
-This is diagnostic analysis. It does not change Senpai's production tablebase
-format, runtime probing, search, evaluation, or adjudication.
+The source solve remains an offline proof artifact. Its accepted result now
+has a separate checked production companion and rule-safe runtime/search
+integration; the immutable WDL container itself remains unchanged.
 
 ## Frozen source
 
@@ -67,9 +68,11 @@ the WDL source is draw or invalid. The JSON header binds:
 - source WDL payload, rules, and capture-policy SHA-256 values;
 - decisive and rule-budget counts, maximum DTM, encoding, and payload hash.
 
-The first accepted artifact remains 32-bit even if the observed maximum is
-small. A narrower production representation would require a separate format
-decision.
+The accepted source artifact remains 32-bit. Production narrows it through an
+exhaustive checked conversion to the explicit `OMTBDTM1` uint16 companion;
+`65535` is the draw/invalid sentinel. That companion binds both the accepted
+source DTM payload/container and the exact production WDL payload. It is not
+stored or described as DTZ.
 
 ## Acceptance gates
 

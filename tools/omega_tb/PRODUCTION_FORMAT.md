@@ -94,6 +94,23 @@ material-specific semantic metadata. Only an
 `OMTB4WDL` artifact marked `complete=true` with `boundary=full` is eligible
 for production conversion.
 
+## Explicit KCCK DTM companion
+
+KCCK mate distance is not DTZ and is never stored in the WDL file's optional
+DTZ field. `omega-kcck-dtm-v1.omtb` is a separate `OMTBDTM1` v1 companion:
+one little-endian `uint16` per dense KCCK index, with `65535` reserved for
+draw/invalid records. It freezes ply-to-checkmate semantics, DTM zero at a
+native checkmate loss, 21,786,787 decisive records, and maximum DTM 40.
+
+The 352-byte companion header binds the exact production WDL payload, source
+WDL/rules/capture-policy hashes, accepted source DTM payload and container
+hashes, its own payload hash, and its own header hash. Both readers scan all
+records and require W/L parity, DTM zero only on a loss, and a sentinel on
+every draw/invalid record. A corrupt, mismatched, or orphaned present
+companion makes configuration fail atomically. The companion remains
+optional, as does KCCK WDL itself, so seven-WDL and legacy six-WDL directories
+continue to load.
+
 ## Verified source conversion
 
 `convert_to_production.py` validates the complete JSON-line source container,
@@ -129,6 +146,12 @@ python tools/omega_tb/convert_to_production.py `
 python tools/omega_tb/convert_to_production.py `
   --input .build-omega-tb/omega-kcck-wdl-v1.omtb4 `
   --output .build-omega-tb/production/omega-kcck-wdl-v1.omtb
+
+python tools/omega_tb/convert_kcck_dtm_to_production.py `
+  --dtm-input .build-omega-tb/omega-kcck-dtm-v1.omtb4d `
+  --source-wdl .build-omega-tb/omega-kcck-wdl-v1.omtb4 `
+  --production-wdl .build-omega-tb/production/omega-kcck-wdl-v1.omtb `
+  --output .build-omega-tb/production/omega-kcck-dtm-v1.omtb
 ```
 
 `OmegaTablebasePath` names a directory containing the fixed production
@@ -137,16 +160,18 @@ filenames `omega-krk-wdl-v1.omtb`, `omega-kck-wdl-v1.omtb`,
 `omega-kwkn-wdl-v1.omtb`, and `omega-kckw-wdl-v1.omtb`. These six core files
 remain mandatory. `omega-kcck-wdl-v1.omtb` is optional for backward
 compatibility; when present, it must validate and participates in the same
-atomic replacement.
+atomic replacement. `omega-kcck-dtm-v1.omtb` is an optional checked companion
+to that optional KCCK WDL file.
 
-`build-production-set.ps1` assembles and natively validates all seven files in
+`build-production-set.ps1` assembles and natively validates all seven WDL
+files plus the KCCK DTM companion in
 `$PWD\.build-omega-tb\production`. Set CoreChess's Senpai engine option
 `OmegaTablebasePath` to that directory's absolute path. An existing six-file
 directory still loads without KCCK support.
 
 `build-production-set.ps1` performs the complete seven-family conversion and
-native re-read, and freezes the real KCKW and KCCK source and production
-container hashes. The retained `test-production-conversion.ps1` is the
+native re-read, and freezes the real KCKW/KCCK WDL and KCCK DTM source and
+production container hashes. The retained `test-production-conversion.ps1` is the
 smaller legacy KRK/KRKC determinism check.
 
 ## Fixed 256-byte header
@@ -220,6 +245,6 @@ $env:OMEGA_FULL_TABLEBASE_PATH = (Resolve-Path .build-omega-tb/production).Path
 powershell -ExecutionPolicy Bypass -File test-msvc.ps1
 ```
 
-The runtime test then probes frozen KCKW and KCCK draw and decisive witnesses
-from the real files and confirms that only exact draws reach search
-adjudication.
+The runtime test probes frozen KCKW and KCCK witnesses plus KCCK DTM 40/1/0
+records. It freezes the halfmove-clock equality boundary at 60, rejection at
+61, acceptance of DTM 1 at clock 99, and native terminal precedence.

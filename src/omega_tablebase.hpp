@@ -17,12 +17,15 @@ namespace omega_tb {
 // A reload is all-or-nothing, so a bad present file cannot replace a table set
 // already serving search.
 const char * production_file_name(production_format::Material material);
+const char * kcck_dtm_file_name();
 
 struct Probe {
    production_format::Material material { production_format::Material::None };
    production_format::Wdl wdl { production_format::Wdl::Invalid };
    std::uint32_t index { 0 };
    bool has_dtz { false };
+   bool has_dtm { false };
+   std::uint16_t dtm { 0 };
 };
 
 struct Configure_Result {
@@ -55,6 +58,12 @@ extern Runtime_Tablebases G_Tablebases;
 // native draw, mate, and stalemate positions so a table can never override
 // Senpai's terminal rules.
 bool probe_search_draw(const Pos & pos, Probe * result = nullptr);
+
+// Exact KCCK W/L is safe for search only when the companion DTM fits in the
+// remaining automatic-draw budget. Native draws and terminal positions keep
+// precedence. The caller remains responsible for validating any reversible
+// pre-root history that is not represented in the tablebase index.
+bool probe_search_exact(const Pos & pos, Probe * result = nullptr);
 
 // Exposed for frozen native parity tests and offline diagnostics.  Squares
 // use Senpai's native Omega numbering (a1..a10, b1..b10, ..., corners 100..103)

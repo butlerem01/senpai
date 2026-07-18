@@ -531,6 +531,7 @@ struct Runtime_Tablebases::Table_Set {
    production_format::Table kwkn;
    production_format::Table kckw;
    production_format::Table kcck;
+   production_format::Dtm_Table kcck_dtm;
 
    const production_format::Table * table(production_format::Material material) const {
       switch (material) {
@@ -560,6 +561,10 @@ const char * production_file_name(production_format::Material material) {
       case production_format::Material::KCCK: return "omega-kcck-wdl-v1.omtb";
       default:                                 return "";
    }
+}
+
+const char * kcck_dtm_file_name() {
+   return "omega-kcck-dtm-v1.omtb";
 }
 
 Runtime_Tablebases::Runtime_Tablebases() : p_tables() {
@@ -674,10 +679,55 @@ Configure_Result Runtime_Tablebases::configure(const std::string & requested_dir
       }
    }
 
+   // The checked DTM companion is optional even when KCCK WDL is present.
+   // A present orphan or invalid companion is an atomic configuration error;
+   // silently ignoring it could make two nominally identical engine setups
+   // behave differently.
+   bool has_kcck_dtm = false;
+   const std::string kcck_dtm_name = kcck_dtm_file_name();
+   const std::string kcck_dtm_path = join_path(directory, kcck_dtm_name);
+   {
+      std::ifstream candidate(kcck_dtm_path, std::ios::binary);
+      if (candidate.good()) {
+         candidate.close();
+         if (!has_kcck) {
+            result.ok = false;
+            result.retained_previous = previous != nullptr;
+            result.message =
+               "Omega tablebase load failed for " + kcck_dtm_name +
+               ": KCCK DTM companion is present without KCCK WDL";
+            if (result.retained_previous) result.message += "; previous tables retained";
+            return result;
+         }
+         std::string error;
+         bool file_loaded = false;
+         try {
+            file_loaded = production_format::read_dtm_file(
+               kcck_dtm_path, next->kcck, next->kcck_dtm, error
+            );
+         } catch (const std::exception & exception) {
+            error = std::string("loader exception: ") + exception.what();
+         } catch (...) {
+            error = "unknown loader exception";
+         }
+         if (!file_loaded) {
+            result.ok = false;
+            result.retained_previous = previous != nullptr;
+            result.message =
+               "Omega tablebase load failed for " + kcck_dtm_name + ": " + error;
+            if (result.retained_previous) result.message += "; previous tables retained";
+            return result;
+         }
+         payload_bytes += next->kcck_dtm.dtm.size() * sizeof(std::uint16_t);
+         has_kcck_dtm = true;
+      }
+   }
+
    std::atomic_store(&p_tables, std::shared_ptr<const Table_Set>(next));
    result.ok = true;
    result.message = "Omega tablebases loaded: KRK, KCK, KRKC, KRKN, KWKN, KCKW";
    if (has_kcck) result.message += ", KCCK";
+   if (has_kcck_dtm) result.message += "+DTM";
    result.message += " (" +
                     std::to_string(payload_bytes / (1024 * 1024)) + " MiB payload";
    if (any_dtz) result.message += "; DTZ payload present but not used by search";
@@ -711,6 +761,14 @@ bool Runtime_Tablebases::probe(const Pos & pos, Probe & result) const {
    result.wdl = wdl;
    result.index = index;
    result.has_dtz = table->metadata.has_dtz;
+   result.has_dtm = false;
+   result.dtm = 0;
+   if (indexed.material == production_format::Material::KCCK
+    && index < tables->kcck_dtm.dtm.size()
+    && tables->kcck_dtm.dtm[index] != production_format::Dtm_No_Distance) {
+      result.has_dtm = true;
+      result.dtm = tables->kcck_dtm.dtm[index];
+   }
    return true;
 }
 
@@ -733,6 +791,34 @@ bool probe_search_draw(const Pos & pos, Probe * result) {
 
    // The production index also contains terminal placements.  Search must
    // still report native mate/stalemate rather than replacing them with WDL.
+   List legal;
+   gen_legals(legal, pos);
+   if (legal.size() == 0) return false;
+
+   if (result != nullptr) *result = probe;
+   return true;
+}
+
+bool probe_search_exact(const Pos & pos, Probe * result) {
+   // Automatic draw and known repetition state always take precedence.
+   if (pos.is_draw()) return false;
+
+   Probe probe;
+   if (!G_Tablebases.probe(pos, probe)) return false;
+   if (probe.material != production_format::Material::KCCK || !probe.has_dtm) {
+      return false;
+   }
+   if (probe.wdl != production_format::Wdl::Win
+    && probe.wdl != production_format::Wdl::Loss) {
+      return false;
+   }
+   if (pos.halfmove_clock() < 0 || pos.halfmove_clock() >= 100
+    || probe.dtm > static_cast<std::uint16_t>(100 - pos.halfmove_clock())) {
+      return false;
+   }
+
+   // Raw probing intentionally exposes terminal Loss/DTM0 for diagnostics
+   // and PV construction. Search must still let native mate/stalemate win.
    List legal;
    gen_legals(legal, pos);
    if (legal.size() == 0) return false;

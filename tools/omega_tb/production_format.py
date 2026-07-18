@@ -39,6 +39,22 @@ WDL_ENCODING_BYTE_FIVE = 1
 DTZ_ENCODING_NONE = 0
 DTZ_ENCODING_UINT16_LE = 1
 
+DTM_MAGIC = b"OMTBDTM1"
+DTM_VERSION = 1
+DTM_HEADER_SIZE = 352
+DTM_ENCODING_UINT16_LE = 1
+DTM_KIND_PLY_TO_CHECKMATE = 1
+DTM_NO_DISTANCE = 0xFFFF
+DTM_PRODUCTION_WDL_HASH_OFFSET = 80
+DTM_SOURCE_WDL_HASH_OFFSET = 112
+DTM_SOURCE_RULES_HASH_OFFSET = 144
+DTM_SOURCE_CAPTURE_HASH_OFFSET = 176
+DTM_PAYLOAD_HASH_OFFSET = 208
+DTM_HEADER_HASH_OFFSET = 240
+DTM_SOURCE_DTM_HASH_OFFSET = 272
+DTM_SOURCE_DTM_CONTAINER_HASH_OFFSET = 304
+DTM_RESERVED_OFFSET = 336
+
 INVALID = 0
 LOSS = 1
 BLESSED_LOSS = 2
@@ -112,6 +128,24 @@ KCCK_RULES_DESCRIPTION = (
 )
 KCCK_RULES_FINGERPRINT = hashlib.sha256(KCCK_RULES_DESCRIPTION.encode("ascii")).digest()
 KCCK_RULES_FINGERPRINT_HEX = KCCK_RULES_FINGERPRINT.hex()
+
+KCCK_SOURCE_WDL_PAYLOAD_SHA256 = bytes.fromhex(
+    "35f9d8bcb3b283dec2f918fcc4c5d62355edc2dee3ee297e16dd42a91940678e"
+)
+KCCK_SOURCE_RULES_SHA256 = bytes.fromhex(
+    "ac44f4152d0c619468addc65c580c064a1e8c5bc6c31509f50243739e8f4431f"
+)
+KCCK_SOURCE_CAPTURE_POLICY_SHA256 = bytes.fromhex(
+    "286a4e80294c4118093c8223b3414859c3a8f634ae401ee49cecb4b636c7172b"
+)
+KCCK_SOURCE_DTM_PAYLOAD_SHA256 = bytes.fromhex(
+    "b702ce64eb13610a9d4a952d8bd9e72340e809775617c6c19b229fcc41de1748"
+)
+KCCK_SOURCE_DTM_CONTAINER_SHA256 = bytes.fromhex(
+    "e6f12c4eda6064df9fe81f984d5d86222eb428552507401fae48ad0eed22275c"
+)
+KCCK_DTM_DECISIVE_COUNT = 21_786_787
+KCCK_DTM_MAXIMUM = 40
 
 RULES_OFFSET = 144
 PAYLOAD_HASH_OFFSET = 176
@@ -207,6 +241,34 @@ class Table:
         if not 0 <= index < self.header.state_count:
             raise IndexError(index)
         return struct.unpack_from("<H", self.dtz, index * 2)[0]
+
+@dataclass(frozen=True)
+class DtmHeader:
+    material: str
+    state_count: int
+    decisive_count: int
+    maximum_dtm: int
+    production_wdl_payload_sha256: bytes
+    source_wdl_payload_sha256: bytes
+    source_rules_sha256: bytes
+    source_capture_policy_sha256: bytes
+    source_dtm_payload_sha256: bytes
+    source_dtm_container_sha256: bytes
+    payload_sha256: bytes
+    header_sha256: bytes
+
+
+@dataclass(frozen=True)
+class DtmTable:
+    header: DtmHeader
+    # Packed little-endian uint16 values; DTM_NO_DISTANCE marks draw/invalid.
+    dtm: bytes
+
+    def dtm_at(self, index: int) -> Optional[int]:
+        if not 0 <= index < self.header.state_count:
+            raise IndexError(index)
+        value = struct.unpack_from("<H", self.dtm, index * 2)[0]
+        return None if value == DTM_NO_DISTANCE else value
 
 
 def material_spec(material: Union[str, int]) -> MaterialSpec:
@@ -478,3 +540,276 @@ def read_table(path: Path, expected_material: Optional[Union[str, int]] = None,
         stored_header_hash,
     )
     return Table(header, wdl, dtz_values)
+
+
+def _dtm_header_digest(header: bytes) -> bytes:
+    if len(header) != DTM_HEADER_SIZE:
+        raise ValueError("production DTM header has the wrong size")
+    canonical = bytearray(header)
+    canonical[DTM_HEADER_HASH_OFFSET:DTM_HEADER_HASH_OFFSET + 32] = bytes(32)
+    return hashlib.sha256(canonical).digest()
+
+
+def _encode_dtm_payload(
+    dtm: Union[bytes, bytearray, memoryview, Sequence[int]],
+    state_count: int,
+) -> bytes:
+    if isinstance(dtm, (bytes, bytearray, memoryview)):
+        payload = bytes(dtm)
+    else:
+        if len(dtm) != state_count:
+            raise ValueError("KCCK DTM value count mismatch")
+        encoded = bytearray(state_count * 2)
+        for index, value in enumerate(dtm):
+            integer = int(value)
+            if not 0 <= integer <= DTM_NO_DISTANCE:
+                raise ValueError("KCCK DTM is outside uint16 range")
+            struct.pack_into("<H", encoded, index * 2, integer)
+        payload = bytes(encoded)
+    if len(payload) != state_count * 2:
+        raise ValueError("KCCK DTM payload must contain one uint16 per state")
+    return payload
+
+
+def _validate_kcck_dtm(wdl: Table, payload: bytes) -> Tuple[int, int]:
+    if wdl.header.material != "KCCK":
+        raise ValueError("DTM companion requires a checked KCCK production WDL table")
+    if len(wdl.wdl) != wdl.header.state_count:
+        raise ValueError("KCCK production WDL payload size mismatch")
+    if len(payload) != wdl.header.state_count * 2:
+        raise ValueError("KCCK DTM payload size mismatch")
+
+    decisive_count = 0
+    maximum_dtm = 0
+    unpack = struct.Struct("<H").unpack_from
+    for index, outcome in enumerate(wdl.wdl):
+        value = unpack(payload, index * 2)[0]
+        decisive = outcome in (LOSS, WIN)
+        has_distance = value != DTM_NO_DISTANCE
+        if outcome not in (INVALID, LOSS, DRAW, WIN):
+            raise ValueError("KCCK DTM source contains blessed/cursed WDL")
+        if decisive != has_distance:
+            if decisive:
+                raise ValueError("decisive KCCK WDL record has no DTM")
+            raise ValueError("draw/invalid KCCK WDL record has a DTM")
+        if not has_distance:
+            continue
+        if value > KCCK_DTM_MAXIMUM:
+            raise ValueError("KCCK DTM exceeds the frozen maximum")
+        if (outcome == WIN and value % 2 == 0) or (
+            outcome == LOSS and value % 2 != 0
+        ):
+            raise ValueError("KCCK DTM parity does not match WDL")
+        if value == 0 and outcome != LOSS:
+            raise ValueError("KCCK DTM zero is not a loss")
+        decisive_count += 1
+        maximum_dtm = max(maximum_dtm, value)
+
+    if decisive_count != KCCK_DTM_DECISIVE_COUNT or maximum_dtm != KCCK_DTM_MAXIMUM:
+        raise ValueError("KCCK DTM frozen decisive count or maximum changed")
+    return decisive_count, maximum_dtm
+
+
+def _build_dtm_header(wdl: Table, payload: bytes) -> bytes:
+    spec = material_spec("KCCK")
+    decisive_count, maximum_dtm = _validate_kcck_dtm(wdl, payload)
+    header = bytearray(DTM_HEADER_SIZE)
+    header[0:8] = DTM_MAGIC
+    struct.pack_into("<H", header, 8, DTM_VERSION)
+    struct.pack_into("<H", header, 10, DTM_HEADER_SIZE)
+    struct.pack_into("<I", header, 12, ENDIAN_TAG)
+    header[16] = spec.code
+    header[17] = spec.piece_count
+    header[18] = DTM_ENCODING_UINT16_LE
+    header[19] = DTM_KIND_PLY_TO_CHECKMATE
+    struct.pack_into("<H", header, 20, SQUARE_COUNT)
+    header[22] = TURN_COUNT
+    header[23] = RULES_ID
+    struct.pack_into("<I", header, 24, INDEX_ID)
+    struct.pack_into("<Q", header, 32, spec.state_count)
+    struct.pack_into("<Q", header, 40, decisive_count)
+    struct.pack_into("<Q", header, 48, DTM_HEADER_SIZE)
+    struct.pack_into("<Q", header, 56, len(payload))
+    struct.pack_into("<H", header, 64, maximum_dtm)
+    struct.pack_into("<H", header, 66, DTM_NO_DISTANCE)
+    struct.pack_into("<H", header, 68, 0)
+    header[70] = DTM_KIND_PLY_TO_CHECKMATE
+    header[72:76] = bytes(spec.pieces)
+    header[76:80] = bytes(spec.roles)
+    header[
+        DTM_PRODUCTION_WDL_HASH_OFFSET:DTM_PRODUCTION_WDL_HASH_OFFSET + 32
+    ] = wdl.header.payload_sha256
+    header[DTM_SOURCE_WDL_HASH_OFFSET:DTM_SOURCE_WDL_HASH_OFFSET + 32] = (
+        KCCK_SOURCE_WDL_PAYLOAD_SHA256
+    )
+    header[DTM_SOURCE_RULES_HASH_OFFSET:DTM_SOURCE_RULES_HASH_OFFSET + 32] = (
+        KCCK_SOURCE_RULES_SHA256
+    )
+    header[
+        DTM_SOURCE_CAPTURE_HASH_OFFSET:DTM_SOURCE_CAPTURE_HASH_OFFSET + 32
+    ] = KCCK_SOURCE_CAPTURE_POLICY_SHA256
+    header[DTM_PAYLOAD_HASH_OFFSET:DTM_PAYLOAD_HASH_OFFSET + 32] = (
+        hashlib.sha256(payload).digest()
+    )
+    header[DTM_SOURCE_DTM_HASH_OFFSET:DTM_SOURCE_DTM_HASH_OFFSET + 32] = (
+        KCCK_SOURCE_DTM_PAYLOAD_SHA256
+    )
+    header[
+        DTM_SOURCE_DTM_CONTAINER_HASH_OFFSET:
+        DTM_SOURCE_DTM_CONTAINER_HASH_OFFSET + 32
+    ] = KCCK_SOURCE_DTM_CONTAINER_SHA256
+    header[DTM_HEADER_HASH_OFFSET:DTM_HEADER_HASH_OFFSET + 32] = (
+        _dtm_header_digest(header)
+    )
+    return bytes(header)
+
+
+def write_dtm_table(
+    path: Path,
+    wdl: Table,
+    dtm: Union[bytes, bytearray, memoryview, Sequence[int]],
+) -> DtmHeader:
+    """Atomically write and re-read the explicit KCCK DTM companion."""
+
+    path = Path(path)
+    payload = _encode_dtm_payload(dtm, wdl.header.state_count)
+    header = _build_dtm_header(wdl, payload)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f"{path.name}.tmp-{os.getpid()}")
+    try:
+        with temporary.open("wb") as stream:
+            stream.write(header)
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        verified = read_dtm_table(temporary, wdl)
+        os.replace(temporary, path)
+        return verified.header
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def read_dtm_table(path: Path, wdl: Table) -> DtmTable:
+    """Read, checksum, bind, and semantically validate a KCCK DTM companion."""
+
+    path = Path(path)
+    if wdl.header.material != "KCCK":
+        raise ValueError("DTM companion requires a checked KCCK production WDL table")
+    spec = material_spec("KCCK")
+    with path.open("rb") as stream:
+        header = stream.read(DTM_HEADER_SIZE)
+        if len(header) != DTM_HEADER_SIZE:
+            raise ValueError("truncated production DTM header")
+        if header[0:8] != DTM_MAGIC:
+            raise ValueError("unsupported production DTM magic")
+        if (
+            struct.unpack_from("<H", header, 8)[0] != DTM_VERSION
+            or struct.unpack_from("<H", header, 10)[0] != DTM_HEADER_SIZE
+        ):
+            raise ValueError("unsupported production DTM version")
+        stored_header_hash = header[
+            DTM_HEADER_HASH_OFFSET:DTM_HEADER_HASH_OFFSET + 32
+        ]
+        if _dtm_header_digest(header) != stored_header_hash:
+            raise ValueError("production DTM header checksum mismatch")
+        if struct.unpack_from("<I", header, 12)[0] != ENDIAN_TAG:
+            raise ValueError("production DTM endianness marker mismatch")
+        if header[16] != spec.code or header[17] != spec.piece_count:
+            raise ValueError("production DTM material signature mismatch")
+        if (
+            header[18] != DTM_ENCODING_UINT16_LE
+            or header[19] != DTM_KIND_PLY_TO_CHECKMATE
+            or struct.unpack_from("<H", header, 66)[0] != DTM_NO_DISTANCE
+            or struct.unpack_from("<H", header, 68)[0] != 0
+            or header[70] != DTM_KIND_PLY_TO_CHECKMATE
+            or header[71] != 0
+        ):
+            raise ValueError("production DTM distance semantics mismatch")
+        if (
+            struct.unpack_from("<H", header, 20)[0] != SQUARE_COUNT
+            or header[22] != TURN_COUNT
+            or header[23] != RULES_ID
+            or struct.unpack_from("<I", header, 24)[0] != INDEX_ID
+            or struct.unpack_from("<I", header, 28)[0] != 0
+        ):
+            raise ValueError("production DTM geometry/index metadata mismatch")
+        if tuple(header[72:76]) != spec.pieces or tuple(header[76:80]) != spec.roles:
+            raise ValueError("production DTM labelled-piece order mismatch")
+        if any(header[DTM_RESERVED_OFFSET:]):
+            raise ValueError("production DTM reserved header bytes are nonzero")
+        if (
+            header[
+                DTM_PRODUCTION_WDL_HASH_OFFSET:
+                DTM_PRODUCTION_WDL_HASH_OFFSET + 32
+            ]
+            != wdl.header.payload_sha256
+        ):
+            raise ValueError(
+                "production DTM is bound to a different production WDL payload"
+            )
+        frozen_bindings = (
+            (
+                DTM_SOURCE_WDL_HASH_OFFSET,
+                KCCK_SOURCE_WDL_PAYLOAD_SHA256,
+            ),
+            (DTM_SOURCE_RULES_HASH_OFFSET, KCCK_SOURCE_RULES_SHA256),
+            (
+                DTM_SOURCE_CAPTURE_HASH_OFFSET,
+                KCCK_SOURCE_CAPTURE_POLICY_SHA256,
+            ),
+            (DTM_SOURCE_DTM_HASH_OFFSET, KCCK_SOURCE_DTM_PAYLOAD_SHA256),
+            (
+                DTM_SOURCE_DTM_CONTAINER_HASH_OFFSET,
+                KCCK_SOURCE_DTM_CONTAINER_SHA256,
+            ),
+        )
+        if any(header[offset:offset + 32] != expected
+               for offset, expected in frozen_bindings):
+            raise ValueError("production DTM frozen source binding mismatch")
+
+        state_count = struct.unpack_from("<Q", header, 32)[0]
+        decisive_count = struct.unpack_from("<Q", header, 40)[0]
+        payload_offset = struct.unpack_from("<Q", header, 48)[0]
+        payload_size = struct.unpack_from("<Q", header, 56)[0]
+        maximum_dtm = struct.unpack_from("<H", header, 64)[0]
+        if (
+            state_count != spec.state_count
+            or payload_offset != DTM_HEADER_SIZE
+            or payload_size != spec.state_count * 2
+        ):
+            raise ValueError("production DTM state-count or payload-size mismatch")
+        payload = stream.read(payload_size)
+        if len(payload) != payload_size or stream.read(1):
+            raise ValueError("production DTM file size mismatch")
+        payload_hash = hashlib.sha256(payload).digest()
+        if payload_hash != header[
+            DTM_PAYLOAD_HASH_OFFSET:DTM_PAYLOAD_HASH_OFFSET + 32
+        ]:
+            raise ValueError("production DTM payload checksum mismatch")
+        actual_count, actual_maximum = _validate_kcck_dtm(wdl, payload)
+        if actual_count != decisive_count or actual_maximum != maximum_dtm:
+            raise ValueError("production DTM decisive count or maximum mismatch")
+
+    metadata = DtmHeader(
+        "KCCK",
+        state_count,
+        decisive_count,
+        maximum_dtm,
+        header[
+            DTM_PRODUCTION_WDL_HASH_OFFSET:DTM_PRODUCTION_WDL_HASH_OFFSET + 32
+        ],
+        header[DTM_SOURCE_WDL_HASH_OFFSET:DTM_SOURCE_WDL_HASH_OFFSET + 32],
+        header[DTM_SOURCE_RULES_HASH_OFFSET:DTM_SOURCE_RULES_HASH_OFFSET + 32],
+        header[
+            DTM_SOURCE_CAPTURE_HASH_OFFSET:DTM_SOURCE_CAPTURE_HASH_OFFSET + 32
+        ],
+        header[DTM_SOURCE_DTM_HASH_OFFSET:DTM_SOURCE_DTM_HASH_OFFSET + 32],
+        header[
+            DTM_SOURCE_DTM_CONTAINER_HASH_OFFSET:
+            DTM_SOURCE_DTM_CONTAINER_HASH_OFFSET + 32
+        ],
+        payload_hash,
+        stored_header_hash,
+    )
+    return DtmTable(metadata, payload)

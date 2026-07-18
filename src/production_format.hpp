@@ -56,6 +56,31 @@ struct Load_Requirements {
    std::array<std::uint8_t, 32> rules_fingerprint {{}};
 };
 
+// KCCK DTM is deliberately a separate companion, not a DTZ payload in the
+// WDL container.  UINT16_MAX is reserved for draw/invalid records; all
+// decisive records contain an exact number of plies to checkmate.
+constexpr std::uint16_t Dtm_No_Distance = UINT16_MAX;
+
+struct Dtm_Metadata {
+   Material material { Material::None };
+   std::uint64_t state_count { 0 };
+   std::uint64_t decisive_count { 0 };
+   std::uint16_t maximum_dtm { 0 };
+   std::array<std::uint8_t, 32> production_wdl_payload_sha256 {{}};
+   std::array<std::uint8_t, 32> source_wdl_payload_sha256 {{}};
+   std::array<std::uint8_t, 32> source_rules_sha256 {{}};
+   std::array<std::uint8_t, 32> source_capture_policy_sha256 {{}};
+   std::array<std::uint8_t, 32> source_dtm_payload_sha256 {{}};
+   std::array<std::uint8_t, 32> source_dtm_container_sha256 {{}};
+   std::array<std::uint8_t, 32> payload_sha256 {{}};
+   std::array<std::uint8_t, 32> header_sha256 {{}};
+};
+
+struct Dtm_Table {
+   Dtm_Metadata metadata;
+   std::vector<std::uint16_t> dtm;
+};
+
 const char * rules_description();
 const char * rules_description(Material material);
 std::array<std::uint8_t, 32> canonical_rules_fingerprint();
@@ -82,6 +107,20 @@ bool read_file(const std::string & path,
                const Load_Requirements & requirements,
                Table & table,
                std::string & error);
+
+// Write/read the explicit KCCK uint16 DTM companion.  The companion binds to
+// the exact production WDL payload and to the frozen solver-source hashes.
+// Reading also verifies the decisive/sentinel map against `wdl`.  On failure
+// the output table is left unchanged.
+bool write_dtm_file(const std::string & path,
+                    const Table & wdl,
+                    const std::vector<std::uint16_t> & dtm,
+                    std::string & error);
+
+bool read_dtm_file(const std::string & path,
+                   const Table & wdl,
+                   Dtm_Table & table,
+                   std::string & error);
 
 } // namespace production_format
 } // namespace omega_tb

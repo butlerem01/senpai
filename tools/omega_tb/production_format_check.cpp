@@ -51,20 +51,23 @@ std::string hex(const std::array<std::uint8_t, 32> & digest) {
 int main(int argc, char ** argv) {
    try {
       std::string input;
+      std::string dtm_input;
       std::string material_name;
       std::string expected_counts_text;
       for (int index = 1; index < argc; ++index) {
          const std::string option = argv[index];
-         if ((option == "--input" || option == "--material" || option == "--counts")
+         if ((option == "--input" || option == "--dtm"
+           || option == "--material" || option == "--counts")
           && index + 1 >= argc)
             throw std::runtime_error("missing value after " + option);
          if (option == "--input") input = argv[++index];
+         else if (option == "--dtm") dtm_input = argv[++index];
          else if (option == "--material") material_name = argv[++index];
          else if (option == "--counts") expected_counts_text = argv[++index];
          else throw std::runtime_error("unknown option: " + option);
       }
       if (input.empty() || material_name.empty() || expected_counts_text.empty())
-         throw std::runtime_error("usage: production_format_check --input FILE --material KRK|KCK|KRKC|KRKN|KWKN|KCKW|KCCK --counts i,l,bl,d,cw,w");
+         throw std::runtime_error("usage: production_format_check --input FILE [--dtm FILE] --material KRK|KCK|KRKC|KRKN|KWKN|KCKW|KCCK --counts i,l,bl,d,cw,w");
 
       const fmt::Material material = parse_material(material_name);
       const auto expected_counts = parse_counts(expected_counts_text);
@@ -78,7 +81,21 @@ int main(int argc, char ** argv) {
       std::cout << "native OMTBPROD verified: material=" << material_name
                 << " states=" << table.metadata.state_count
                 << " legal=" << table.metadata.legal_count
-                << " payload_sha256=" << hex(table.metadata.payload_sha256) << '\n';
+                << " payload_sha256=" << hex(table.metadata.payload_sha256);
+      if (!dtm_input.empty()) {
+         if (material != fmt::Material::KCCK)
+            throw std::runtime_error("--dtm is supported only for KCCK");
+         fmt::Dtm_Table dtm;
+         if (!fmt::read_dtm_file(dtm_input, table, dtm, error))
+            throw std::runtime_error(error);
+         if (dtm.metadata.decisive_count != 21786787ULL
+          || dtm.metadata.maximum_dtm != 40)
+            throw std::runtime_error("native KCCK DTM census changed");
+         std::cout << " dtm_decisive=" << dtm.metadata.decisive_count
+                   << " dtm_max=" << dtm.metadata.maximum_dtm
+                   << " dtm_payload_sha256=" << hex(dtm.metadata.payload_sha256);
+      }
+      std::cout << '\n';
       return 0;
    } catch (const std::exception & exception) {
       std::cerr << "production-format-check: " << exception.what() << '\n';
