@@ -11,6 +11,8 @@ namespace omega_eval {
 namespace {
 
 const int Phase_Max { 32 };
+const int Champion_Pair_MG { 8 };
+const int Champion_Pair_EG { 40 };
 
 const int MG_Value[Piece_Size] { 100, 225, 425, 600, 1200, 0, 400, 375 };
 const int EG_Value[Piece_Size] { 125, 235, 440, 625, 1225, 0, 400, 375 };
@@ -285,6 +287,11 @@ void eval_pieces(Eval_Score & score, const Pos & pos, const Attack_Maps & maps,
       }
 
       if (pos.count(Bishop, sd) >= 2) score.add(sd, 32, 48);
+      int champions = pos.count(Champion, sd);
+      score.add(sd,
+         champion_pair_bonus(champions, Phase_Max),
+         champion_pair_bonus(champions, 0)
+      );
       if (pos.count(Champion, sd) >= 1 && pos.count(Wizard, sd) >= 1) {
          score.add(sd, 10, 8);
       }
@@ -493,6 +500,15 @@ int king_attack_quadratic(int attack_units, int attacker_count) {
    int value = attack_units * attack_units / 3;
    if (attacker_count == 2) value /= 2;
    return value;
+}
+
+int champion_pair_bonus(int champion_count, int opening_units) {
+   if (champion_count < 2) return 0;
+
+   int opening = std::max(0, std::min(opening_units, Phase_Max));
+   int endgame = Phase_Max - opening;
+   return (Champion_Pair_MG * opening + Champion_Pair_EG * endgame)
+        / Phase_Max;
 }
 
 int piece_value(Piece pc) {

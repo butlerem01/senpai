@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "runId": "confirm-omega-integrated-pair-v1-96-20260718",
+  "outputDirectory": "../../match-runs/output/confirm-omega-integrated-pair-v1-96-20260718",
+  "seed": 20260718,
+  "engines": [
+    {
+      "id": "kcck-dtm-control",
+      "executable": "../../senpai-exp-kcck-dtm-runtime/build-msvc/senpai.exe",
+      "expectedSha256": "6b30f9f8ae8dbd2719cd54a620a8014c14f61be8789aea0a62148dfddf302463",
+      "options": {
+        "Threads": "1",
+        "Hash": "128",
+        "Ponder": "false",
+        "OwnBook": "false",
+        "UCI_Variant": "omega",
+        "OmegaTablebasePath": "C:/Users/whate/Documents/Codex/2026-07-11/let-s-adapt-some-engines-and/senpai-exp-kcck-dtm-runtime/.build-omega-tb/production"
+      }
+    },
+    {
+      "id": "omega-integrated-pair-v1",
+      "executable": "../build-msvc/senpai.exe",
+      "expectedSha256": "84042a909308ff033408b8856346388b67692e180a29c74b3f8f5b98b70f2504",
+      "options": {
+        "Threads": "1",
+        "Hash": "128",
+        "Ponder": "false",
+        "OwnBook": "false",
+        "UCI_Variant": "omega",
+        "OmegaTablebasePath": "C:/Users/whate/Documents/Codex/2026-07-11/let-s-adapt-some-engines-and/senpai-exp-kcck-dtm-runtime/.build-omega-tb/production"
+      }
+    }
+  ],
+  "match": {
+    "engineA": "kcck-dtm-control",
+    "engineB": "omega-integrated-pair-v1",
+    "openingsFile": "../../match-runs/configs/omega-confirmation-48.json",
+    "repeats": 1,
+    "maxPlies": 180,
+    "absoluteMaxPlies": 300,
+    "mode": "nodes",
+    "nodes": 50000,
+    "searchTimeoutMs": 120000,
+    "stopGraceMs": 2000,
+    "bootstrapIterations": 20000,
+    "freshProcessPerGame": true
+  }
+}

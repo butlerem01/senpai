@@ -269,6 +269,27 @@ void test_king_attack_coordination() {
           "coordinated king danger must preserve colour symmetry");
 }
 
+void test_champion_pair_reserve() {
+   expect(omega_eval::champion_pair_bonus(0, 0) == 0
+       && omega_eval::champion_pair_bonus(1, 0) == 0
+       && omega_eval::champion_pair_bonus(1, 32) == 0,
+          "zero or one Champion must receive no pair bonus");
+
+   expect(omega_eval::champion_pair_bonus(2, 32) == 8
+       && omega_eval::champion_pair_bonus(2, 24) == 16
+       && omega_eval::champion_pair_bonus(2, 16) == 24
+       && omega_eval::champion_pair_bonus(2, 8) == 32
+       && omega_eval::champion_pair_bonus(2, 0) == 40,
+          "the Champion-pair reserve must grow through the phase taper");
+
+   expect(omega_eval::champion_pair_bonus(3, 16)
+          == omega_eval::champion_pair_bonus(2, 16),
+          "promotion must not stack the Champion-pair reserve");
+   expect(omega_eval::champion_pair_bonus(2, 100) == 8
+       && omega_eval::champion_pair_bonus(2, -100) == 40,
+          "the Champion-pair phase input must be bounded");
+}
+
 void test_corner_wizard_development() {
    Ofen_Position corner = bare_omega();
    put(corner, Pawn, White, "j1");
@@ -409,6 +430,7 @@ int main() {
    test_pawns();
    test_king_safety_and_castling();
    test_king_attack_coordination();
+   test_champion_pair_reserve();
    test_corner_wizard_development();
    test_development_completion();
    test_endgame_material_classes();

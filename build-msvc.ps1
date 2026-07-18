@@ -29,6 +29,9 @@ Push-Location $output
 try {
     & cl.exe @common @nativeSources "/Fe:$(Join-Path $output 'senpai.exe')"
     if ($LASTEXITCODE -ne 0) { throw "Native Senpai build failed with exit code $LASTEXITCODE." }
+    Copy-Item -Force `
+        (Join-Path $output "senpai.exe") `
+        (Join-Path $output "senpai-omega-integrated.exe")
 
     & cl.exe @common (Join-Path $source "omega.cpp") "/Fe:$(Join-Path $output 'senpai-omega-companion.exe')"
     if ($LASTEXITCODE -ne 0) { throw "Omega companion build failed with exit code $LASTEXITCODE." }
@@ -37,4 +40,5 @@ try {
 }
 
 Write-Host "Built: $(Join-Path $output 'senpai.exe')"
+Write-Host "Built: $(Join-Path $output 'senpai-omega-integrated.exe')"
 Write-Host "Built: $(Join-Path $output 'senpai-omega-companion.exe')"

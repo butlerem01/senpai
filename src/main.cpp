@@ -35,7 +35,7 @@
 // constants
 
 const std::string Engine_Name    { "Senpai" };
-const std::string Engine_Version { "2.0" };
+const std::string Engine_Version { "2.0 Omega Integrated 1" };
 
 // prototypes
 

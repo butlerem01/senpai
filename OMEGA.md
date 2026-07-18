@@ -115,6 +115,14 @@ It provides verified KRK, KCK, KRKC, KRKN, KWKN, KCKW, and KCCK theoretical
 WDL, geometry and graph parity checks, and a checksummed production format.
 Set the UCI string option `OmegaTablebasePath` to a directory containing the
 six fixed core production files and, for exact two-Champion draws, the
-optional `omega-kcck-wdl-v1.omtb`.
-Search consumes exact draws only; theoretical wins and losses fall back to
-normal search until DTZ and the 100-ply conversion boundary are implemented.
+optional `omega-kcck-wdl-v1.omtb`. When the companion
+`omega-kcck-dtm-v1.omtb` is present, search plays exact shortest KCCK mating
+routes whenever the route fits inside the 100-ply conversion boundary and the
+known game history is repetition-safe. Unsafe or incomplete cases fall back
+to normal search.
+
+The integrated evaluator gives one non-stacking Champion-pair reserve bonus:
+8 centipawns in the opening, tapering to 40 in the endgame. This represents
+the proven conversion capability of two Champions before the exact KCCK
+tablebase becomes applicable. It does not increase a lone Champion's value or
+duplicate the existing mobility, landing-square, and king-attack terms.
