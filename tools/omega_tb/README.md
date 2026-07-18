@@ -30,6 +30,10 @@ heuristic four-man score scaler**.
 - A separate checksummed `OMTB4DTM` KCCK companion. It binds to the exact WDL
   payload, stores ply-accurate mate distances, probes rule budgets, extracts
   raw-orientation optimal lines, and produces the two-Champion mating atlas.
+- A separate exact KCCK draw analyzer. It reconstructs all draw-preserving
+  edges, classifies local exits, proves normalized SCC traversal parity, and
+  solves the alternating defender capture-or-stalemate attractor without
+  changing the WDL generator or engine.
 - Versioned, checksummed three-man foundation files. They are deliberately not
   yet an engine probe format.
 
@@ -66,6 +70,20 @@ detached-corner roots. Its SHA-256 is
 `300f9a25f2b6592b0322e79382acd7a9e5d819a7dc8ca8d2c44598b216471729`;
 the independently computed expected-record stream is also frozen at
 `2c1cf4bf03837b43ac58b1c5acd1fe5e15029eaa974d490e08f1f6f5e44b92ab`.
+
+Classify every record in the frozen KCCK draw population and run the exact
+edge, SCC, Champion-label, target/cycle-reachability, and attractor contract:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File `
+  tools/omega_tb/test-kcck-draw-analysis.ps1 `
+  -KcckWdlPath .build-omega-tb/omega-kcck-wdl-v1.omtb4
+```
+
+See `KCCK_DRAW_THEORY.md` for the frozen counts and interpretation. In
+particular, all 1,852,083 draw records lie in the defender's finite
+capture-or-stalemate attractor, and none of the 2,082 cyclic SCCs contains a
+detached-corner defender.
 
 Run the generator directly and optionally write the compact WDL files:
 
@@ -222,7 +240,9 @@ previously loaded valid six-table set).
   file is loaded. Its decisive W/L and DTM records remain diagnostic-only
   until search can bind the distance to the current halfmove clock and score
   the exact result without overriding native terminal/history rules. See
-  `KCCK_THEORY.md`, `KCCK_DTM_DESIGN.md`, and `KCCK_MATING_ATLAS.md`.
+  `KCCK_THEORY.md`, `KCCK_DTM_DESIGN.md`, `KCCK_MATING_ATLAS.md`, and
+  `KCCK_DRAW_THEORY.md` for the contracts, hashes, mating census, longest
+  line, exact draw mechanisms, and production limits.
 - Three-man native/Python parity is sampled by default to keep normal
   verification fast; use `test-native-parity.ps1 -Exhaustive` for every
   indexed three-man state. KCCK currently has the separate frozen sampled
