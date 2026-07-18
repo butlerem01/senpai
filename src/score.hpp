@@ -12,7 +12,11 @@ namespace score {
 // constants
 
 const Score Inf      = Score(10000);
-const Score Eval_Inf = Inf - Score(100);
+// Search recursion and PV storage stop at 63 plies, but an exact KCCK DTM
+// probe can be entered late in that search with as many as 40 plies still to
+// mate. Keep those exact distances distinct from evaluation scores.
+const Ply   Mate_Ply_Max = Ply(200);
+const Score Eval_Inf = Inf - Score(Mate_Ply_Max) - Score(1);
 const Score None     = -Inf - Score(1);
 
 // functions

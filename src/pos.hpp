@@ -83,6 +83,13 @@ public :
    int fullmove_number () const { return p_fullmove_number; }
    int ply             () const { return p_halfmove_clock; } // legacy name
 
+   // The reversible parent chain is narrower than the halfmove clock: a FEN
+   // can carry a nonzero clock without supplying any known history. Exact
+   // tablebase callers use these accessors to audit only history that Senpai
+   // actually retained.
+   int known_reversible_plies () const { return p_rep; }
+   const Pos * known_parent   () const { return p_parent; }
+
    bool is_draw () const;
 
 private :

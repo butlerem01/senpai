@@ -2,6 +2,7 @@
 // includes
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -321,11 +322,131 @@ static double lerp (double mg, double eg, double phase);
 
 static double time_lag (double time);
 
+static void wait_after_search(bool move, bool ponder);
+
 static void node_update (Node & node, Move mv, Score sc, const Line & pv, Search_Global & sg);
 
 static Flag flag (Score sc, Score alpha, Score beta);
 
 // functions
+
+namespace {
+
+using Wdl = omega_tb::production_format::Wdl;
+
+bool exact_decisive(Wdl wdl) {
+   return wdl == Wdl::Win || wdl == Wdl::Loss;
+}
+
+bool exact_opposites(Wdl parent, Wdl child) {
+   return (parent == Wdl::Win && child == Wdl::Loss)
+       || (parent == Wdl::Loss && child == Wdl::Win);
+}
+
+Score exact_score(const omega_tb::Probe & probe, Ply ply) {
+   assert(exact_decisive(probe.wdl));
+   assert(probe.has_dtm);
+   const Ply mate_ply = Ply(int(ply) + int(probe.dtm));
+   assert(mate_ply <= score::Mate_Ply_Max);
+   return probe.wdl == Wdl::Win
+        ? score::win(mate_ply)
+        : score::loss(mate_ply);
+}
+
+bool exact_history_is_safe(const Pos & pos,
+                           const omega_tb::Probe & current_probe) {
+   const Pos * child = &pos;
+   omega_tb::Probe child_probe = current_probe;
+   int remaining = pos.known_reversible_plies();
+
+   while (remaining-- > 0) {
+      const Pos * parent = child->known_parent();
+      if (parent == nullptr) return false;
+
+      omega_tb::Probe parent_probe;
+      if (!omega_tb::G_Tablebases.probe(*parent, parent_probe)
+       || parent_probe.material != omega_tb::production_format::Material::KCCK
+       || !parent_probe.has_dtm
+       || !exact_decisive(parent_probe.wdl)
+       || !exact_opposites(parent_probe.wdl, child_probe.wdl)
+       || parent_probe.dtm <= child_probe.dtm) {
+         return false;
+      }
+
+      child = parent;
+      child_probe = parent_probe;
+   }
+
+   return true;
+}
+
+bool exact_probe(const Pos & pos, omega_tb::Probe & probe) {
+   return omega_tb::probe_search_exact(pos, &probe)
+       && exact_history_is_safe(pos, probe);
+}
+
+bool exact_child(const Pos & child,
+                 const omega_tb::Probe & parent_probe,
+                 omega_tb::Probe & child_probe) {
+   return omega_tb::G_Tablebases.probe(child, child_probe)
+       && child_probe.material == omega_tb::production_format::Material::KCCK
+       && child_probe.has_dtm
+       && exact_opposites(parent_probe.wdl, child_probe.wdl)
+       && int(child_probe.dtm) + 1 == int(parent_probe.dtm);
+}
+
+} // namespace
+
+bool omega_dtm_search::root_line(const Pos & pos, Line & pv, Score & sc) {
+   pv.clear();
+   sc = score::None;
+
+   omega_tb::Probe root_probe;
+   if (!exact_probe(pos, root_probe) || root_probe.dtm == 0) return false;
+   if (root_probe.dtm > Ply_Size) return false;
+
+   // A fixed chain keeps every predecessor at a stable address while native
+   // repetition guards and terminal validation inspect the extracted line.
+   std::array<Pos, Ply_Size + 1> position;
+   position[0] = pos;
+   omega_tb::Probe probe = root_probe;
+   Line line;
+
+   for (int ply = 0; probe.dtm != 0; ++ply) {
+      List legal;
+      gen_legals(legal, position[ply]);
+      if (legal.size() == 0) return false;
+
+      Move best = move::None;
+      omega_tb::Probe best_probe;
+      std::string best_name;
+
+      for (int index = 0; index < legal.size(); ++index) {
+         const Move candidate = legal[index];
+         Pos child = position[ply].succ(candidate);
+         omega_tb::Probe candidate_probe;
+         if (!exact_child(child, probe, candidate_probe)) continue;
+
+         const std::string name = move::to_uci(candidate, position[ply]);
+         if (best == move::None || name < best_name) {
+            best = candidate;
+            best_probe = candidate_probe;
+            best_name = name;
+         }
+      }
+
+      if (best == move::None) return false;
+      line.add(best);
+      position[ply + 1] = position[ply].succ(best);
+      probe = best_probe;
+   }
+
+   if (probe.wdl != Wdl::Loss || !is_mate(position[line.size()])) return false;
+
+   pv = line;
+   sc = exact_score(root_probe, Ply_Root);
+   return true;
+}
 
 void search(Search_Output & so, const Pos & pos, const Search_Input & si) {
 
@@ -346,6 +467,19 @@ void search(Search_Output & so, const Pos & pos, const Search_Input & si) {
    List list;
    gen_legals(list, pos);
    assert(list.size() != 0);
+
+   Line exact_pv;
+   Score exact_sc = score::None;
+   if (omega_dtm_search::root_line(pos, exact_pv, exact_sc)) {
+      std::cout << "info string omega KCCK DTM hit distance "
+                << exact_pv.size() << std::endl;
+      so.new_best_move(
+         exact_pv[0], exact_sc, Flag::Exact, Depth(0), exact_pv
+      );
+      so.end();
+      wait_after_search(si.move, si.ponder);
+      return;
+   }
 
    if (si.move && !si.ponder && var::OwnBook && variant_is_omega()) {
       Move book_move = move::None;
@@ -425,9 +559,16 @@ void search(Search_Output & so, const Pos & pos, const Search_Input & si) {
 
    so.end();
 
-   // UCI analysis/ponder buffering
+   wait_after_search(si.move, sg.ponder());
+}
 
-   while (!si.move || sg.ponder()) {
+static void wait_after_search(bool move, bool ponder) {
+
+   // UCI analysis/ponder buffering. Exact tablebase roots use the same
+   // release protocol as an ordinary completed search: analysis waits for
+   // stop, and ponder waits for ponderhit or stop before bestmove is emitted.
+
+   while (!move || ponder) {
 
       std::string line;
       if (!peek_line(line)) { // EOF
@@ -1222,9 +1363,22 @@ Score Search_Local::search(const Pos & pos, Score alpha, Score beta, Depth depth
 
    pv.clear();
 
-   if (score::win(ply + Ply(1)) <= alpha) return leaf(score::win(ply + Ply(1)), ply);
-
    if (pos.is_draw()) return leaf(Score(0), ply);
+
+   // Native draw/repetition and terminal rules have first claim. For a
+   // rule-safe exact record, return the full optimal continuation and encode
+   // mate at its absolute root-search ply so TT conversion remains correct.
+   Score exact_sc = score::None;
+   if (skip_move == move::None
+    && omega_dtm_search::root_line(pos, pv, exact_sc)) {
+      const Ply mate_ply = Ply(int(ply) + score::ply(exact_sc));
+      exact_sc = score::is_win(exact_sc)
+               ? score::win(mate_ply)
+               : score::loss(mate_ply);
+      return leaf(exact_sc, ply);
+   }
+
+   if (score::win(ply + Ply(1)) <= alpha) return leaf(score::win(ply + Ply(1)), ply);
 
    // WDL-only wins and losses are theoretical and may fail Omega's 100-ply
    // conversion rule, so they deliberately fall through to normal search.
@@ -1549,9 +1703,18 @@ Score Search_Local::qs(const Pos & pos, Score alpha, Score beta, Depth depth, Pl
 
    pv.clear();
 
-   if (score::win(ply + Ply(1)) <= alpha) return leaf(score::win(ply + Ply(1)), ply);
-
    if (pos.is_draw()) return leaf(Score(0), ply);
+
+   Score exact_sc = score::None;
+   if (omega_dtm_search::root_line(pos, pv, exact_sc)) {
+      const Ply mate_ply = Ply(int(ply) + score::ply(exact_sc));
+      exact_sc = score::is_win(exact_sc)
+               ? score::win(mate_ply)
+               : score::loss(mate_ply);
+      return leaf(exact_sc, ply);
+   }
+
+   if (score::win(ply + Ply(1)) <= alpha) return leaf(score::win(ply + Ply(1)), ply);
 
    if (omega_tb::probe_search_draw(pos)) return leaf(Score(0), ply);
 

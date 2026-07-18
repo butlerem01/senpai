@@ -92,4 +92,15 @@ if ($LASTEXITCODE -ne 0) {
     throw "UCI opening-book protocol test failed with exit code $LASTEXITCODE"
 }
 
+if ($env:OMEGA_FULL_TABLEBASE_PATH) {
+    & (Join-Path $tests "uci_kcck_dtm.ps1") `
+        -EnginePath $engine `
+        -TablebasePath $env:OMEGA_FULL_TABLEBASE_PATH
+    if ($LASTEXITCODE -ne 0) {
+        throw "UCI KCCK DTM protocol test failed with exit code $LASTEXITCODE"
+    }
+} else {
+    Write-Host "Skipping full KCCK DTM protocol test: OMEGA_FULL_TABLEBASE_PATH is not set"
+}
+
 Write-Host "$passed C++ tests and the UCI protocol tests passed ($Configuration)"

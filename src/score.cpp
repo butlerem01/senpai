@@ -15,12 +15,12 @@ bool is_ok(int sc) {
 }
 
 Score win(Ply ply) {
-   assert(ply >= 0 && ply <= Ply_Max + 1);
+   assert(ply >= 0 && ply <= Mate_Ply_Max);
    return +Inf - Score(ply);
 }
 
 Score loss(Ply ply) {
-   assert(ply >= 0 && ply <= Ply_Max + 2);
+   assert(ply >= 0 && ply <= Mate_Ply_Max);
    return -Inf + Score(ply);
 }
 

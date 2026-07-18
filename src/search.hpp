@@ -115,5 +115,15 @@ void search (Search_Output & so, const Pos & pos, const Search_Input & si);
 Move  quick_move  (const Pos & pos);
 Score quick_score (const Pos & pos);
 
+namespace omega_dtm_search {
+
+// Build a complete, rule-safe exact KCCK line. The attacker chooses a
+// shortest mate, the defender chooses the longest survival, and DTM must
+// decrease by exactly one at every ply. Known reversible pre-root history is
+// accepted only when it is itself a strict exact-distance descent.
+bool root_line(const Pos & pos, Line & pv, Score & score);
+
+}
+
 #endif // !defined SEARCH_HPP
 
