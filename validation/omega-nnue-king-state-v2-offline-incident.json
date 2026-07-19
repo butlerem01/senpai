@@ -1,0 +1,737 @@
+{
+  "schemaVersion": 1,
+  "kind": "omega-nnue-king-state-v2-offline-incident",
+  "incidentId": "king-state-v2-heldout-singleton-phase-incidence",
+  "createdUtc": "2026-07-19T11:53:49.3587812Z",
+  "generationId": "king-state-v1-deep-hce-v2",
+  "protocolGeneration": 2,
+  "status": "retired after consumed one-time heldout access",
+  "informationBoundary": {
+    "analysisStartedAfterAccessClaimExisted": true,
+    "offlineTestInvokedByThisAnalysis": false,
+    "accessClaimReadForIdentityAndPolicyOnly": true,
+    "corpusValuesDecoded": [
+      "groupId",
+      "ofen"
+    ],
+    "phaseFieldDecoded": false,
+    "phaseDerivedFromOfen": true,
+    "split2TargetFieldsDecodedByThisAnalysis": 0,
+    "split2TargetFieldsReadByThisAnalysis": 0,
+    "split2TargetMetricsReadByThisAnalysis": false,
+    "targetFieldsEmittedByThisAnalysis": 0,
+    "secondAccessAllowed": false
+  },
+  "consumedAccess": {
+    "claim": {
+      "path": "build-msvc/king-state-v2/offline-test.json.access.json",
+      "bytes": 1152,
+      "sha256": "ca3bec802224fafc7442d5a60420bc0a32b9f06413e32a7fe064aeb3433e8a89"
+    },
+    "claimCreatedUtc": "2026-07-19T11:44:22.378401Z",
+    "claimSecondAccessAllowed": false,
+    "claimHeldOutLabelsDecodedBeforeClaim": false,
+    "offlineReport": {
+      "path": "build-msvc/king-state-v2/offline-test.json",
+      "absent": true
+    },
+    "offlineSufficientStatistics": {
+      "path": "build-msvc/king-state-v2/offline-test.sufficient.json",
+      "absent": true
+    },
+    "retryForbidden": true
+  },
+  "pinnedExperimentArtifacts": {
+    "trainingPlan": {
+      "path": "build-msvc/king-state-v2/training-plan.json",
+      "bytes": 22768,
+      "sha256": "c2a567082119fbd19705209f812178e782677d5740a559b287157b0066780d46"
+    },
+    "validationSelection": {
+      "path": "build-msvc/king-state-v2/validation-selection.seal.json",
+      "bytes": 15015,
+      "sha256": "44224d2fa3db382d0045615a8aa758b45b654e45c2374dbe9321e042fed1bd3f"
+    },
+    "preselectionReadiness": {
+      "path": "build-king-state-v2/readiness/king-state-v2-match-readiness.seal.json",
+      "bytes": 1515733,
+      "sha256": "b82f3c0f43a15b3f090fb61435005cd3ba43c8a6bcb895a559a2bc5ac2826f50"
+    },
+    "selectedK2": {
+      "network": {
+        "path": "build-msvc/king-state-v2/K2.nnue",
+        "bytes": 12392940,
+        "sha256": "74cfefdad87ce4e620597f1153bf03aa88b301cf66b2c959700b07e85acafe33"
+      },
+      "manifest": {
+        "path": "build-msvc/king-state-v2/K2.manifest.json",
+        "bytes": 116217,
+        "sha256": "48e0666d6a86bc253d435ee0b42908667dfb200d3cfc27bcbef9dbeced677b99"
+      },
+      "deploymentFloat": {
+        "path": "build-msvc/king-state-v2/K2.float",
+        "bytes": 24802112,
+        "sha256": "7562675d366b51454a2faa1661afb3b6e41d0267bb2e84c8bf63b405afb0a4d3"
+      }
+    },
+    "robustnessK2": {
+      "network": {
+        "path": "build-msvc/king-state-v2/K2-robustness.nnue",
+        "bytes": 12392940,
+        "sha256": "ce05bec2b2860678523d9d3bd5fe67d207060b16b8e6de2e27c9b453d082e2e3"
+      },
+      "manifest": {
+        "path": "build-msvc/king-state-v2/K2-robustness.manifest.json",
+        "bytes": 116359,
+        "sha256": "df72f5391473669f0e006590fc83894ce009e2a0c3c8e7f75c0ccded5ace11e9"
+      },
+      "deploymentFloat": {
+        "path": "build-msvc/king-state-v2/K2-robustness.float",
+        "bytes": 24802112,
+        "sha256": "3210315860c699cd02d3986c985e79ab3613256c140d37dded68bb5b2da8c76a"
+      }
+    }
+  },
+  "failure": {
+    "stage": "phase-incidence-stratified paired bootstrap construction",
+    "type": "ValueError",
+    "exactMessage": "every observed bootstrap phase-incidence stratum must contain at least two groupIds",
+    "source": {
+      "path": "tools/omega_nnue/king_state_train_amended.py",
+      "function": "_incidence_strata",
+      "lines": [
+        208,
+        228
+      ]
+    },
+    "accessOrdering": [
+      "one-time claim published",
+      "heldout labeled split decoded by the authorized offline invocation",
+      "group-phase sufficient statistics computed in memory",
+      "bootstrap structural guard discovered the singleton",
+      "offline invocation failed before report or sufficient-statistics publication"
+    ],
+    "rootCause": "The plan preflight checked marginal phase-row and side-to-move balance but never constructed exact per-split global-group phase-incidence strata. The first real corpus call to the singleton guard occurred after the one-time access claim.",
+    "targetsRequiredToDiagnose": false
+  },
+  "targetBlindDiagnosis": {
+    "implementation": {
+      "path": "tools/omega_nnue/phase_incidence_preflight.py",
+      "bytes": 31219,
+      "sha256": "d58f1cb9150c79910c460dea7e95aefd2153e9ce3c8866cd2da3f5a953d591b9"
+    },
+    "corpus": {
+      "path": "build-msvc/data-generation/deep-hce-v3/deep-hce-v2-residual.jsonl",
+      "bytes": 16269695,
+      "sha256": "f62a0b73abd9c696c11c7dfa19a38c017cb7407d2319ea8586c549faaf74e06d"
+    },
+    "corpusManifest": {
+      "path": "build-msvc/data-generation/deep-hce-v3/deep-hce-v2-residual.jsonl.manifest.json",
+      "bytes": 1649,
+      "sha256": "c1887b606fa9af1ca5a1b7f7160862917a849654a3277d1547d193d600c16614"
+    },
+    "scanner": {
+      "decodedValueFields": [
+        "groupId",
+        "ofen"
+      ],
+      "allOtherValuesSkippedLexically": true,
+      "phaseFieldDecoded": false,
+      "phaseDerivedFromOfenPieceCount": true,
+      "targetFieldsDecoded": 0,
+      "targetFieldsEmitted": 0
+    },
+    "globalGroupContract": {
+      "field": "groupId",
+      "requiredForm": "^deep-hce-v[0-9]+-component:[0-9a-f]{64}$",
+      "postComponentGlobalIdRequired": true,
+      "appendPhaseForbidden": true
+    },
+    "phaseDerivation": {
+      "phaseOrder": [
+        "opening",
+        "middlegame",
+        "late",
+        "endgame"
+      ],
+      "pieceCountRanges": {
+        "opening": [
+          37,
+          null
+        ],
+        "middlegame": [
+          25,
+          36
+        ],
+        "late": [
+          13,
+          24
+        ],
+        "endgame": [
+          5,
+          12
+        ]
+      }
+    },
+    "splitRouting": {
+      "algorithm": "SHA-256(UTF-8(decimal seed + NUL + groupId)); first 64 digest bits as an unsigned big-endian fraction of 2^64",
+      "groupField": "groupId",
+      "splitSeed": 4989,
+      "trainPercent": 80.0,
+      "validationPercent": 10.0,
+      "heldoutPercent": 10.0,
+      "routeWholeGlobalGroup": true
+    },
+    "groupListDigestEncoding": "sorted unique UTF-8 groupIds, each followed by one LF",
+    "minimumGroupsPerObservedStratum": 2,
+    "rows": 8192,
+    "groups": 2066,
+    "splits": [
+      {
+        "splitId": 0,
+        "split": "train",
+        "rows": 6550,
+        "groups": 1651,
+        "phaseRows": {
+          "opening": 1638,
+          "middlegame": 1644,
+          "late": 1632,
+          "endgame": 1636
+        },
+        "sideToMoveRows": {
+          "white": 3275,
+          "black": 3275
+        },
+        "phaseGroupCells": {
+          "opening": 819,
+          "middlegame": 822,
+          "late": 808,
+          "endgame": 813
+        },
+        "observedStrata": [
+          {
+            "mask": 1,
+            "phases": [
+              "opening"
+            ],
+            "groupCount": 94,
+            "rowCount": 188,
+            "phaseCellCount": 94,
+            "groupIdsSha256": "d1b4705b60fa69072045ada52597152ef2c7eba9c51f22108f611a2287c7babc"
+          },
+          {
+            "mask": 2,
+            "phases": [
+              "middlegame"
+            ],
+            "groupCount": 88,
+            "rowCount": 176,
+            "phaseCellCount": 88,
+            "groupIdsSha256": "c35f917f61c25be285dcede9773a84af2aa8bd6715341326c777000e47e6b0a8"
+          },
+          {
+            "mask": 3,
+            "phases": [
+              "opening",
+              "middlegame"
+            ],
+            "groupCount": 94,
+            "rowCount": 376,
+            "phaseCellCount": 188,
+            "groupIdsSha256": "99c6118a6552467c87793c00e07c80b465957658875c4a78fac906e37f32956b"
+          },
+          {
+            "mask": 4,
+            "phases": [
+              "late"
+            ],
+            "groupCount": 69,
+            "rowCount": 138,
+            "phaseCellCount": 69,
+            "groupIdsSha256": "13dd6a26269c5f790ca9f1a557b6bbe2245aa518dd89ad69f26e8a3002db8ffd"
+          },
+          {
+            "mask": 5,
+            "phases": [
+              "opening",
+              "late"
+            ],
+            "groupCount": 253,
+            "rowCount": 1012,
+            "phaseCellCount": 506,
+            "groupIdsSha256": "e7562e03e1aaf418242e148052ed02d268485c2fd5e34062c58023fc4544fab1"
+          },
+          {
+            "mask": 6,
+            "phases": [
+              "middlegame",
+              "late"
+            ],
+            "groupCount": 240,
+            "rowCount": 960,
+            "phaseCellCount": 480,
+            "groupIdsSha256": "97ffe1eba4e9fb1a36b5103957427899af357af014f9d8a041434c1379cd7528"
+          },
+          {
+            "mask": 8,
+            "phases": [
+              "endgame"
+            ],
+            "groupCount": 62,
+            "rowCount": 124,
+            "phaseCellCount": 62,
+            "groupIdsSha256": "e3bcba645855b4984e0c0b6a6b8031ff60f72429290f60fd9837517d0e3478ce"
+          },
+          {
+            "mask": 9,
+            "phases": [
+              "opening",
+              "endgame"
+            ],
+            "groupCount": 213,
+            "rowCount": 852,
+            "phaseCellCount": 426,
+            "groupIdsSha256": "a699735c3d6082a3e1d0853ca32b643170d954876af4c381c3e2111773af7bd2"
+          },
+          {
+            "mask": 10,
+            "phases": [
+              "middlegame",
+              "endgame"
+            ],
+            "groupCount": 227,
+            "rowCount": 908,
+            "phaseCellCount": 454,
+            "groupIdsSha256": "44c07b3cf7090054149d2286569beeb2f443fa40a578ae1185e06e35b3a11c32"
+          },
+          {
+            "mask": 11,
+            "phases": [
+              "opening",
+              "middlegame",
+              "endgame"
+            ],
+            "groupCount": 65,
+            "rowCount": 394,
+            "phaseCellCount": 195,
+            "groupIdsSha256": "ba731973d14768b91e9db28185ded4dc09f81bb62e7ce3e1c7e192e1456571d5"
+          },
+          {
+            "mask": 12,
+            "phases": [
+              "late",
+              "endgame"
+            ],
+            "groupCount": 38,
+            "rowCount": 174,
+            "phaseCellCount": 76,
+            "groupIdsSha256": "2d567f7af927891dcdfeb5032aef1fc02f5238832f5d56ab49db0b1fba35a756"
+          },
+          {
+            "mask": 13,
+            "phases": [
+              "opening",
+              "late",
+              "endgame"
+            ],
+            "groupCount": 100,
+            "rowCount": 600,
+            "phaseCellCount": 300,
+            "groupIdsSha256": "6880e83e0a677dd29137215d96feb91d831a080a06c71f6ee27f26cacb78821a"
+          },
+          {
+            "mask": 14,
+            "phases": [
+              "middlegame",
+              "late",
+              "endgame"
+            ],
+            "groupCount": 108,
+            "rowCount": 648,
+            "phaseCellCount": 324,
+            "groupIdsSha256": "74d287bb84f69c48cc2a621a340a4f2bfed9ece1a6ec279392ee20c7a1522c19"
+          }
+        ],
+        "minimumObservedGroupCount": 38,
+        "passed": true
+      },
+      {
+        "splitId": 1,
+        "split": "validation",
+        "rows": 834,
+        "groups": 206,
+        "phaseRows": {
+          "opening": 194,
+          "middlegame": 210,
+          "late": 214,
+          "endgame": 216
+        },
+        "sideToMoveRows": {
+          "white": 417,
+          "black": 417
+        },
+        "phaseGroupCells": {
+          "opening": 97,
+          "middlegame": 105,
+          "late": 104,
+          "endgame": 101
+        },
+        "observedStrata": [
+          {
+            "mask": 1,
+            "phases": [
+              "opening"
+            ],
+            "groupCount": 17,
+            "rowCount": 34,
+            "phaseCellCount": 17,
+            "groupIdsSha256": "4866fdf4746430f7a4f9fbe5d22d3c5e1c011174e120a4f73fa47dbd98c5b018"
+          },
+          {
+            "mask": 2,
+            "phases": [
+              "middlegame"
+            ],
+            "groupCount": 10,
+            "rowCount": 20,
+            "phaseCellCount": 10,
+            "groupIdsSha256": "6c27072c91263cb5b1926042605dda6c4a2265a16252b4744aa609e60a19a110"
+          },
+          {
+            "mask": 3,
+            "phases": [
+              "opening",
+              "middlegame"
+            ],
+            "groupCount": 10,
+            "rowCount": 40,
+            "phaseCellCount": 20,
+            "groupIdsSha256": "60d0ee39ed8d17b23b9f5f411201ac68996ab9309ea44fb4368f0290e2f97685"
+          },
+          {
+            "mask": 4,
+            "phases": [
+              "late"
+            ],
+            "groupCount": 4,
+            "rowCount": 8,
+            "phaseCellCount": 4,
+            "groupIdsSha256": "20e9187fda58f44f4f32baf7d5828776793f47b148f00e6ee8e38b6223655765"
+          },
+          {
+            "mask": 5,
+            "phases": [
+              "opening",
+              "late"
+            ],
+            "groupCount": 29,
+            "rowCount": 116,
+            "phaseCellCount": 58,
+            "groupIdsSha256": "b469ee6fbf9dd18fc50ad27c6ea1cb3505b634c6cdfad9e63a9862fc1141e37b"
+          },
+          {
+            "mask": 6,
+            "phases": [
+              "middlegame",
+              "late"
+            ],
+            "groupCount": 35,
+            "rowCount": 140,
+            "phaseCellCount": 70,
+            "groupIdsSha256": "899003ef53dd3c5fa894687d8a9d67a7cc8d5386c8738d9c74d335cada635ec6"
+          },
+          {
+            "mask": 8,
+            "phases": [
+              "endgame"
+            ],
+            "groupCount": 11,
+            "rowCount": 22,
+            "phaseCellCount": 11,
+            "groupIdsSha256": "c58856e2c1ab0fa60edb934805be12e503a64cfc846cbad090909e78481a613c"
+          },
+          {
+            "mask": 9,
+            "phases": [
+              "opening",
+              "endgame"
+            ],
+            "groupCount": 25,
+            "rowCount": 100,
+            "phaseCellCount": 50,
+            "groupIdsSha256": "a371f011dd62ff6550a70f080ba15e91322c73bb7abcbd74fbcaae01d9e54351"
+          },
+          {
+            "mask": 10,
+            "phases": [
+              "middlegame",
+              "endgame"
+            ],
+            "groupCount": 24,
+            "rowCount": 96,
+            "phaseCellCount": 48,
+            "groupIdsSha256": "0ea1def87a9c44943b59a89e15d2b69b7e488ee783ce57ec608f65764bb83ed0"
+          },
+          {
+            "mask": 11,
+            "phases": [
+              "opening",
+              "middlegame",
+              "endgame"
+            ],
+            "groupCount": 5,
+            "rowCount": 30,
+            "phaseCellCount": 15,
+            "groupIdsSha256": "b72317d5dc22ae052406f8223a61822f86c1385a60de18c11aa175903c1b87ad"
+          },
+          {
+            "mask": 12,
+            "phases": [
+              "late",
+              "endgame"
+            ],
+            "groupCount": 4,
+            "rowCount": 36,
+            "phaseCellCount": 8,
+            "groupIdsSha256": "d8cdec7d00499f7ac0ace4f450f642f072b2c05140a31172c8076746ac60f2a1"
+          },
+          {
+            "mask": 13,
+            "phases": [
+              "opening",
+              "late",
+              "endgame"
+            ],
+            "groupCount": 11,
+            "rowCount": 66,
+            "phaseCellCount": 33,
+            "groupIdsSha256": "b38b7eae01ab36d8ef9ca1738ba7bb57200f5d53088a4a0e4d418e05c669051f"
+          },
+          {
+            "mask": 14,
+            "phases": [
+              "middlegame",
+              "late",
+              "endgame"
+            ],
+            "groupCount": 21,
+            "rowCount": 126,
+            "phaseCellCount": 63,
+            "groupIdsSha256": "c96c7c1ac4242ca795714b4f34f21d00fafc37918aeb774d44a274bf5de94812"
+          }
+        ],
+        "minimumObservedGroupCount": 4,
+        "passed": true
+      },
+      {
+        "splitId": 2,
+        "split": "heldout",
+        "rows": 808,
+        "groups": 209,
+        "phaseRows": {
+          "opening": 216,
+          "middlegame": 194,
+          "late": 202,
+          "endgame": 196
+        },
+        "sideToMoveRows": {
+          "white": 404,
+          "black": 404
+        },
+        "phaseGroupCells": {
+          "opening": 108,
+          "middlegame": 97,
+          "late": 101,
+          "endgame": 98
+        },
+        "observedStrata": [
+          {
+            "mask": 1,
+            "phases": [
+              "opening"
+            ],
+            "groupCount": 14,
+            "rowCount": 28,
+            "phaseCellCount": 14,
+            "groupIdsSha256": "af594106ba8fcc29889d00c359522b4122e41bc0a421bf4ee106d023a65f095c"
+          },
+          {
+            "mask": 2,
+            "phases": [
+              "middlegame"
+            ],
+            "groupCount": 11,
+            "rowCount": 22,
+            "phaseCellCount": 11,
+            "groupIdsSha256": "a336f8f4a210d4cd29ef03dca4b0c0e62a06d1584eeea0578dc4f9826681f413"
+          },
+          {
+            "mask": 3,
+            "phases": [
+              "opening",
+              "middlegame"
+            ],
+            "groupCount": 8,
+            "rowCount": 32,
+            "phaseCellCount": 16,
+            "groupIdsSha256": "338c359f64c4c5b6d1a6048d49952b01efacdf27cd62902d4e4ea01b71c7a9eb"
+          },
+          {
+            "mask": 4,
+            "phases": [
+              "late"
+            ],
+            "groupCount": 12,
+            "rowCount": 24,
+            "phaseCellCount": 12,
+            "groupIdsSha256": "a05c12b3bf0c658c418dc3181067b65cb7c4fb9520afa6aa846170d02cda67a2"
+          },
+          {
+            "mask": 5,
+            "phases": [
+              "opening",
+              "late"
+            ],
+            "groupCount": 34,
+            "rowCount": 136,
+            "phaseCellCount": 68,
+            "groupIdsSha256": "66f13ebfa74a8a9b43273099ebb92965a42e93f26b908588b92c136a5592e5e9"
+          },
+          {
+            "mask": 6,
+            "phases": [
+              "middlegame",
+              "late"
+            ],
+            "groupCount": 32,
+            "rowCount": 128,
+            "phaseCellCount": 64,
+            "groupIdsSha256": "6303e0daf1b3acdd7a50fdfc6b54c92b244c326b601233bc802956a4b1aff042"
+          },
+          {
+            "mask": 8,
+            "phases": [
+              "endgame"
+            ],
+            "groupCount": 11,
+            "rowCount": 22,
+            "phaseCellCount": 11,
+            "groupIdsSha256": "165f0c459467856ffc15c3f36c5b48e126a0d20274e5c41b12b13a7cd39def35"
+          },
+          {
+            "mask": 9,
+            "phases": [
+              "opening",
+              "endgame"
+            ],
+            "groupCount": 30,
+            "rowCount": 120,
+            "phaseCellCount": 60,
+            "groupIdsSha256": "a06f833c72c598e662fee277721149a348cdaef11ebb42029cd7ccbe9c6b8934"
+          },
+          {
+            "mask": 10,
+            "phases": [
+              "middlegame",
+              "endgame"
+            ],
+            "groupCount": 22,
+            "rowCount": 88,
+            "phaseCellCount": 44,
+            "groupIdsSha256": "238426f1e47f63205229ab85fe230d7bb6b8f4b518d1fb53dd2683fcdb7fa2f2"
+          },
+          {
+            "mask": 11,
+            "phases": [
+              "opening",
+              "middlegame",
+              "endgame"
+            ],
+            "groupCount": 12,
+            "rowCount": 72,
+            "phaseCellCount": 36,
+            "groupIdsSha256": "dcdd26c6ba0f8f6b8571b3df4b19d3ab2cad9137fefd3fea21514749eccbfcc3"
+          },
+          {
+            "mask": 12,
+            "phases": [
+              "late",
+              "endgame"
+            ],
+            "groupCount": 1,
+            "rowCount": 4,
+            "phaseCellCount": 2,
+            "groupIdsSha256": "4842094f7f7550d9b8b8664dbe71e9372adb1dfd9f98310eca864758612bdbfe"
+          },
+          {
+            "mask": 13,
+            "phases": [
+              "opening",
+              "late",
+              "endgame"
+            ],
+            "groupCount": 10,
+            "rowCount": 60,
+            "phaseCellCount": 30,
+            "groupIdsSha256": "a1124a5427984d8600f4996fca4fee5f52abf0234e40bbdeb3eaf235b141d126"
+          },
+          {
+            "mask": 14,
+            "phases": [
+              "middlegame",
+              "late",
+              "endgame"
+            ],
+            "groupCount": 12,
+            "rowCount": 72,
+            "phaseCellCount": 36,
+            "groupIdsSha256": "c42fca0848207d4cb614bf9f9ca143665e235c10d7d87873ecc1189fe1b0adb7"
+          }
+        ],
+        "minimumObservedGroupCount": 1,
+        "passed": false
+      }
+    ],
+    "failures": [
+      {
+        "type": "minimum-groups-per-observed-stratum",
+        "splitId": 2,
+        "split": "heldout",
+        "mask": 12,
+        "phases": [
+          "late",
+          "endgame"
+        ],
+        "groupCount": 1,
+        "rowCount": 4,
+        "phaseCellCount": 2,
+        "groupIds": [
+          "deep-hce-v2-component:d4d595dc578c584174cf1c278f23cd1b5e21edb59f3a393b56af2a5c2eec23b1"
+        ]
+      }
+    ],
+    "passed": false
+  },
+  "scientificDisposition": {
+    "generation2Retired": true,
+    "generation2SelectedCandidate": "K2",
+    "generation2OfflinePromotionDecisionAvailable": false,
+    "generation2MatchSuitesMayBeCreated": false,
+    "generation2MatchesMayRun": false,
+    "generation2SecondHeldoutAccessAllowed": false,
+    "singletonMayBeReinterpretedAsRows": false,
+    "singletonMayBeTreatedAsAResampleableStratum": false,
+    "fallback": "generation 3 under its separately preregistered fresh data profile",
+    "generation3ProfileId": "king-state-v3-deep-hce-v4",
+    "generation3PrelabelMinimumGroupsPerObservedPhaseIncidenceStratum": 2,
+    "generation3CanonicalAuditPath": "build-msvc/data-generation/deep-hce-v4/phase-incidence-preflight.seal.json",
+    "generation3RequiredOrdering": [
+      "freeze the target-blind structural rule and failure action",
+      "construct the final post-replacement post-component corpus",
+      "scan only groupId and ofen and publish the exact phase-incidence audit",
+      "abort the whole generation without repair if any observed split stratum has fewer than two groups",
+      "verify the audit before train or validation target decoding",
+      "recompute and verify heldout structure before publishing any one-time access claim"
+    ]
+  }
+}
