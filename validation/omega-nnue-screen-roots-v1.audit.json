@@ -1,0 +1,526 @@
+{
+  "schemaVersion": 1,
+  "kind": "omega-nnue-screen-root-selection",
+  "policy": {
+    "candidateBlind": true,
+    "candidateEvaluationsRead": 0,
+    "rulePreservingSymmetries": [
+      "identity",
+      "horizontal-file-reflection",
+      "rank-reflection-with-colour-swap",
+      "combined-180-degree-with-colour-swap"
+    ],
+    "openingFamily": "Minimum SHA-256 over four consistently transformed sequences of the initial position plus first 8 post-move positions",
+    "inputMembershipAudit": "Canonical legal Omega OFEN placement, side-to-move, and effective castling rights exactly determine frozen-v1 NNUE features. Membership is tested on those three canonical fields under all four rule-preserving symmetries; selected roots also record the independent frozen-v1 feature signature.",
+    "phaseBucketsByPieceCount": {
+      "opening": "37+",
+      "middlegame": "25-36",
+      "late": "13-24",
+      "endgame": "5-12"
+    },
+    "minimumPlyGapWithinSourceGame": 5,
+    "maximumRootsPerSourceGame": 6,
+    "requestedRoots": 16,
+    "minimumSourceFamiliesForPromotion": 12,
+    "seed": 20260718
+  },
+  "inputs": {
+    "selectorFiles": [
+      {
+        "path": "senpai-omega-nnue/tools/omega_nnue/select_screen.py",
+        "bytes": 39442,
+        "sha256": "304172e583b4c963718191017b4f8d2426aea325dd42337c197496ee738677ee"
+      },
+      {
+        "path": "senpai-omega-nnue/tools/omega_nnue/omega_nnue.py",
+        "bytes": 33444,
+        "sha256": "7ea084c00821f3d91a5a674088fb13b636397fc4ca68990732ebe726ca3c9d79"
+      }
+    ],
+    "trainingCorpora": [
+      {
+        "path": "senpai-omega-nnue/build-msvc/experimental-networks/omega-teacher-strict-v1.jsonl",
+        "bytes": 68722290,
+        "sha256": "c3e1cf213bab0b2eb8e7293ccbdbae4af2b33456822a2b1764bbf32a3034b8b6"
+      },
+      {
+        "path": "senpai-omega-nnue/build-msvc/experimental-networks/omega-hce-labels-v1.jsonl",
+        "bytes": 49087074,
+        "sha256": "0fbf3840585555624666903304f7691c29089c9e5b7106c3b566940d7c37064f"
+      }
+    ],
+    "trainingManifests": [
+      {
+        "path": "senpai-omega-nnue/build-msvc/experimental-networks/omega-teacher-strict-v1.manifest.json",
+        "bytes": 26458,
+        "sha256": "cecb7d57413dc330beb7c5e8266d6b71828174d6796576e8a89cd4c6119c2d16"
+      },
+      {
+        "path": "senpai-omega-nnue/build-msvc/experimental-networks/omega-hce-labels-v1.jsonl.manifest.json",
+        "bytes": 2044,
+        "sha256": "a16dbc5518cfd131f7feb0ee12b9abf943f56b5ca1b23caec1b2f62ad8c3b145"
+      }
+    ],
+    "catalogFiles": [
+      {
+        "path": "omega-lab/data/current/games.jsonl",
+        "bytes": 11161473,
+        "sha256": "727cc8525c02d0c806ec36cac669260c770101be454cd62f514b8c5d03351320"
+      },
+      {
+        "path": "omega-lab/data/current/training-positions.jsonl",
+        "bytes": 46990833,
+        "sha256": "8de7e59fb4374003b397a24e1d78c30eef26e245cfa68e39ae833c8ddef675d4"
+      },
+      {
+        "path": "senpai-omega-nnue/build-msvc/screening-catalog-v1/games.jsonl",
+        "bytes": 95276,
+        "sha256": "273fdb5bec2a80fe7251119d6e6832bf6288139f9e9f82fe80294646e3dc89d8"
+      },
+      {
+        "path": "senpai-omega-nnue/build-msvc/screening-catalog-v1/training-positions.jsonl",
+        "bytes": 398640,
+        "sha256": "00128163f3582383e0e0e21d6bc79305d9fa830e7eed55865923e9a2501f9760"
+      }
+    ],
+    "regressionFiles": [
+      {
+        "path": "omega-lab/regressions/champion-activation-natural-v1.json",
+        "bytes": 29741,
+        "sha256": "7f8631982bab172e2923dc41a982c7c03edaecc1de22a443b69a49566e84db13"
+      },
+      {
+        "path": "omega-lab/regressions/champion-attack-v1.json",
+        "bytes": 22870,
+        "sha256": "ef32014a221a515213000aae2dd05af061db2980cc97353929fe51aaa5cfbf5b"
+      },
+      {
+        "path": "omega-lab/regressions/champion-attack-v1.sources.json",
+        "bytes": 4927,
+        "sha256": "4be10b9bd30fa29cf58a319ab42bdd92cb526eff856c6f843ee35ae37c418ac1"
+      },
+      {
+        "path": "omega-lab/regressions/champion-eg415-isolation-v1.json",
+        "bytes": 9319,
+        "sha256": "7644e013e5613ea63d2c7576cd0dce00953cac13f90d35e61edfb6d5c9739035"
+      },
+      {
+        "path": "omega-lab/regressions/champion-egmob6-isolation-v1.json",
+        "bytes": 6680,
+        "sha256": "215c20bd0ce2eed3aeb4e8ac357e778ec9422da69dbfe874adc34d8ea393bace"
+      },
+      {
+        "path": "omega-lab/regressions/champion-landing-quality-natural-v1.json",
+        "bytes": 30188,
+        "sha256": "34502b3b9f1413fc35b26d466d4819b41f21d87bc16e873b262a368e2ddbf66b"
+      },
+      {
+        "path": "omega-lab/regressions/e9-bishop-raid-v1.json",
+        "bytes": 14065,
+        "sha256": "53b7b79b4fc27fb412ad8bd419f899129e01b0adcb84c78301e6a55307b1765f"
+      },
+      {
+        "path": "omega-lab/regressions/leaper-capture-choice-natural-v1.json",
+        "bytes": 30863,
+        "sha256": "f3c929dbd4aeb539631a6c51e625a651bb51896f239bcaa7e34e22c054d50507"
+      },
+      {
+        "path": "omega-lab/regressions/leaper-forced-exchanges-v2.json",
+        "bytes": 10821,
+        "sha256": "57fc6cbf244d0c2d5fca97366b290eaba1ad3e67081f1dcdf29a06f4bf9e6db7"
+      },
+      {
+        "path": "omega-lab/regressions/leaper-forced-exchanges-v2.sources.json",
+        "bytes": 3367,
+        "sha256": "2331a78dae153dbd791cf459569282dc2bfc3faf1d2efb1097f353575c195066"
+      },
+      {
+        "path": "omega-lab/regressions/leaper-landing-quality-v1.json",
+        "bytes": 9603,
+        "sha256": "64f05a8283649c3548df1c289bd50c5ba66499e36dcf377c4eb7ce89561720cd"
+      },
+      {
+        "path": "omega-lab/regressions/leaper-phase-exchanges-v1.json",
+        "bytes": 17710,
+        "sha256": "b0814a4231ca25f223f9c1e57022e020bd94c2f78d5445eaae65e9d0bba4af1e"
+      },
+      {
+        "path": "omega-lab/regressions/leaper-phase-exchanges-v1.sources.json",
+        "bytes": 3609,
+        "sha256": "4631eb0d6d56dbba89c0a26b0237eb1c8adf00a775ce1ff7189bd82fcceeb744"
+      },
+      {
+        "path": "omega-lab/regressions/leaper-quiet-endpoints-v3.json",
+        "bytes": 51554,
+        "sha256": "59ceb0562d2c87c33d0f2f884d4997a2ff971f69afd062a3e0e81e9b3e287e0d"
+      },
+      {
+        "path": "omega-lab/regressions/leaper-quiet-endpoints-v3.sources.json",
+        "bytes": 4953,
+        "sha256": "3718fc5d98a589ec228f011ba9946670cae4f44a0fd10243ef439db1521e1d0e"
+      },
+      {
+        "path": "omega-lab/regressions/wizard-activation-natural-v1.json",
+        "bytes": 25773,
+        "sha256": "0e8e2fd40a05ba04ed623e1c5efcd0c4e55fb27c3ce3eeab6aa4c0255d43bbc0"
+      },
+      {
+        "path": "omega-lab/regressions/wizard-color-fit-v1.json",
+        "bytes": 9916,
+        "sha256": "49f0e930fd05f9f186e200cdf01f8c38c51736cfa2511e28dd6470b1e1c4c8bc"
+      },
+      {
+        "path": "omega-lab/regressions/wizard-color-fit-v1.sources.json",
+        "bytes": 2789,
+        "sha256": "f6a3577aa91914f2f068a6946358c0cbdeca16f937bd42a70c97bdaefda50587"
+      },
+      {
+        "path": "omega-lab/regressions/wizard-tactics-v1.json",
+        "bytes": 4899,
+        "sha256": "ce552c39c3cbd2cebc11c0b328776bf727d9662fa4fc645bdc6bfe1dd5ed3032"
+      },
+      {
+        "path": "omega-lab/regressions/wizard-tactics-v1.sources.json",
+        "bytes": 1731,
+        "sha256": "dcf66bd705ec0cf083ec8cda0261fa33fdbb411b5da99579bb3d8c160a47f004"
+      }
+    ],
+    "activeEventSnapshots": [
+      {
+        "path": "match-runs/output/confirm-omega-integrated-pair-v1-96-20260718/events.jsonl",
+        "snapshotBytes": 103861759,
+        "snapshotSha256": "d4e623f308aa88305120b08801cade6211fd2f9f8b36c27d544b4a7ad5b215f0"
+      }
+    ],
+    "selectedSourceFiles": [
+      {
+        "path": "%USERPROFILE%/Downloads/great game.ccsf",
+        "bytes": 179633,
+        "sha256": "b93b12d2eb4b8b161a09b2487d0777b989f8554b68a61c2691a7fb494772e798"
+      },
+      {
+        "path": "%USERPROFILE%/Downloads/hmm.ccsf",
+        "bytes": 29404,
+        "sha256": "4585880b58175dc1fdda0eb7a8341ac5250f98268d8e94c7913ebf5af1fdf180"
+      },
+      {
+        "path": "%USERPROFILE%/Downloads/shit.ccsf",
+        "bytes": 6895,
+        "sha256": "6735c4c02f9f6aa32e9d6f2d08d9a08de23df57db9a9bb55b31516115522e961"
+      }
+    ]
+  },
+  "audit": {
+    "trainingRecordsRead": 170771,
+    "trainingExactInputs": 117992,
+    "trainingObservableInputs": 117992,
+    "trainingSourceGameIds": 2273,
+    "trainingOpeningFamilies": 797,
+    "frozenRegressionPositionsRead": 226,
+    "frozenRegressionSymmetryOrbits": 141,
+    "activeRecordsRead": 11587,
+    "activeObservableInputs": 11327,
+    "candidateRowsConsidered": 122009,
+    "candidateRowsEligible": 361,
+    "exclusionsByReasonNonExclusive": {
+      "active-match-position": 3,
+      "active-source-name": 12110,
+      "frozen-regression": 12,
+      "training-exact-input": 12,
+      "training-opening-family": 121622,
+      "training-source-game": 121622,
+      "training-source-name": 96834,
+      "training-source-run": 120460,
+      "training-symmetry-orbit": 14
+    }
+  },
+  "selection": {
+    "suite": {
+      "path": "senpai-omega-nnue/validation/omega-nnue-screen-roots-v1.json",
+      "bytes": 7503,
+      "sha256": "51e8577100fd222c53ea8084647509d8e69aaaa83d8597dbc937477c11004c49"
+    },
+    "roots": 16,
+    "phaseCounts": {
+      "opening": 4,
+      "middlegame": 4,
+      "late": 4,
+      "endgame": 4
+    },
+    "sourceFamilyCounts": {
+      "great game": 6,
+      "hmm": 5,
+      "shit": 5
+    },
+    "sourceGameCounts": {
+      "12d53d91d785bc4c960ea2d6e6d1db1e43039512c9497ffd8323092ca9d627e7": 5,
+      "38e2260c9c05c3d239db5ffe980760d2ae4e3b71c69ba19f2c550dd353f817d0": 6,
+      "e11fc1a330e2e6bb029ac483e0ef3394b6199989080c1846461865115d73ae42": 5
+    },
+    "uniqueSourceFamilies": 3,
+    "promotionEligible": false,
+    "minimumSourceFamiliesForPromotion": 12,
+    "rootsDetail": [
+      {
+        "id": "nnue-screen-v1-opening-shit-p008-01fcfd21",
+        "gameId": "12d53d91d785bc4c960ea2d6e6d1db1e43039512c9497ffd8323092ca9d627e7",
+        "sourceFamily": "shit",
+        "sourcePath": "%USERPROFILE%/Downloads/shit.ccsf",
+        "sourceSha256": "6735c4c02f9f6aa32e9d6f2d08d9a08de23df57db9a9bb55b31516115522e961",
+        "catalog": "senpai-omega-nnue/build-msvc/screening-catalog-v1",
+        "ply": 8,
+        "phase": "opening",
+        "pieceCount": 44,
+        "pawnCount": 20,
+        "nnueInputSignature": "c0234979d4b39ce2ea403919bf00ae1fb319038f7eb5870be927066a4bdc96fc",
+        "symmetryOrbitKey": "01fcfd2162fdafedb43be8ccbdb3e880e40899964c27e08e259c0e693beb3365",
+        "deterministicRank": "33ab60f894a5f653c3e73458c8e09896f25b701041ff5290cd3fb18867e6513d"
+      },
+      {
+        "id": "nnue-screen-v1-opening-shit-p013-1a261b31",
+        "gameId": "12d53d91d785bc4c960ea2d6e6d1db1e43039512c9497ffd8323092ca9d627e7",
+        "sourceFamily": "shit",
+        "sourcePath": "%USERPROFILE%/Downloads/shit.ccsf",
+        "sourceSha256": "6735c4c02f9f6aa32e9d6f2d08d9a08de23df57db9a9bb55b31516115522e961",
+        "catalog": "senpai-omega-nnue/build-msvc/screening-catalog-v1",
+        "ply": 13,
+        "phase": "opening",
+        "pieceCount": 44,
+        "pawnCount": 20,
+        "nnueInputSignature": "1a261b31f34daf46d3462b83eb1a3f55960ba53e7bb4cdac3729fa4a9f298df0",
+        "symmetryOrbitKey": "1a261b31f34daf46d3462b83eb1a3f55960ba53e7bb4cdac3729fa4a9f298df0",
+        "deterministicRank": "3e6ded72d244e647de3f87d4d80a1989bfb1ab556622ba998107590c8aba3453"
+      },
+      {
+        "id": "nnue-screen-v1-opening-shit-p021-11e464c2",
+        "gameId": "12d53d91d785bc4c960ea2d6e6d1db1e43039512c9497ffd8323092ca9d627e7",
+        "sourceFamily": "shit",
+        "sourcePath": "%USERPROFILE%/Downloads/shit.ccsf",
+        "sourceSha256": "6735c4c02f9f6aa32e9d6f2d08d9a08de23df57db9a9bb55b31516115522e961",
+        "catalog": "senpai-omega-nnue/build-msvc/screening-catalog-v1",
+        "ply": 21,
+        "phase": "opening",
+        "pieceCount": 44,
+        "pawnCount": 20,
+        "nnueInputSignature": "11e464c2245b835ac337b3ea8515d1e6e7be7447d16b40d315ae2a984a61038b",
+        "symmetryOrbitKey": "11e464c2245b835ac337b3ea8515d1e6e7be7447d16b40d315ae2a984a61038b",
+        "deterministicRank": "2aee297b4dea09dceeacefc52f5abbe7da3cd97a2eeddd3f24d488d717c7d188"
+      },
+      {
+        "id": "nnue-screen-v1-opening-shit-p026-048f01b1",
+        "gameId": "12d53d91d785bc4c960ea2d6e6d1db1e43039512c9497ffd8323092ca9d627e7",
+        "sourceFamily": "shit",
+        "sourcePath": "%USERPROFILE%/Downloads/shit.ccsf",
+        "sourceSha256": "6735c4c02f9f6aa32e9d6f2d08d9a08de23df57db9a9bb55b31516115522e961",
+        "catalog": "senpai-omega-nnue/build-msvc/screening-catalog-v1",
+        "ply": 26,
+        "phase": "opening",
+        "pieceCount": 42,
+        "pawnCount": 20,
+        "nnueInputSignature": "048f01b18821208fe2a94196d1431facb1694cabcc5be559807d43f8429c1a5d",
+        "symmetryOrbitKey": "048f01b18821208fe2a94196d1431facb1694cabcc5be559807d43f8429c1a5d",
+        "deterministicRank": "0a3ebad95ae84d898cdfaedccfb7dc1b33b40760544643711ab90fa496bca50d"
+      },
+      {
+        "id": "nnue-screen-v1-middlegame-great-game-p047-199be247",
+        "gameId": "38e2260c9c05c3d239db5ffe980760d2ae4e3b71c69ba19f2c550dd353f817d0",
+        "sourceFamily": "great game",
+        "sourcePath": "%USERPROFILE%/Downloads/great game.ccsf",
+        "sourceSha256": "b93b12d2eb4b8b161a09b2487d0777b989f8554b68a61c2691a7fb494772e798",
+        "catalog": "senpai-omega-nnue/build-msvc/screening-catalog-v1",
+        "ply": 47,
+        "phase": "middlegame",
+        "pieceCount": 35,
+        "pawnCount": 17,
+        "nnueInputSignature": "3aa8b2cdb6a6478d9ef6fda290b012f073fb5271706a1a7c8faf55e1b3c331ac",
+        "symmetryOrbitKey": "199be2470b907fb5f2e80a2bc7ce120be0ad360b67798419dd71d5627f88bc5b",
+        "deterministicRank": "06a997ba7d688eb21d71c8504628cb8e057ce66ceaa8354462e9e2f26828759b"
+      },
+      {
+        "id": "nnue-screen-v1-middlegame-hmm-p077-84a022ab",
+        "gameId": "e11fc1a330e2e6bb029ac483e0ef3394b6199989080c1846461865115d73ae42",
+        "sourceFamily": "hmm",
+        "sourcePath": "%USERPROFILE%/Downloads/hmm.ccsf",
+        "sourceSha256": "4585880b58175dc1fdda0eb7a8341ac5250f98268d8e94c7913ebf5af1fdf180",
+        "catalog": "senpai-omega-nnue/build-msvc/screening-catalog-v1",
+        "ply": 77,
+        "phase": "middlegame",
+        "pieceCount": 30,
+        "pawnCount": 16,
+        "nnueInputSignature": "fbbe3cf7b1317cf5c2566d79298b797169e05e736f2c00324cc93b561ad33803",
+        "symmetryOrbitKey": "84a022ab40a0a4c4697b38f9d16068dbe82b508daeda46fdde12fcd1d883442f",
+        "deterministicRank": "03339891b3be5864e14dd822d2589b2bfb00085366408fb4d49086792e8aa0e0"
+      },
+      {
+        "id": "nnue-screen-v1-middlegame-hmm-p085-44f575d2",
+        "gameId": "e11fc1a330e2e6bb029ac483e0ef3394b6199989080c1846461865115d73ae42",
+        "sourceFamily": "hmm",
+        "sourcePath": "%USERPROFILE%/Downloads/hmm.ccsf",
+        "sourceSha256": "4585880b58175dc1fdda0eb7a8341ac5250f98268d8e94c7913ebf5af1fdf180",
+        "catalog": "senpai-omega-nnue/build-msvc/screening-catalog-v1",
+        "ply": 85,
+        "phase": "middlegame",
+        "pieceCount": 27,
+        "pawnCount": 15,
+        "nnueInputSignature": "a0dfdd33f4a399a2ac990dcff23e5150d81438e5c9d4958ae4f6c2eac41b3fb4",
+        "symmetryOrbitKey": "44f575d23f953cdb512c3162f67326335027d4a5b0415fb6c8a6e4f1e26be6a1",
+        "deterministicRank": "0086967f0b994091c8821e830e144bfef78f1e7781a5f684378d7eb3d85c98f9"
+      },
+      {
+        "id": "nnue-screen-v1-middlegame-shit-p041-9714cb25",
+        "gameId": "12d53d91d785bc4c960ea2d6e6d1db1e43039512c9497ffd8323092ca9d627e7",
+        "sourceFamily": "shit",
+        "sourcePath": "%USERPROFILE%/Downloads/shit.ccsf",
+        "sourceSha256": "6735c4c02f9f6aa32e9d6f2d08d9a08de23df57db9a9bb55b31516115522e961",
+        "catalog": "senpai-omega-nnue/build-msvc/screening-catalog-v1",
+        "ply": 41,
+        "phase": "middlegame",
+        "pieceCount": 36,
+        "pawnCount": 16,
+        "nnueInputSignature": "9714cb2528ee3d0198f267fb4a8d9c48b15fa012046d7410bcafff08f14f82d7",
+        "symmetryOrbitKey": "9714cb2528ee3d0198f267fb4a8d9c48b15fa012046d7410bcafff08f14f82d7",
+        "deterministicRank": "b0656d43ab844627f2ae997204c10ea4e3a033b3d8ff6940249a98d4c8f70b8c"
+      },
+      {
+        "id": "nnue-screen-v1-late-great-game-p146-4732f639",
+        "gameId": "38e2260c9c05c3d239db5ffe980760d2ae4e3b71c69ba19f2c550dd353f817d0",
+        "sourceFamily": "great game",
+        "sourcePath": "%USERPROFILE%/Downloads/great game.ccsf",
+        "sourceSha256": "b93b12d2eb4b8b161a09b2487d0777b989f8554b68a61c2691a7fb494772e798",
+        "catalog": "senpai-omega-nnue/build-msvc/screening-catalog-v1",
+        "ply": 146,
+        "phase": "late",
+        "pieceCount": 16,
+        "pawnCount": 11,
+        "nnueInputSignature": "4732f639ffb9d89517016460898c72247158c4ee888178ff708372c1b66fadfd",
+        "symmetryOrbitKey": "4732f639ffb9d89517016460898c72247158c4ee888178ff708372c1b66fadfd",
+        "deterministicRank": "0326b35167d1605fcb32e22a64c49f4a785ecc86628076a379b9271f656fa67d"
+      },
+      {
+        "id": "nnue-screen-v1-late-hmm-p103-51fd8b8f",
+        "gameId": "e11fc1a330e2e6bb029ac483e0ef3394b6199989080c1846461865115d73ae42",
+        "sourceFamily": "hmm",
+        "sourcePath": "%USERPROFILE%/Downloads/hmm.ccsf",
+        "sourceSha256": "4585880b58175dc1fdda0eb7a8341ac5250f98268d8e94c7913ebf5af1fdf180",
+        "catalog": "senpai-omega-nnue/build-msvc/screening-catalog-v1",
+        "ply": 103,
+        "phase": "late",
+        "pieceCount": 24,
+        "pawnCount": 15,
+        "nnueInputSignature": "6d744056d09f226b42327c5eea3b70e60802e1e87cc70a348359dc57f5f9aabb",
+        "symmetryOrbitKey": "51fd8b8ff48db0b7837172d79b45a7ad9ce723d4d4989b623f35b9baae4c8ba1",
+        "deterministicRank": "240163b281e6ff9994943f8a058a0924bf2387fe8b133bee96ead4afb235e88b"
+      },
+      {
+        "id": "nnue-screen-v1-late-hmm-p110-64c05b20",
+        "gameId": "e11fc1a330e2e6bb029ac483e0ef3394b6199989080c1846461865115d73ae42",
+        "sourceFamily": "hmm",
+        "sourcePath": "%USERPROFILE%/Downloads/hmm.ccsf",
+        "sourceSha256": "4585880b58175dc1fdda0eb7a8341ac5250f98268d8e94c7913ebf5af1fdf180",
+        "catalog": "senpai-omega-nnue/build-msvc/screening-catalog-v1",
+        "ply": 110,
+        "phase": "late",
+        "pieceCount": 24,
+        "pawnCount": 15,
+        "nnueInputSignature": "7db5c5ac60e1b59ba764a0d51edb2133ccbd6ec61c1e22643f1ce08cb24306e0",
+        "symmetryOrbitKey": "64c05b202dea090cc1bb70809342a5485343a49e48bf3b387e90a4f394c19c02",
+        "deterministicRank": "34a9e1a141a229151774b5c5ab943504633281902ed513667f2f3e9e858e0cd3"
+      },
+      {
+        "id": "nnue-screen-v1-late-hmm-p115-03b20d0b",
+        "gameId": "e11fc1a330e2e6bb029ac483e0ef3394b6199989080c1846461865115d73ae42",
+        "sourceFamily": "hmm",
+        "sourcePath": "%USERPROFILE%/Downloads/hmm.ccsf",
+        "sourceSha256": "4585880b58175dc1fdda0eb7a8341ac5250f98268d8e94c7913ebf5af1fdf180",
+        "catalog": "senpai-omega-nnue/build-msvc/screening-catalog-v1",
+        "ply": 115,
+        "phase": "late",
+        "pieceCount": 24,
+        "pawnCount": 15,
+        "nnueInputSignature": "8552c1e5f8e29ffccb426730ad688097d7271fd1042c07b726daec356e7ca172",
+        "symmetryOrbitKey": "03b20d0b3c7bb33d341f3efe50c0f190e36b6de381f74c15a49b9d092645f3d5",
+        "deterministicRank": "025f2be3dad68625d97ce962f5aacf618115e94d3e8e3a1ac7eff1b40d3ac1d2"
+      },
+      {
+        "id": "nnue-screen-v1-endgame-great-game-p165-844e9b00",
+        "gameId": "38e2260c9c05c3d239db5ffe980760d2ae4e3b71c69ba19f2c550dd353f817d0",
+        "sourceFamily": "great game",
+        "sourcePath": "%USERPROFILE%/Downloads/great game.ccsf",
+        "sourceSha256": "b93b12d2eb4b8b161a09b2487d0777b989f8554b68a61c2691a7fb494772e798",
+        "catalog": "senpai-omega-nnue/build-msvc/screening-catalog-v1",
+        "ply": 165,
+        "phase": "endgame",
+        "pieceCount": 10,
+        "pawnCount": 5,
+        "nnueInputSignature": "844e9b009e60e074ba0d4f11d47a4195dc4f15e45bba769acc022e72f7a8fa53",
+        "symmetryOrbitKey": "844e9b009e60e074ba0d4f11d47a4195dc4f15e45bba769acc022e72f7a8fa53",
+        "deterministicRank": "072bf77f240f034a49ba660f535b89d80080c5908a407ff5ecdbe8fb4dacccd8"
+      },
+      {
+        "id": "nnue-screen-v1-endgame-great-game-p174-7af949b7",
+        "gameId": "38e2260c9c05c3d239db5ffe980760d2ae4e3b71c69ba19f2c550dd353f817d0",
+        "sourceFamily": "great game",
+        "sourcePath": "%USERPROFILE%/Downloads/great game.ccsf",
+        "sourceSha256": "b93b12d2eb4b8b161a09b2487d0777b989f8554b68a61c2691a7fb494772e798",
+        "catalog": "senpai-omega-nnue/build-msvc/screening-catalog-v1",
+        "ply": 174,
+        "phase": "endgame",
+        "pieceCount": 9,
+        "pawnCount": 4,
+        "nnueInputSignature": "ed20b2543644824504a70687800786f7d7fe671af8fb1bf039b4a0c486885e6a",
+        "symmetryOrbitKey": "7af949b70b79a4087b76d5903105342210998316d49b98e04bcc26dbe463facf",
+        "deterministicRank": "046c7eaf0a60d678327dab31301075f7ae0eea65e5e09af44ef2b3cac7b0d523"
+      },
+      {
+        "id": "nnue-screen-v1-endgame-great-game-p183-ec025731",
+        "gameId": "38e2260c9c05c3d239db5ffe980760d2ae4e3b71c69ba19f2c550dd353f817d0",
+        "sourceFamily": "great game",
+        "sourcePath": "%USERPROFILE%/Downloads/great game.ccsf",
+        "sourceSha256": "b93b12d2eb4b8b161a09b2487d0777b989f8554b68a61c2691a7fb494772e798",
+        "catalog": "senpai-omega-nnue/build-msvc/screening-catalog-v1",
+        "ply": 183,
+        "phase": "endgame",
+        "pieceCount": 8,
+        "pawnCount": 3,
+        "nnueInputSignature": "ec0257314b113cb7f699ad3c6a6a9a6b97cda83beaaf356280c8aa08f964beb0",
+        "symmetryOrbitKey": "ec0257314b113cb7f699ad3c6a6a9a6b97cda83beaaf356280c8aa08f964beb0",
+        "deterministicRank": "0279f8c5d65afb558256ed1ab1a2f9903c60961a75a6c646560bcbb6bbc10d87"
+      },
+      {
+        "id": "nnue-screen-v1-endgame-great-game-p199-0ea07a78",
+        "gameId": "38e2260c9c05c3d239db5ffe980760d2ae4e3b71c69ba19f2c550dd353f817d0",
+        "sourceFamily": "great game",
+        "sourcePath": "%USERPROFILE%/Downloads/great game.ccsf",
+        "sourceSha256": "b93b12d2eb4b8b161a09b2487d0777b989f8554b68a61c2691a7fb494772e798",
+        "catalog": "senpai-omega-nnue/build-msvc/screening-catalog-v1",
+        "ply": 199,
+        "phase": "endgame",
+        "pieceCount": 8,
+        "pawnCount": 3,
+        "nnueInputSignature": "0ea07a78fc7ef583629cc5a48dbf112c664dc93fcc1b17d48271968337c9800e",
+        "symmetryOrbitKey": "0ea07a78fc7ef583629cc5a48dbf112c664dc93fcc1b17d48271968337c9800e",
+        "deterministicRank": "01f383f8e60d7f7e6326b702781487b7217c8a69ea880d6f001dd059f2217f33"
+      }
+    ]
+  },
+  "limitations": [
+    "SCREEN-ONLY: multiple roots come from each held-out game, so paired outcomes are clustered and the arena's pair bootstrap would overstate independent evidence.",
+    "Only 3 source-game families survived all training, symmetry, regression, and active-match exclusions.",
+    "The active events file was audited as a byte-pinned partial snapshot; positions produced after that byte boundary were not available to the selector.",
+    "OmegaMatch validate must still reject any root that is illegal or already terminal before a screening run starts."
+  ],
+  "confirmationRemedy": {
+    "sequence": [
+      "Freeze and hash the candidate network before generating confirmation data.",
+      "Generate a new candidate-blind source corpus using only the unchanged HCE control, book off, fixed shallow node budget, and independent source games.",
+      "Before any candidate evaluation, sample at most one phase-stratified root from each source game.",
+      "Freeze source logs, root suite, executable, and selector hashes; then run paired AB/BA confirmation."
+    ],
+    "candidateMayNotInfluence": [
+      "source-game generation",
+      "root selection",
+      "phase assignment",
+      "exclusion decisions"
+    ]
+  }
+}

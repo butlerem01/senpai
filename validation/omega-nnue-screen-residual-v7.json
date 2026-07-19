@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "runId": "screen-omega-nnue-residual-v7-16",
+  "outputDirectory": "../../match-runs/output/screen-omega-nnue-residual-v7-16",
+  "seed": 20260718,
+  "engines": [
+    {
+      "id": "nnue-candidate",
+      "executable": "../build-msvc/senpai-omega-nnue.exe",
+      "expectedSha256": "24e30df0abc8e15d054193762a3e47aa415bddf585d0db929908f7934d4407d5",
+      "expectedAssetSha256": {
+        "OmegaNNUEFile": "c796dc42663b95d1044d635b71488e46a65763153d73e08c68e07bf2b4841bd3"
+      },
+      "options": {
+        "Threads": "1",
+        "Hash": "128",
+        "Ponder": "false",
+        "OwnBook": "false",
+        "UCI_Chess960": "false",
+        "UCI_Variant": "omega",
+        "OmegaNNUEFile": "../build-msvc/experimental-networks/omega-nnue-residual-v7-outcome-alltrain.nnue",
+        "UseOmegaNNUE": "true"
+      }
+    },
+    {
+      "id": "hce-control",
+      "executable": "../build-msvc/senpai-omega-nnue.exe",
+      "expectedSha256": "24e30df0abc8e15d054193762a3e47aa415bddf585d0db929908f7934d4407d5",
+      "options": {
+        "Threads": "1",
+        "Hash": "128",
+        "Ponder": "false",
+        "OwnBook": "false",
+        "UCI_Chess960": "false",
+        "UCI_Variant": "omega",
+        "UseOmegaNNUE": "false"
+      }
+    }
+  ],
+  "match": {
+    "engineA": "nnue-candidate",
+    "engineB": "hce-control",
+    "openingsFile": "omega-nnue-screen-roots-v1.json",
+    "repeats": 1,
+    "maxPlies": 300,
+    "absoluteMaxPlies": 400,
+    "mode": "nodes",
+    "nodes": 20000,
+    "searchTimeoutMs": 60000,
+    "stopGraceMs": 2000,
+    "bootstrapIterations": 10000,
+    "freshProcessPerGame": true
+  }
+}

@@ -1,0 +1,167 @@
+{
+  "schemaVersion": 1,
+  "name": "Omega NNUE leakage-audited screen v1 (16 roots; screen-only)",
+  "screenOnly": true,
+  "openings": [
+    {
+      "id": "nnue-screen-v1-opening-shit-p008-01fcfd21",
+      "source": "Held-out CoreChess save shit.ccsf (sha256 6735c4c02f9f6aa3...), position before source ply 9; selected without candidate evaluation.",
+      "initialOfen": "1rnbqkbnrc/ppppp1pppp/2c2p4/6w3/10/10/10/W1C4C1W/PPPPPPPPPP/1RNBQKBNR1[-/-/-/w] w KQkq - 6 9",
+      "moves": [],
+      "phaseBucket": "opening",
+      "pieceCount": 44,
+      "pawnCount": 20,
+      "sourceFamily": "shit"
+    },
+    {
+      "id": "nnue-screen-v1-opening-shit-p013-1a261b31",
+      "source": "Held-out CoreChess save shit.ccsf (sha256 6735c4c02f9f6aa3...), position before source ply 14; selected without candidate evaluation.",
+      "initialOfen": "1rnbqkbnrc/ppppp1pppp/2c2p4/6w3/10/1w8/10/W1CN2NC1W/PPPPPPPPPP/R2BQKB1R1[-/-/-/-] b Kkq - 11 14",
+      "moves": [],
+      "phaseBucket": "opening",
+      "pieceCount": 44,
+      "pawnCount": 20,
+      "sourceFamily": "shit"
+    },
+    {
+      "id": "nnue-screen-v1-opening-shit-p021-11e464c2",
+      "source": "Held-out CoreChess save shit.ccsf (sha256 6735c4c02f9f6aa3...), position before source ply 22; selected without candidate evaluation.",
+      "initialOfen": "1rnb1k1nrc/pppp2pppp/2c2pq3/3bp5/5w4/1w3P4/3B6/WPCN2NC1W/P1PPP1PPPP/R2BQ1RK2[-/-/-/-] b kq - 1 22",
+      "moves": [],
+      "phaseBucket": "opening",
+      "pieceCount": 44,
+      "pawnCount": 20,
+      "sourceFamily": "shit"
+    },
+    {
+      "id": "nnue-screen-v1-opening-shit-p026-048f01b1",
+      "source": "Held-out CoreChess save shit.ccsf (sha256 6735c4c02f9f6aa3...), position before source ply 27; selected without candidate evaluation.",
+      "initialOfen": "1rnb1k1nr1/pppp1bpppp/2c2pq2c/10/5p4/1w2PP4/10/WPCN2NC1W/P1PP2PPPP/R2BQ1RK2[-/-/-/-] w kq - 1 27",
+      "moves": [],
+      "phaseBucket": "opening",
+      "pieceCount": 42,
+      "pawnCount": 20,
+      "sourceFamily": "shit"
+    },
+    {
+      "id": "nnue-screen-v1-middlegame-great-game-p047-199be247",
+      "source": "Held-out CoreChess save great game.ccsf (sha256 b93b12d2eb4b8b16...), position before source ply 48; selected without candidate evaluation.",
+      "initialOfen": "r3q1k2r/ppp1n1p1pp/2cp3pn1/6w3/4W5/4P1P3/3Q6/2C2P1C2/PPPP4PP/1RNB1K2R1[-/-/-/w] b KQ - 0 48",
+      "moves": [],
+      "phaseBucket": "middlegame",
+      "pieceCount": 35,
+      "pawnCount": 17,
+      "sourceFamily": "great game"
+    },
+    {
+      "id": "nnue-screen-v1-middlegame-hmm-p077-84a022ab",
+      "source": "Held-out CoreChess save hmm.ccsf (sha256 4585880b58175dc1...), position before source ply 78; selected without candidate evaluation.",
+      "initialOfen": "1r1b2k3/p1p3pp1p/1pc2p4/8r1/1B2b4C/1C1p2P1P1/3Q6/3P3P2/PPP3P3/3KR3R1[-/q/-/-] b - - 0 78",
+      "moves": [],
+      "phaseBucket": "middlegame",
+      "pieceCount": 30,
+      "pawnCount": 16,
+      "sourceFamily": "hmm"
+    },
+    {
+      "id": "nnue-screen-v1-middlegame-hmm-p085-44f575d2",
+      "source": "Held-out CoreChess save hmm.ccsf (sha256 4585880b58175dc1...), position before source ply 86; selected without candidate evaluation.",
+      "initialOfen": "1r1b2k3/2p3p2p/1p3p1p2/p7r1/3Qb4C/2B3P1P1/10/3P3P2/PPP3P3/3KR3R1[-/q/-/-] b - - 0 86",
+      "moves": [],
+      "phaseBucket": "middlegame",
+      "pieceCount": 27,
+      "pawnCount": 15,
+      "sourceFamily": "hmm"
+    },
+    {
+      "id": "nnue-screen-v1-middlegame-shit-p041-9714cb25",
+      "source": "Held-out CoreChess save shit.ccsf (sha256 6735c4c02f9f6aa3...), position before source ply 42; selected without candidate evaluation.",
+      "initialOfen": "1r1b1k1nr1/ppp2bpppp/5p4/4n5/5q1c2/2C2P4/10/WP1N2NCPW/P1wP2PP1P/R1Q3R1K1[-/-/-/-] b kq - 1 42",
+      "moves": [],
+      "phaseBucket": "middlegame",
+      "pieceCount": 36,
+      "pawnCount": 16,
+      "sourceFamily": "shit"
+    },
+    {
+      "id": "nnue-screen-v1-late-great-game-p146-4732f639",
+      "source": "Held-out CoreChess save great game.ccsf (sha256 b93b12d2eb4b8b16...), position before source ply 147; selected without candidate evaluation.",
+      "initialOfen": "1R8/10/1p1p1k1p2/2p1n5/3w2P2p/8p1/8P1/1P7P/P9/9K[-/-/-/-] w - - 4 147",
+      "moves": [],
+      "phaseBucket": "late",
+      "pieceCount": 16,
+      "pawnCount": 11,
+      "sourceFamily": "great game"
+    },
+    {
+      "id": "nnue-screen-v1-late-hmm-p103-51fd8b8f",
+      "source": "Held-out CoreChess save hmm.ccsf (sha256 4585880b58175dc1...), position before source ply 104; selected without candidate evaluation.",
+      "initialOfen": "3Q6/6p1kp/5p1pb1/ppp3r3/8PC/6P3/3B6/3P3P2/PPP3P3/3K4R1[-/q/-/-] b - - 1 104",
+      "moves": [],
+      "phaseBucket": "late",
+      "pieceCount": 24,
+      "pawnCount": 15,
+      "sourceFamily": "hmm"
+    },
+    {
+      "id": "nnue-screen-v1-late-hmm-p110-64c05b20",
+      "source": "Held-out CoreChess save hmm.ccsf (sha256 4585880b58175dc1...), position before source ply 111; selected without candidate evaluation.",
+      "initialOfen": "2Q7/6pk1p/5p1pbC/1pp7/p5r1P1/6P3/3B6/3P3P2/PPP3P3/3K4R1[-/q/-/-] w - - 2 111",
+      "moves": [],
+      "phaseBucket": "late",
+      "pieceCount": 24,
+      "pawnCount": 15,
+      "sourceFamily": "hmm"
+    },
+    {
+      "id": "nnue-screen-v1-late-hmm-p115-03b20d0b",
+      "source": "Held-out CoreChess save hmm.ccsf (sha256 4585880b58175dc1...), position before source ply 116; selected without candidate evaluation.",
+      "initialOfen": "6k1C1/3Q5p/5p1pb1/1pp3p3/p5r1P1/6P3/3B6/3P3P2/PPP3P3/3K4R1[-/q/-/-] b - - 3 116",
+      "moves": [],
+      "phaseBucket": "late",
+      "pieceCount": 24,
+      "pawnCount": 15,
+      "sourceFamily": "hmm"
+    },
+    {
+      "id": "nnue-screen-v1-endgame-great-game-p165-844e9b00",
+      "source": "Held-out CoreChess save great game.ccsf (sha256 b93b12d2eb4b8b16...), position before source ply 166; selected without candidate evaluation.",
+      "initialOfen": "10/10/3p6/2p7/4k2R2/w7p1/7nP1/9P/9K/10[-/-/-/-] b - - 2 166",
+      "moves": [],
+      "phaseBucket": "endgame",
+      "pieceCount": 10,
+      "pawnCount": 5,
+      "sourceFamily": "great game"
+    },
+    {
+      "id": "nnue-screen-v1-endgame-great-game-p174-7af949b7",
+      "source": "Held-out CoreChess save great game.ccsf (sha256 b93b12d2eb4b8b16...), position before source ply 175; selected without candidate evaluation.",
+      "initialOfen": "3R6/10/10/2p1wk4/10/8p1/7nP1/9P/9K/10[-/-/-/-] w - - 3 175",
+      "moves": [],
+      "phaseBucket": "endgame",
+      "pieceCount": 9,
+      "pawnCount": 4,
+      "sourceFamily": "great game"
+    },
+    {
+      "id": "nnue-screen-v1-endgame-great-game-p183-ec025731",
+      "source": "Held-out CoreChess save great game.ccsf (sha256 b93b12d2eb4b8b16...), position before source ply 184; selected without candidate evaluation.",
+      "initialOfen": "10/10/4k5/10/4R5/6w1p1/7nP1/9P/9K/10[-/-/-/-] b - - 4 184",
+      "moves": [],
+      "phaseBucket": "endgame",
+      "pieceCount": 8,
+      "pawnCount": 3,
+      "sourceFamily": "great game"
+    },
+    {
+      "id": "nnue-screen-v1-endgame-great-game-p199-0ea07a78",
+      "source": "Held-out CoreChess save great game.ccsf (sha256 b93b12d2eb4b8b16...), position before source ply 200; selected without candidate evaluation.",
+      "initialOfen": "5R4/10/5n4/10/4k5/6w1p1/8P1/7K1P/10/10[-/-/-/-] b - - 20 200",
+      "moves": [],
+      "phaseBucket": "endgame",
+      "pieceCount": 8,
+      "pawnCount": 3,
+      "sourceFamily": "great game"
+    }
+  ]
+}

@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -957,8 +958,23 @@ static int eval_omega(const Pos & pos) {
 
    if (var::UseOmegaNNUE) {
       int stm_score = 0;
-      if (omega_nnue::G_Network.evaluate(pos, stm_score)) {
-         return pos.turn() == White ? stm_score : -stm_score;
+      bool residual_correction = false;
+      if (omega_nnue::G_Network.evaluate(
+             pos, stm_score, residual_correction
+          )) {
+         std::int64_t white_score = pos.turn() == White
+                                  ? std::int64_t(stm_score)
+                                  : -std::int64_t(stm_score);
+         if (residual_correction) {
+            white_score += std::int64_t(omega_eval::evaluate(pos));
+         }
+         if (white_score > std::numeric_limits<int>::max()) {
+            return std::numeric_limits<int>::max();
+         }
+         if (white_score < std::numeric_limits<int>::min()) {
+            return std::numeric_limits<int>::min();
+         }
+         return int(white_score);
       }
    }
 

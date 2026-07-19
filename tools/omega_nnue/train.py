@@ -14,6 +14,7 @@ import json
 import math
 import os
 import platform
+import struct
 import subprocess
 import sys
 import tempfile
@@ -25,6 +26,9 @@ import omega_nnue as omega_nnue_module
 from omega_nnue import (
     ACCUMULATOR_SIZE,
     ACTIVATION_MAX,
+    ARCHITECTURE_ABSOLUTE,
+    ARCHITECTURE_NAMES,
+    ARCHITECTURE_RESIDUAL,
     FEATURE_COUNT,
     FORMAT_VERSION,
     HEADER_BYTES,
@@ -46,6 +50,8 @@ from omega_nnue import (
 CP_NORMALIZER = 100.0
 CP_HUBER_DELTA = 2.0
 OUTCOME_LOGISTIC_SCALE = 400.0 / math.log(10.0)
+FLOAT_CHECKPOINT_MAGIC = b"OMFNET1\0"
+FLOAT_CHECKPOINT_HEADER = struct.Struct("<8sIIIII32s")
 
 INITIAL_OFEN = (
     "crnbqkbnrc/pppppppppp/10/10/10/10/10/10/"
@@ -83,6 +89,87 @@ def _file_pin(path: Path) -> dict[str, Any]:
         "bytes": byte_count,
         "sha256": digest.hexdigest(),
     }
+
+
+def _validate_residual_targets(paths: list[Path]) -> int:
+    """Reject an absolute-score corpus mislabeled as residual training data."""
+
+    checked = 0
+    for path in paths:
+        with path.resolve(strict=True).open("r", encoding="utf-8-sig") as stream:
+            for line_number, line in enumerate(stream, 1):
+                if not line.strip():
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError as error:
+                    raise ValueError(f"{path}:{line_number}: {error}") from error
+                if not isinstance(record, dict):
+                    raise ValueError(
+                        f"{path}:{line_number}: residual row is not an object"
+                    )
+                if record.get("targetSemantics") != "search-minus-handcrafted":
+                    raise ValueError(
+                        f"{path}:{line_number}: residual training requires "
+                        "targetSemantics='search-minus-handcrafted'"
+                    )
+                search = record.get("searchTargetCpStm")
+                handcrafted = record.get("handcraftedCpStm")
+                residual = record.get("targetCpStm")
+                if (
+                    isinstance(search, bool)
+                    or not isinstance(search, (int, float))
+                    or isinstance(handcrafted, bool)
+                    or not isinstance(handcrafted, (int, float))
+                    or isinstance(residual, bool)
+                    or not isinstance(residual, (int, float))
+                    or not all(
+                        math.isfinite(float(value))
+                        for value in (search, handcrafted, residual)
+                    )
+                ):
+                    raise ValueError(
+                        f"{path}:{line_number}: residual target components "
+                        "must be finite numbers"
+                    )
+                expected = float(search) - float(handcrafted)
+                if not math.isclose(
+                    float(residual), expected, rel_tol=0.0, abs_tol=1e-9
+                ):
+                    raise ValueError(
+                        f"{path}:{line_number}: residual target {residual} "
+                        f"does not equal search-HCE {expected}"
+                    )
+                search_outcome = record.get("searchOutcomeStm")
+                search_side_score = record.get("searchSideToMoveScore")
+                for name, value in (
+                    ("searchOutcomeStm", search_outcome),
+                    ("searchSideToMoveScore", search_side_score),
+                ):
+                    if value is None:
+                        continue
+                    if (
+                        isinstance(value, bool)
+                        or not isinstance(value, (int, float))
+                        or not math.isfinite(float(value))
+                        or not 0.0 <= float(value) <= 1.0
+                    ):
+                        raise ValueError(
+                            f"{path}:{line_number}: {name} must be a finite "
+                            "number in 0..1"
+                        )
+                if (
+                    search_outcome is not None
+                    and search_side_score is not None
+                    and float(search_outcome) != float(search_side_score)
+                ):
+                    raise ValueError(
+                        f"{path}:{line_number}: search outcome fields disagree"
+                    )
+                checked += 1
+    if checked == 0:
+        raise ValueError("residual training corpus contains no labeled rows")
+    return checked
 
 
 def _numpy_build_configuration() -> Any:
@@ -127,7 +214,11 @@ def _runtime_manifest() -> dict[str, Any]:
     }
 
 
-def _blank_quantized_network(*, output_bias: int = 0) -> QuantizedNetwork:
+def _blank_quantized_network(
+    *,
+    output_bias: int = 0,
+    architecture: int = ARCHITECTURE_ABSOLUTE,
+) -> QuantizedNetwork:
     return QuantizedNetwork(
         ft_bias=np.zeros(ACCUMULATOR_SIZE, dtype=np.int16),
         ft_weights=np.zeros(
@@ -139,6 +230,7 @@ def _blank_quantized_network(*, output_bias: int = 0) -> QuantizedNetwork:
         ),
         output_bias=output_bias,
         output_weights=np.zeros(HIDDEN_SIZE, dtype=np.int8),
+        architecture=architecture,
     )
 
 
@@ -182,6 +274,11 @@ def _golden_runtime_cases() -> list[dict[str, Any]]:
     saturation.ft_bias[0] = 200
     saturation.dense_weights[0, 0] = 127
     saturation.output_weights[0] = 64
+
+    residual = _blank_quantized_network(
+        output_bias=64,
+        architecture=ARCHITECTURE_RESIDUAL,
+    )
 
     return [
         {
@@ -241,6 +338,17 @@ def _golden_runtime_cases() -> list[dict[str, Any]]:
                     "name": "feature-and-hidden-clip-at-127",
                     "ofen": SPARSE_OFEN,
                     "expected": 127,
+                }
+            ],
+        },
+        {
+            "name": "residual-header-semantics",
+            "network": residual,
+            "vectors": [
+                {
+                    "name": "residual-raw-correction",
+                    "ofen": SPARSE_OFEN,
+                    "expected": 1,
                 }
             ],
         },
@@ -396,7 +504,7 @@ class FloatNetwork:
         return cls(
             ft_bias=np.full(ACCUMULATOR_SIZE, 24.0, dtype=np.float32),
             ft_weights=rng.normal(
-                0.0, 0.20, size=(FEATURE_COUNT, ACCUMULATOR_SIZE)
+                0.0, 0.50, size=(FEATURE_COUNT, ACCUMULATOR_SIZE)
             ).astype(np.float32),
             dense_bias=np.full(HIDDEN_SIZE, 24.0, dtype=np.float32),
             dense_weights=rng.normal(
@@ -405,8 +513,132 @@ class FloatNetwork:
                 size=(HIDDEN_SIZE, ACCUMULATOR_SIZE * 2),
             ).astype(np.float32),
             output_bias=np.zeros(1, dtype=np.float32),
-            output_weights=rng.normal(0.0, 0.025, size=HIDDEN_SIZE).astype(
+            output_weights=rng.normal(0.0, 0.10, size=HIDDEN_SIZE).astype(
                 np.float32
+            ),
+        )
+
+    def clone(self) -> "FloatNetwork":
+        return FloatNetwork(
+            ft_bias=self.ft_bias.copy(),
+            ft_weights=self.ft_weights.copy(),
+            dense_bias=self.dense_bias.copy(),
+            dense_weights=self.dense_weights.copy(),
+            output_bias=self.output_bias.copy(),
+            output_weights=self.output_weights.copy(),
+        )
+
+    def checkpoint_bytes(self) -> bytes:
+        arrays = (
+            self.ft_bias,
+            self.ft_weights,
+            self.dense_bias,
+            self.dense_weights,
+            self.output_bias,
+            self.output_weights,
+        )
+        if not all(np.all(np.isfinite(value)) for value in arrays):
+            raise ValueError("float checkpoint contains a non-finite parameter")
+        payload = b"".join(
+            np.asarray(value, dtype=np.dtype("<f4")).tobytes(order="C")
+            for value in arrays
+        )
+        header = FLOAT_CHECKPOINT_HEADER.pack(
+            FLOAT_CHECKPOINT_MAGIC,
+            FORMAT_VERSION,
+            FEATURE_COUNT,
+            ACCUMULATOR_SIZE,
+            HIDDEN_SIZE,
+            len(payload),
+            hashlib.sha256(payload).digest(),
+        )
+        return header + payload
+
+    def write_checkpoint(self, path: Path) -> None:
+        _atomic_bytes(path, self.checkpoint_bytes())
+
+    @classmethod
+    def read_checkpoint(cls, path: Path) -> "FloatNetwork":
+        data = path.read_bytes()
+        if len(data) < FLOAT_CHECKPOINT_HEADER.size:
+            raise ValueError("float checkpoint is truncated")
+        (
+            magic,
+            format_version,
+            features,
+            accumulator,
+            hidden,
+            payload_bytes,
+            expected_hash,
+        ) = FLOAT_CHECKPOINT_HEADER.unpack_from(data)
+        expected = (
+            (magic, FLOAT_CHECKPOINT_MAGIC, "magic"),
+            (format_version, FORMAT_VERSION, "format version"),
+            (features, FEATURE_COUNT, "feature count"),
+            (accumulator, ACCUMULATOR_SIZE, "accumulator size"),
+            (hidden, HIDDEN_SIZE, "hidden size"),
+        )
+        for actual, wanted, label in expected:
+            if actual != wanted:
+                raise ValueError(
+                    f"bad float-checkpoint {label}: {actual!r}; expected {wanted!r}"
+                )
+        payload = data[FLOAT_CHECKPOINT_HEADER.size :]
+        if len(payload) != payload_bytes:
+            raise ValueError(
+                f"float checkpoint payload is {len(payload)} bytes; "
+                f"expected {payload_bytes}"
+            )
+        actual_hash = hashlib.sha256(payload).digest()
+        if actual_hash != expected_hash:
+            raise ValueError("float checkpoint payload SHA-256 mismatch")
+
+        offset = 0
+
+        def take(shape: tuple[int, ...]) -> np.ndarray:
+            nonlocal offset
+            count = math.prod(shape)
+            size = count * np.dtype("<f4").itemsize
+            value = np.frombuffer(
+                payload, dtype=np.dtype("<f4"), count=count, offset=offset
+            ).reshape(shape)
+            offset += size
+            return value.astype(np.float32, copy=True)
+
+        result = cls(
+            ft_bias=take((ACCUMULATOR_SIZE,)),
+            ft_weights=take((FEATURE_COUNT, ACCUMULATOR_SIZE)),
+            dense_bias=take((HIDDEN_SIZE,)),
+            dense_weights=take((HIDDEN_SIZE, ACCUMULATOR_SIZE * 2)),
+            output_bias=take((1,)),
+            output_weights=take((HIDDEN_SIZE,)),
+        )
+        if offset != len(payload):
+            raise ValueError("float checkpoint has trailing payload bytes")
+        if not all(
+            np.all(np.isfinite(value)) for value in result.parameters().values()
+        ):
+            raise ValueError("float checkpoint contains a non-finite parameter")
+        return result
+
+    @classmethod
+    def from_quantized(cls, network: QuantizedNetwork) -> "FloatNetwork":
+        """Resume training from an exactly representable exported checkpoint."""
+
+        return cls(
+            ft_bias=network.ft_bias.astype(np.float32),
+            ft_weights=network.ft_weights.astype(np.float32),
+            dense_bias=(
+                network.dense_bias.astype(np.float32) / HIDDEN_DIVISOR
+            ),
+            dense_weights=(
+                network.dense_weights.astype(np.float32) / HIDDEN_DIVISOR
+            ),
+            output_bias=np.asarray(
+                [network.output_bias / OUTPUT_DIVISOR], dtype=np.float32
+            ),
+            output_weights=(
+                network.output_weights.astype(np.float32) / OUTPUT_DIVISOR
             ),
         )
 
@@ -420,7 +652,9 @@ class FloatNetwork:
             "output_weights": self.output_weights,
         }
 
-    def quantize(self) -> QuantizedNetwork:
+    def quantize(
+        self, architecture: int = ARCHITECTURE_ABSOLUTE
+    ) -> QuantizedNetwork:
         return QuantizedNetwork(
             ft_bias=_clip_round(
                 self.ft_bias, -(1 << 15), (1 << 15) - 1, np.int16
@@ -448,6 +682,7 @@ class FloatNetwork:
             output_weights=_clip_round(
                 self.output_weights * OUTPUT_DIVISOR, -128, 127, np.int8
             ),
+            architecture=architecture,
         )
 
     def _effective_parameters(
@@ -535,12 +770,22 @@ class Adam:
         self,
         parameters: dict[str, np.ndarray],
         learning_rate: float,
+        learning_rate_scales: dict[str, float] | None = None,
         beta1: float = 0.9,
         beta2: float = 0.999,
         epsilon: float = 1e-8,
     ) -> None:
         self.parameters = parameters
         self.learning_rate = learning_rate
+        self.learning_rate_scales = learning_rate_scales or {}
+        unknown_scales = set(self.learning_rate_scales) - set(parameters)
+        if unknown_scales:
+            raise ValueError(
+                "learning-rate scales name unknown parameters: "
+                + ", ".join(sorted(unknown_scales))
+            )
+        if any(value <= 0.0 for value in self.learning_rate_scales.values()):
+            raise ValueError("learning-rate scales must be positive")
         self.beta1 = beta1
         self.beta2 = beta2
         self.epsilon = epsilon
@@ -554,7 +799,11 @@ class Adam:
         }
         self.step_count = 0
 
-    def step(self, gradients: dict[str, np.ndarray]) -> None:
+    def step(
+        self, gradients: dict[str, np.ndarray], learning_rate_scale: float = 1.0
+    ) -> None:
+        if learning_rate_scale <= 0.0:
+            raise ValueError("Adam step learning-rate scale must be positive")
         self.step_count += 1
         correction1 = 1.0 - self.beta1**self.step_count
         correction2 = 1.0 - self.beta2**self.step_count
@@ -568,6 +817,8 @@ class Adam:
             second += (1.0 - self.beta2) * gradient * gradient
             parameter -= (
                 self.learning_rate
+                * learning_rate_scale
+                * self.learning_rate_scales.get(name, 1.0)
                 * (first / correction1)
                 / (np.sqrt(second / correction2) + self.epsilon)
             )
@@ -602,13 +853,65 @@ class Adam:
         )
 
 
+def _outcome_supervision(
+    dataset: Dataset,
+    indices: np.ndarray,
+    architecture: int,
+) -> tuple[np.ndarray, np.ndarray | None]:
+    """Select outcome labels and the score presented to outcome BCE.
+
+    Absolute networks retain the original fields and use their network output
+    directly. Residual networks use search outcomes and add the fixed
+    side-to-move handcrafted score before the logistic conversion.
+    """
+
+    if architecture == ARCHITECTURE_ABSOLUTE:
+        return dataset.outcome[indices], None
+    if architecture != ARCHITECTURE_RESIDUAL:
+        raise ValueError(f"unsupported architecture semantics {architecture}")
+
+    outcome = dataset.search_outcome[indices]
+    baseline = dataset.handcrafted_cp[indices]
+    supervised = np.isfinite(outcome)
+    if np.any(supervised & ~np.isfinite(baseline)):
+        raise ValueError(
+            "residual outcome supervision requires a finite "
+            "handcraftedCpStm baseline for every search outcome"
+        )
+    return outcome, baseline
+
+
+def _require_residual_outcomes(
+    dataset: Dataset,
+    architecture: int,
+    outcome_weight: float,
+) -> None:
+    if (
+        architecture == ARCHITECTURE_RESIDUAL
+        and outcome_weight > 0.0
+        and not np.any(np.isfinite(dataset.search_outcome))
+    ):
+        raise ValueError(
+            "residual outcome weight is positive but the selected input has "
+            "no searchOutcomeStm or searchSideToMoveScore labels"
+        )
+
+
 def loss_and_gradient(
     prediction: np.ndarray,
     target_cp: np.ndarray,
     outcome: np.ndarray,
     cp_weight: float,
     outcome_weight: float,
+    outcome_score_offset: np.ndarray | None = None,
 ) -> tuple[float, np.ndarray, dict[str, float | int | None]]:
+    if prediction.shape != target_cp.shape or prediction.shape != outcome.shape:
+        raise ValueError("prediction and target arrays must have equal shapes")
+    if (
+        outcome_score_offset is not None
+        and outcome_score_offset.shape != prediction.shape
+    ):
+        raise ValueError("outcome score offset must match prediction shape")
     gradient = np.zeros_like(prediction, dtype=np.float32)
     total_loss = 0.0
     cp_mask = np.isfinite(target_cp)
@@ -617,6 +920,8 @@ def loss_and_gradient(
     outcome_count = int(outcome_mask.sum())
     cp_mae: float | None = None
     outcome_bce: float | None = None
+    outcome_score_min: float | None = None
+    outcome_score_max: float | None = None
 
     if cp_count:
         error = (prediction[cp_mask] - target_cp[cp_mask]) / CP_NORMALIZER
@@ -637,7 +942,16 @@ def loss_and_gradient(
         cp_mae = float(np.abs(prediction[cp_mask] - target_cp[cp_mask]).mean())
 
     if outcome_count:
-        logits = prediction[outcome_mask] / OUTCOME_LOGISTIC_SCALE
+        if outcome_score_offset is None:
+            outcome_scores = prediction[outcome_mask]
+        else:
+            selected_offset = outcome_score_offset[outcome_mask]
+            if not np.all(np.isfinite(selected_offset)):
+                raise ValueError(
+                    "outcome score offset is non-finite on a supervised row"
+                )
+            outcome_scores = prediction[outcome_mask] + selected_offset
+        logits = outcome_scores / OUTCOME_LOGISTIC_SCALE
         targets = outcome[outcome_mask]
         losses = np.maximum(logits, 0.0) - logits * targets + np.log1p(
             np.exp(-np.abs(logits))
@@ -649,6 +963,8 @@ def loss_and_gradient(
         )
         derivatives = (probabilities - targets) / OUTCOME_LOGISTIC_SCALE
         outcome_bce = float(losses.mean())
+        outcome_score_min = float(outcome_scores.min())
+        outcome_score_max = float(outcome_scores.max())
         total_loss += outcome_weight * outcome_bce
         gradient[outcome_mask] += (
             outcome_weight * derivatives.astype(np.float32) / outcome_count
@@ -659,6 +975,11 @@ def loss_and_gradient(
         "cpMae": cp_mae,
         "outcomeCount": outcome_count,
         "outcomeBce": outcome_bce,
+        "outcomeBaselineCount": (
+            outcome_count if outcome_score_offset is not None else 0
+        ),
+        "outcomeScoreMin": outcome_score_min,
+        "outcomeScoreMax": outcome_score_max,
     }
 
 
@@ -669,6 +990,7 @@ def gradients(
     cp_weight: float,
     outcome_weight: float,
     quantization_aware: bool,
+    architecture: int = ARCHITECTURE_ABSOLUTE,
 ) -> tuple[float, dict[str, np.ndarray], dict[str, float | int | None]]:
     stm_features, opponent_features = dataset.perspective_features(indices)
     prediction, cache = model.forward(
@@ -678,12 +1000,16 @@ def gradients(
         need_cache=True,
     )
     assert cache is not None
+    outcome, outcome_score_offset = _outcome_supervision(
+        dataset, indices, architecture
+    )
     loss, output_gradient, metrics = loss_and_gradient(
         prediction,
         dataset.target_cp[indices],
-        dataset.outcome[indices],
+        outcome,
         cp_weight,
         outcome_weight,
+        outcome_score_offset,
     )
 
     output_weights = cache["output_weights"]
@@ -745,6 +1071,40 @@ def predict_dataset(
     return result
 
 
+def quantization_penalty(
+    dataset: Dataset,
+    indices: np.ndarray,
+    model: FloatNetwork,
+    network: QuantizedNetwork,
+    batch_size: int,
+) -> dict[str, Any]:
+    if indices.size == 0:
+        return {"samples": 0, "maeCp": None, "maxCp": None}
+    absolute_errors: list[np.ndarray] = []
+    for start in range(0, indices.size, batch_size):
+        part = indices[start : start + batch_size]
+        stm, opponent = dataset.perspective_features(part)
+        float_prediction, _ = model.forward(
+            stm,
+            opponent,
+            quantization_aware=False,
+            need_cache=False,
+        )
+        quantized_prediction = network.predict_features(stm, opponent)
+        absolute_errors.append(
+            np.abs(
+                float_prediction.astype(np.float64)
+                - quantized_prediction.astype(np.float64)
+            )
+        )
+    errors = np.concatenate(absolute_errors)
+    return {
+        "samples": int(indices.size),
+        "maeCp": float(errors.mean()),
+        "maxCp": float(errors.max()),
+    }
+
+
 def evaluate(
     dataset: Dataset,
     indices: np.ndarray,
@@ -753,38 +1113,215 @@ def evaluate(
     cp_weight: float,
     outcome_weight: float,
 ) -> dict[str, Any]:
+    output_semantics = ARCHITECTURE_NAMES[network.architecture]
+    outcome_score_semantics = (
+        "handcrafted-plus-network-correction"
+        if network.architecture == ARCHITECTURE_RESIDUAL
+        else "network"
+    )
     if indices.size == 0:
-        return {"samples": 0, "loss": None, "cpMae": None, "outcomeBce": None}
+        return {
+            "samples": 0,
+            "loss": None,
+            "cpMae": None,
+            "outcomeBce": None,
+            "networkOutputSemantics": output_semantics,
+            "outcomeScoreSemantics": outcome_score_semantics,
+        }
     prediction = predict_dataset(dataset, indices, network, batch_size)
+    outcome, outcome_score_offset = _outcome_supervision(
+        dataset, indices, network.architecture
+    )
     loss, _, details = loss_and_gradient(
         prediction.astype(np.float32),
         dataset.target_cp[indices],
-        dataset.outcome[indices],
+        outcome,
         cp_weight,
         outcome_weight,
+        outcome_score_offset,
     )
-    return {
+    result: dict[str, Any] = {
         "samples": int(indices.size),
         "loss": float(loss),
         "cpMae": details["cpMae"],
         "outcomeBce": details["outcomeBce"],
+        "outcomeCount": details["outcomeCount"],
+        "outcomeBaselineCount": details["outcomeBaselineCount"],
+        "outcomeScoreMin": details["outcomeScoreMin"],
+        "outcomeScoreMax": details["outcomeScoreMax"],
+        "networkOutputSemantics": output_semantics,
+        "outcomeScoreSemantics": outcome_score_semantics,
         "predictionMin": int(prediction.min()),
         "predictionMax": int(prediction.max()),
+        "predictionUnique": int(np.unique(prediction).size),
+        "predictionStdDev": float(prediction.std()),
+    }
+    cp_mask = np.isfinite(dataset.target_cp[indices])
+    if np.any(cp_mask):
+        target = dataset.target_cp[indices][cp_mask].astype(np.float64)
+        predicted = prediction[cp_mask].astype(np.float64)
+        error = predicted - target
+        result["cpBias"] = float(error.mean())
+        result["cpRmse"] = float(np.sqrt(np.mean(error * error)))
+        if np.std(target) > 0.0 and np.std(predicted) > 0.0:
+            result["cpCorrelation"] = float(np.corrcoef(target, predicted)[0, 1])
+        else:
+            result["cpCorrelation"] = None
+        decisive = np.abs(target) >= 100.0
+        result["decisiveSamples"] = int(decisive.sum())
+        result["decisiveSignAccuracy"] = (
+            float(np.mean(np.sign(predicted[decisive]) == np.sign(target[decisive])))
+            if np.any(decisive)
+            else None
+        )
+
+        feature_counts = np.sum(
+            dataset.white_features[indices][cp_mask] != PAD_FEATURE, axis=1
+        )
+        phase_metrics: dict[str, Any] = {}
+        for name, phase_mask in (
+            ("ending", feature_counts <= 12),
+            ("middlegame", (feature_counts > 12) & (feature_counts < 29)),
+            ("opening", feature_counts >= 29),
+        ):
+            phase_metrics[name] = {
+                "samples": int(phase_mask.sum()),
+                "cpMae": (
+                    float(np.mean(np.abs(error[phase_mask])))
+                    if np.any(phase_mask)
+                    else None
+                ),
+            }
+        result["phase"] = phase_metrics
+    else:
+        result.update(
+            {
+                "cpBias": None,
+                "cpRmse": None,
+                "cpCorrelation": None,
+                "decisiveSamples": 0,
+                "decisiveSignAccuracy": None,
+                "phase": {},
+            }
+        )
+    return result
+
+
+def _training_strata(
+    dataset: Dataset, indices: np.ndarray
+) -> tuple[list[np.ndarray], dict[str, Any]]:
+    """Create deterministic phase/score strata without changing sample weight."""
+
+    active_features_per_position = np.sum(
+        dataset.white_features[indices] != PAD_FEATURE, axis=1
+    )
+    phase_cuts = np.quantile(active_features_per_position, [1.0 / 3.0, 2.0 / 3.0])
+    phase = np.digitize(active_features_per_position, phase_cuts, right=True)
+    cp = dataset.target_cp[indices]
+    # Outcome-only rows occupy the neutral score band. CP distillation uses
+    # explicit quiet/negative/positive strata to prevent common-mode batches.
+    score = np.where(
+        np.isfinite(cp),
+        np.digitize(cp, [-100.0, 100.0], right=True),
+        1,
+    )
+    strata = []
+    counts: dict[str, int] = {}
+    for phase_index in range(3):
+        for score_index in range(3):
+            selected = indices[(phase == phase_index) & (score == score_index)]
+            if selected.size:
+                strata.append(selected.copy())
+                counts[f"phase{phase_index}-score{score_index}"] = int(
+                    selected.size
+                )
+    return strata, {
+        "phaseFeatureCuts": [float(value) for value in phase_cuts],
+        "counts": counts,
+    }
+
+
+def _interleaved_stratified_order(
+    strata: list[np.ndarray], rng: np.random.Generator, batch_size: int
+) -> np.ndarray:
+    shuffled = []
+    for stratum in strata:
+        values = stratum.copy()
+        rng.shuffle(values)
+        shuffled.append(values)
+    positions = [0] * len(shuffled)
+    output: list[np.ndarray] = []
+    while True:
+        active = [
+            index
+            for index, values in enumerate(shuffled)
+            if positions[index] < values.size
+        ]
+        if not active:
+            break
+        quota = max(1, batch_size // len(active))
+        for index in active:
+            start = positions[index]
+            end = min(start + quota, shuffled[index].size)
+            output.append(shuffled[index][start:end])
+            positions[index] = end
+    return np.concatenate(output)
+
+
+def _activation_health(
+    dataset: Dataset,
+    train_indices: np.ndarray,
+    model: FloatNetwork,
+    *,
+    quantization_aware: bool,
+) -> dict[str, Any]:
+    health_count = min(2048, train_indices.size)
+    health_indices = train_indices[:health_count]
+    health_stm, health_opponent = dataset.perspective_features(health_indices)
+    health_prediction, health_cache = model.forward(
+        health_stm,
+        health_opponent,
+        quantization_aware=quantization_aware,
+        need_cache=True,
+    )
+    assert health_cache is not None
+    dense_positive = health_cache["dense_z"] > 0.0
+    dense_below_clip = health_cache["dense_z"] < ACTIVATION_MAX
+    return {
+        "samples": int(health_count),
+        "denseActiveFraction": float(
+            np.mean(dense_positive & dense_below_clip)
+        ),
+        "denseDeadUnits": int((~np.any(dense_positive, axis=0)).sum()),
+        "denseSaturatedUnits": int(
+            (~np.any(dense_below_clip, axis=0)).sum()
+        ),
+        "predictionMin": float(health_prediction.min()),
+        "predictionMax": float(health_prediction.max()),
+        "predictionStdDev": float(health_prediction.std()),
     }
 
 
 def train(
     dataset: Dataset,
     *,
+    architecture: int,
     seed: int,
     epochs: int,
     qat_epochs: int,
     batch_size: int,
     learning_rate: float,
+    feature_transformer_learning_rate_scale: float,
+    dense_bias_learning_rate_scale: float,
+    dense_weight_learning_rate_scale: float,
+    output_learning_rate_scale: float,
+    qat_learning_rate_scale: float,
+    initial_model: FloatNetwork | None,
+    stratified_batches: bool,
     cp_weight: float,
     outcome_weight: float,
     quiet: bool,
-) -> tuple[FloatNetwork, list[dict[str, Any]]]:
+) -> tuple[FloatNetwork, list[dict[str, Any]], int]:
     train_indices = dataset.indices(0)
     if train_indices.size == 0:
         raise ValueError("deterministic split produced no training samples")
@@ -797,14 +1334,89 @@ def train(
     if learning_rate <= 0.0:
         raise ValueError("learning rate must be positive")
 
-    model = FloatNetwork.initialize(seed)
-    optimizer = Adam(model.parameters(), learning_rate)
+    model = (
+        FloatNetwork.initialize(seed)
+        if initial_model is None
+        else initial_model.clone()
+    )
+    optimizer = Adam(
+        model.parameters(),
+        learning_rate,
+        learning_rate_scales={
+            # Adam's first update is approximately one signed learning-rate
+            # step regardless of gradient magnitude. A dense row sees 256
+            # joined activations near 24, so an unscaled 0.01 step can move
+            # its pre-activation by roughly 61 and kill every ReLU at once.
+            "ft_bias": feature_transformer_learning_rate_scale,
+            "ft_weights": feature_transformer_learning_rate_scale,
+            "dense_bias": dense_bias_learning_rate_scale,
+            "dense_weights": dense_weight_learning_rate_scale,
+            "output_bias": output_learning_rate_scale,
+            "output_weights": output_learning_rate_scale,
+        },
+    )
     rng = np.random.default_rng(seed)
-    history: list[dict[str, Any]] = []
+    strata, strata_metadata = _training_strata(dataset, train_indices)
+    validation_indices = dataset.indices(1)
+    initial_network = model.quantize(architecture)
+    initial_train_metrics = evaluate(
+        dataset,
+        train_indices,
+        initial_network,
+        batch_size,
+        cp_weight,
+        outcome_weight,
+    )
+    initial_validation_metrics = evaluate(
+        dataset,
+        validation_indices,
+        initial_network,
+        batch_size,
+        cp_weight,
+        outcome_weight,
+    )
+    initial_selection_metrics = (
+        initial_validation_metrics
+        if validation_indices.size
+        else initial_train_metrics
+    )
+    best_model = model.clone()
+    best_epoch = 0
+    best_selection_loss = float(initial_selection_metrics["loss"])
+    history: list[dict[str, Any]] = [
+        {
+            "epoch": 0,
+            "stage": "initial",
+            "quantizationAware": True,
+            "optimizerSteps": 0,
+            "meanBatchLoss": None,
+            "quantizedTrain": initial_train_metrics,
+            "quantizedValidation": initial_validation_metrics,
+            "elapsedSeconds": 0.0,
+            "batchStrata": strata_metadata,
+            "activationHealth": _activation_health(
+                dataset,
+                train_indices,
+                model,
+                quantization_aware=True,
+            ),
+        }
+    ]
+    if not quiet:
+        selection_split = "validation" if validation_indices.size else "train"
+        print(
+            f"epoch   0/{epochs}: "
+            f"initial q-loss={best_selection_loss:.6f} "
+            f"selection={selection_split}",
+            flush=True,
+        )
     for epoch in range(epochs):
         started = time.perf_counter()
-        order = train_indices.copy()
-        rng.shuffle(order)
+        if stratified_batches:
+            order = _interleaved_stratified_order(strata, rng, batch_size)
+        else:
+            order = train_indices.copy()
+            rng.shuffle(order)
         quantization_aware = epoch >= epochs - qat_epochs
         batch_losses: list[float] = []
         for start in range(0, order.size, batch_size):
@@ -816,12 +1428,16 @@ def train(
                 cp_weight,
                 outcome_weight,
                 quantization_aware,
+                architecture,
             )
             if not math.isfinite(loss):
                 raise FloatingPointError("training loss became non-finite")
-            optimizer.step(batch_gradients)
+            optimizer.step(
+                batch_gradients,
+                qat_learning_rate_scale if quantization_aware else 1.0,
+            )
             batch_losses.append(loss)
-        network = model.quantize()
+        network = model.quantize(architecture)
         train_metrics = evaluate(
             dataset,
             train_indices,
@@ -830,13 +1446,44 @@ def train(
             cp_weight,
             outcome_weight,
         )
+        validation_metrics = evaluate(
+            dataset,
+            validation_indices,
+            network,
+            batch_size,
+            cp_weight,
+            outcome_weight,
+        )
         row = {
             "epoch": epoch + 1,
+            "stage": "training",
             "quantizationAware": quantization_aware,
+            "optimizerSteps": optimizer.step_count,
             "meanBatchLoss": float(np.mean(batch_losses)),
             "quantizedTrain": train_metrics,
+            "quantizedValidation": validation_metrics,
             "elapsedSeconds": time.perf_counter() - started,
+            "batchStrata": strata_metadata,
+            "activationHealth": _activation_health(
+                dataset,
+                train_indices,
+                model,
+                quantization_aware=quantization_aware,
+            ),
         }
+        if row["activationHealth"]["denseDeadUnits"] == HIDDEN_SIZE:
+            raise FloatingPointError(
+                "all dense ReLU units died; reduce the dense-weight "
+                "learning-rate scale"
+            )
+        selection_metrics = (
+            validation_metrics if validation_indices.size else train_metrics
+        )
+        selection_loss = float(selection_metrics["loss"])
+        if selection_loss < best_selection_loss:
+            best_selection_loss = selection_loss
+            best_model = model.clone()
+            best_epoch = epoch + 1
         history.append(row)
         if not quiet:
             cp_text = (
@@ -853,15 +1500,15 @@ def train(
                 f"epoch {epoch + 1:3d}/{epochs}: "
                 f"q-loss={train_metrics['loss']:.6f} "
                 f"cp-mae={cp_text} outcome-bce={outcome_text} "
+                f"dead={row['activationHealth']['denseDeadUnits']}/{HIDDEN_SIZE} "
                 f"qat={'yes' if quantization_aware else 'no'} "
                 f"({row['elapsedSeconds']:.2f}s)",
                 flush=True,
             )
-    return model, history
+    return best_model, history, best_epoch
 
 
-def _atomic_json(path: Path, value: Any) -> None:
-    encoded = (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
+def _atomic_bytes(path: Path, encoded: bytes) -> None:
     path = path.resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     handle, temporary_name = tempfile.mkstemp(
@@ -879,6 +1526,11 @@ def _atomic_json(path: Path, value: Any) -> None:
         except OSError:
             pass
         raise
+
+
+def _atomic_json(path: Path, value: Any) -> None:
+    encoded = (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    _atomic_bytes(path, encoded)
 
 
 def run_round_trip(
@@ -933,6 +1585,259 @@ def _feature_self_test() -> None:
         raise AssertionError("feature index exceeds frozen feature count")
     if len(set(white)) != len(white) or len(set(black)) != len(black):
         raise AssertionError("initial OFEN contains duplicate active features")
+
+
+def _format_semantics_self_test() -> None:
+    absolute = _blank_quantized_network(output_bias=64)
+    residual = _blank_quantized_network(
+        output_bias=64,
+        architecture=ARCHITECTURE_RESIDUAL,
+    )
+    absolute_bytes = absolute.to_bytes()
+    residual_bytes = residual.to_bytes()
+    if absolute_bytes[HEADER_BYTES:] != residual_bytes[HEADER_BYTES:]:
+        raise AssertionError("network semantics changed the tensor payload")
+    if absolute_bytes == residual_bytes:
+        raise AssertionError("network semantics are not encoded in the header")
+    absolute_round_trip = QuantizedNetwork.from_bytes(absolute_bytes)
+    if absolute_round_trip.architecture != ARCHITECTURE_ABSOLUTE:
+        raise AssertionError("absolute architecture did not round-trip")
+    if absolute_round_trip.to_bytes() != absolute_bytes:
+        raise AssertionError("legacy architecture-1 bytes changed on round trip")
+    residual_round_trip = QuantizedNetwork.from_bytes(residual_bytes)
+    if residual_round_trip.architecture != ARCHITECTURE_RESIDUAL:
+        raise AssertionError("residual architecture did not round-trip")
+    if residual_round_trip.to_bytes() != residual_bytes:
+        raise AssertionError("residual architecture bytes changed on round trip")
+    bad = bytearray(absolute_bytes)
+    struct.pack_into("<I", bad, 20, 3)
+    try:
+        QuantizedNetwork.from_bytes(bytes(bad))
+    except ValueError as error:
+        if "unsupported architecture semantics" not in str(error):
+            raise
+    else:
+        raise AssertionError("unknown network semantics were accepted")
+
+
+def _residual_outcome_supervision_self_test() -> None:
+    """Pin residual outcome arithmetic without involving network training."""
+
+    no_cp = np.asarray([float("nan")], dtype=np.float32)
+    win = np.asarray([1.0], dtype=np.float32)
+
+    # A +250 handcrafted score and -50 correction must present +200 to BCE.
+    residual_loss, residual_gradient, residual_metrics = loss_and_gradient(
+        np.asarray([-50.0], dtype=np.float32),
+        no_cp,
+        win,
+        0.0,
+        1.0,
+        np.asarray([250.0], dtype=np.float32),
+    )
+    reference_loss, reference_gradient, _ = loss_and_gradient(
+        np.asarray([200.0], dtype=np.float32),
+        no_cp,
+        win,
+        0.0,
+        1.0,
+    )
+    if residual_loss != reference_loss or not np.array_equal(
+        residual_gradient, reference_gradient
+    ):
+        raise AssertionError("residual outcome BCE did not add the HCE baseline")
+    if residual_gradient[0] == 0.0:
+        raise AssertionError("outcome BCE did not flow into the correction")
+    if (
+        residual_metrics["outcomeBaselineCount"] != 1
+        or residual_metrics["outcomeScoreMin"] != 200.0
+        or residual_metrics["outcomeScoreMax"] != 200.0
+    ):
+        raise AssertionError("residual outcome score telemetry is incorrect")
+
+    # Preserve the side-to-move sign: +50 plus a -250 HCE score is -200.
+    negative_loss, negative_gradient, _ = loss_and_gradient(
+        np.asarray([50.0], dtype=np.float32),
+        no_cp,
+        win,
+        0.0,
+        1.0,
+        np.asarray([-250.0], dtype=np.float32),
+    )
+    negative_reference_loss, negative_reference_gradient, _ = loss_and_gradient(
+        np.asarray([-200.0], dtype=np.float32),
+        no_cp,
+        win,
+        0.0,
+        1.0,
+    )
+    if negative_loss != negative_reference_loss or not np.array_equal(
+        negative_gradient, negative_reference_gradient
+    ):
+        raise AssertionError("negative HCE outcome baseline changed sign")
+
+    paired_loss, paired_gradient, _ = loss_and_gradient(
+        np.asarray([0.0, 0.0], dtype=np.float32),
+        np.asarray([float("nan"), float("nan")], dtype=np.float32),
+        np.asarray([1.0, 0.0], dtype=np.float32),
+        0.0,
+        1.0,
+        np.asarray([400.0, -400.0], dtype=np.float32),
+    )
+    if (
+        not math.isclose(paired_loss, math.log(1.1), abs_tol=1e-7)
+        or not math.isclose(
+            float(paired_gradient[0]),
+            -float(paired_gradient[1]),
+            rel_tol=0.0,
+            abs_tol=2e-10,
+        )
+        or paired_gradient[0] >= 0.0
+    ):
+        raise AssertionError(
+            "side-to-move HCE signs did not produce symmetric outcome gradients"
+        )
+
+    # CP supervision remains on the correction and ignores the outcome offset.
+    cp_target = np.asarray([75.0], dtype=np.float32)
+    no_outcome = np.asarray([float("nan")], dtype=np.float32)
+    cp_loss, cp_gradient, _ = loss_and_gradient(
+        np.asarray([25.0], dtype=np.float32),
+        cp_target,
+        no_outcome,
+        1.0,
+        0.0,
+        np.asarray([900.0], dtype=np.float32),
+    )
+    cp_reference_loss, cp_reference_gradient, _ = loss_and_gradient(
+        np.asarray([25.0], dtype=np.float32),
+        cp_target,
+        no_outcome,
+        1.0,
+        0.0,
+    )
+    if cp_loss != cp_reference_loss or not np.array_equal(
+        cp_gradient, cp_reference_gradient
+    ):
+        raise AssertionError("HCE outcome baseline leaked into correction CP loss")
+
+    # Selection is architecture-specific. Extra residual fields cannot alter
+    # the legacy absolute outcome path, including for Black to move.
+    black_ofen = INITIAL_OFEN.replace(" w KQkq ", " b KQkq ")
+    outcome_records = [
+        {
+            "sampleId": "residual-outcome-black",
+            "groupId": "residual-outcome",
+            "ofen": black_ofen,
+            "targetCpStm": 12,
+            "outcomeStm": 0.25,
+            "searchOutcomeStm": 0.75,
+            "handcraftedCpStm": -300,
+        }
+    ]
+    absolute_dataset = make_dataset_from_records(outcome_records)
+    if (
+        np.any(np.isfinite(absolute_dataset.search_outcome))
+        or np.any(np.isfinite(absolute_dataset.handcrafted_cp))
+    ):
+        raise AssertionError("absolute loading consumed residual-only fields")
+    dataset = make_dataset_from_records(
+        outcome_records, residual_outcomes=True
+    )
+    indices = np.asarray([0], dtype=np.int64)
+    absolute_outcome, absolute_offset = _outcome_supervision(
+        dataset, indices, ARCHITECTURE_ABSOLUTE
+    )
+    if absolute_offset is not None or absolute_outcome[0] != 0.25:
+        raise AssertionError("residual metadata altered absolute supervision")
+    residual_outcome, residual_offset = _outcome_supervision(
+        dataset, indices, ARCHITECTURE_RESIDUAL
+    )
+    if residual_outcome[0] != 0.75:
+        raise AssertionError("residual search outcome was not selected")
+    assert residual_offset is not None
+    if residual_offset[0] != -300.0:
+        raise AssertionError("Black-to-move handcrafted baseline changed sign")
+
+    model = FloatNetwork.initialize(718)
+    stm, opponent = dataset.perspective_features(indices)
+    prediction, _ = model.forward(
+        stm,
+        opponent,
+        quantization_aware=False,
+        need_cache=False,
+    )
+    expected_loss, expected_output_gradient, _ = loss_and_gradient(
+        prediction,
+        dataset.target_cp[indices],
+        residual_outcome,
+        0.0,
+        1.0,
+        residual_offset,
+    )
+    actual_loss, parameter_gradients, _ = gradients(
+        dataset,
+        indices,
+        model,
+        0.0,
+        1.0,
+        False,
+        ARCHITECTURE_RESIDUAL,
+    )
+    if expected_loss != actual_loss or not np.isclose(
+        parameter_gradients["output_bias"][0],
+        expected_output_gradient.sum(),
+        rtol=0.0,
+        atol=1e-12,
+    ):
+        raise AssertionError(
+            "residual outcome gradient did not reach the network output"
+        )
+
+    try:
+        make_dataset_from_records(
+            [
+                {
+                    "sampleId": "missing-outcome-baseline",
+                    "ofen": black_ofen,
+                    "targetCpStm": 0,
+                    "searchOutcomeStm": 0.5,
+                }
+            ],
+            residual_outcomes=True,
+        )
+    except ValueError as error:
+        if "requires handcraftedCpStm" not in str(error):
+            raise
+    else:
+        raise AssertionError("residual outcome without an HCE baseline was accepted")
+
+    cp_only = make_dataset_from_records(
+        [
+            {
+                "sampleId": "cp-only-residual",
+                "ofen": black_ofen,
+                "targetCpStm": 0,
+                "handcraftedCpStm": -10,
+            }
+        ],
+        residual_outcomes=True,
+    )
+    try:
+        _require_residual_outcomes(
+            cp_only, ARCHITECTURE_RESIDUAL, outcome_weight=1.0
+        )
+    except ValueError as error:
+        if "no searchOutcomeStm" not in str(error):
+            raise
+    else:
+        raise AssertionError("positive residual outcome weight became a no-op")
+    _require_residual_outcomes(
+        cp_only, ARCHITECTURE_RESIDUAL, outcome_weight=0.0
+    )
+    _require_residual_outcomes(
+        cp_only, ARCHITECTURE_ABSOLUTE, outcome_weight=1.0
+    )
 
 
 def _collision_self_test() -> None:
@@ -1020,6 +1925,102 @@ def _collision_self_test() -> None:
             raise AssertionError("collision-error policy accepted a collision")
 
 
+def _float_checkpoint_self_test() -> None:
+    model = FloatNetwork.initialize(77123)
+    with tempfile.TemporaryDirectory(prefix="omega-nnue-float-checkpoint-") as directory:
+        path = Path(directory) / "model.float"
+        model.write_checkpoint(path)
+        first = path.read_bytes()
+        model.write_checkpoint(path)
+        if path.read_bytes() != first:
+            raise AssertionError("float checkpoint bytes are not deterministic")
+        loaded = FloatNetwork.read_checkpoint(path)
+        for name, value in model.parameters().items():
+            if not np.array_equal(value, loaded.parameters()[name]):
+                raise AssertionError(
+                    f"float checkpoint changed parameter {name!r}"
+                )
+        corrupt = bytearray(first)
+        corrupt[-1] ^= 1
+        path.write_bytes(corrupt)
+        try:
+            FloatNetwork.read_checkpoint(path)
+        except ValueError as error:
+            if "SHA-256 mismatch" not in str(error):
+                raise
+        else:
+            raise AssertionError("corrupt float checkpoint was accepted")
+
+
+def _epoch_zero_selection_self_test() -> None:
+    """A worsening continuation must export its unchanged initial checkpoint."""
+
+    dataset = make_dataset_from_records(
+        [
+            {
+                "sampleId": "epoch-zero-train",
+                "groupId": "epoch-zero-train",
+                "ofen": SPARSE_OFEN,
+                "targetCpStm": 200,
+            },
+            {
+                "sampleId": "epoch-zero-validation",
+                "groupId": "epoch-zero-validation",
+                "ofen": CHAMPION_C3_OFEN,
+                "targetCpStm": 0,
+            },
+        ],
+        seed=88421,
+    )
+    dataset.split = np.asarray([0, 1], dtype=dataset.split.dtype)
+
+    initial = _blank_quantized_network()
+    initial.dense_bias.fill(HIDDEN_DIVISOR)
+    initial_model = FloatNetwork.from_quantized(initial)
+    selected, history, selected_epoch = train(
+        dataset,
+        architecture=ARCHITECTURE_ABSOLUTE,
+        seed=88421,
+        epochs=1,
+        qat_epochs=1,
+        batch_size=1,
+        learning_rate=0.1,
+        feature_transformer_learning_rate_scale=0.1,
+        dense_bias_learning_rate_scale=0.1,
+        dense_weight_learning_rate_scale=0.1,
+        output_learning_rate_scale=1.0,
+        qat_learning_rate_scale=1.0,
+        initial_model=initial_model,
+        stratified_batches=False,
+        cp_weight=1.0,
+        outcome_weight=0.0,
+        quiet=True,
+    )
+    if selected_epoch != 0:
+        raise AssertionError(
+            f"worsening continuation selected epoch {selected_epoch}, not epoch 0"
+        )
+    if [row["epoch"] for row in history] != [0, 1]:
+        raise AssertionError("epoch-zero selection history is not explicit")
+    initial_loss = float(history[0]["quantizedValidation"]["loss"])
+    worsened_loss = float(history[1]["quantizedValidation"]["loss"])
+    if not worsened_loss > initial_loss:
+        raise AssertionError(
+            "epoch-zero selection fixture did not worsen validation loss: "
+            f"{initial_loss:.6f} -> {worsened_loss:.6f}"
+        )
+    selected_network = selected.quantize()
+    if selected_network.to_bytes() != initial.to_bytes():
+        raise AssertionError("epoch-zero selection changed the initial network")
+    with tempfile.TemporaryDirectory(prefix="omega-nnue-epoch-zero-") as directory:
+        output = Path(directory) / "selected.nnue"
+        selected_network.write(output)
+        if QuantizedNetwork.read(output).to_bytes() != initial.to_bytes():
+            raise AssertionError(
+                "worsening continuation did not export the initial checkpoint"
+            )
+
+
 def parse_arguments(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -1036,13 +2037,75 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--output", type=Path, help="output .nnue file")
     parser.add_argument("--manifest", type=Path, help="output manifest JSON")
+    parser.add_argument(
+        "--network-semantics",
+        choices=("absolute", "residual"),
+        default="absolute",
+        help=(
+            "self-described runtime meaning stored in the OMNNUE1 architecture "
+            "field: absolute replaces HCE; residual adds a learned correction "
+            "to HCE"
+        ),
+    )
+    parser.add_argument(
+        "--initial-network",
+        type=Path,
+        help="quantized checkpoint used to initialize a fine-tuning run",
+    )
+    parser.add_argument(
+        "--initial-float-checkpoint",
+        type=Path,
+        help="lossless float shadow checkpoint used to resume training",
+    )
+    parser.add_argument(
+        "--float-checkpoint",
+        type=Path,
+        help="output lossless float shadow checkpoint (normal default: <output>.float)",
+    )
     parser.add_argument("--seed", type=int, default=20260718)
+    parser.add_argument(
+        "--split-seed",
+        type=int,
+        help="dataset-group split seed (defaults to --seed)",
+    )
     parser.add_argument("--epochs", type=int)
     parser.add_argument("--qat-epochs", type=int)
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--learning-rate", type=float, default=0.01)
+    parser.add_argument(
+        "--feature-transformer-learning-rate-scale", type=float, default=0.1
+    )
+    parser.add_argument(
+        "--dense-bias-learning-rate-scale", type=float, default=0.1
+    )
+    parser.add_argument(
+        "--dense-weight-learning-rate-scale",
+        type=float,
+        default=0.005,
+        help=(
+            "Adam step multiplier for the 256-input dense matrix; the default "
+            "prevents a coherent first step from killing every clipped ReLU"
+        ),
+    )
+    parser.add_argument("--output-learning-rate-scale", type=float, default=1.0)
+    parser.add_argument(
+        "--qat-learning-rate-scale",
+        type=float,
+        default=0.1,
+        help="global Adam step multiplier during quantization-aware epochs",
+    )
+    parser.add_argument(
+        "--unstratified-batches",
+        action="store_true",
+        help="use a plain epoch shuffle instead of phase/score interleaving",
+    )
     parser.add_argument("--cp-weight", type=float, default=1.0)
     parser.add_argument("--outcome-weight", type=float, default=1.0)
+    parser.add_argument(
+        "--target-cp-clip",
+        type=float,
+        help="symmetrically clip finite CP labels before training",
+    )
     parser.add_argument("--train-percent", type=float, default=80.0)
     parser.add_argument("--validation-percent", type=float, default=10.0)
     parser.add_argument(
@@ -1096,14 +2159,57 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_arguments(sys.argv[1:] if argv is None else argv)
+    architecture = {
+        "absolute": ARCHITECTURE_ABSOLUTE,
+        "residual": ARCHITECTURE_RESIDUAL,
+    }[args.network_semantics]
+    if args.initial_network is not None and args.initial_float_checkpoint is not None:
+        raise ValueError(
+            "--initial-network and --initial-float-checkpoint are mutually exclusive"
+        )
     if args.cp_weight < 0.0 or args.outcome_weight < 0.0:
         raise ValueError("loss weights cannot be negative")
     if args.cp_weight == 0.0 and args.outcome_weight == 0.0:
         raise ValueError("at least one loss weight must be positive")
+    if args.target_cp_clip is not None and args.target_cp_clip <= 0.0:
+        raise ValueError("--target-cp-clip must be positive")
+    learning_rate_scales = {
+        "--feature-transformer-learning-rate-scale": (
+            args.feature_transformer_learning_rate_scale
+        ),
+        "--dense-bias-learning-rate-scale": args.dense_bias_learning_rate_scale,
+        "--dense-weight-learning-rate-scale": (
+            args.dense_weight_learning_rate_scale
+        ),
+        "--output-learning-rate-scale": args.output_learning_rate_scale,
+        "--qat-learning-rate-scale": args.qat_learning_rate_scale,
+    }
+    for name, value in learning_rate_scales.items():
+        if value <= 0.0:
+            raise ValueError(f"{name} must be positive")
 
+    runtime_manifest = _runtime_manifest()
     input_pins = [_file_pin(path) for path in args.input]
+    residual_targets_validated = (
+        _validate_residual_targets(args.input)
+        if architecture == ARCHITECTURE_RESIDUAL and args.input
+        else 0
+    )
+    split_seed = args.seed if args.split_seed is None else args.split_seed
+    initial_network_pin = (
+        _file_pin(args.initial_network) if args.initial_network is not None else None
+    )
+    initial_float_checkpoint_pin = (
+        _file_pin(args.initial_float_checkpoint)
+        if args.initial_float_checkpoint is not None
+        else None
+    )
     _feature_self_test()
+    _format_semantics_self_test()
+    _residual_outcome_supervision_self_test()
     _collision_self_test()
+    _float_checkpoint_self_test()
+    _epoch_zero_selection_self_test()
     golden_cases = _golden_runtime_cases()
     golden_python = _golden_python_self_test(golden_cases)
     temporary_output: Path | None = None
@@ -1111,7 +2217,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.input:
             dataset = load_dataset(
                 args.input,
-                seed=args.seed,
+                seed=split_seed,
                 train_percent=100.0,
                 validation_percent=0.0,
                 explicit_group_field=args.group_field,
@@ -1124,16 +2230,19 @@ def main(argv: list[str] | None = None) -> int:
                 strict=args.strict,
                 all_train=True,
                 collision_policy=args.collision_policy,
+                residual_outcomes=architecture == ARCHITECTURE_RESIDUAL,
             )
         else:
             dataset = make_dataset_from_records(
                 make_synthetic_records(),
-                seed=args.seed,
+                seed=split_seed,
                 collision_policy=args.collision_policy,
             )
-        epochs = args.epochs if args.epochs is not None else 100
+        epochs = args.epochs if args.epochs is not None else 200
         qat_epochs = (
-            args.qat_epochs if args.qat_epochs is not None else min(20, epochs)
+            args.qat_epochs
+            if args.qat_epochs is not None
+            else min(20, max(1, epochs // 5))
         )
         if args.output is None:
             handle, name = tempfile.mkstemp(suffix=".nnue")
@@ -1149,22 +2258,59 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("normal training requires --output")
         dataset = load_dataset(
             args.input,
-            seed=args.seed,
+            seed=split_seed,
             train_percent=args.train_percent,
             validation_percent=args.validation_percent,
             explicit_group_field=args.group_field,
             max_records=args.max_records,
             strict=args.strict,
             collision_policy=args.collision_policy,
+            residual_outcomes=architecture == ARCHITECTURE_RESIDUAL,
         )
-        epochs = args.epochs if args.epochs is not None else 12
+        epochs = args.epochs if args.epochs is not None else 15
         qat_epochs = (
-            args.qat_epochs if args.qat_epochs is not None else min(3, epochs)
+            args.qat_epochs
+            if args.qat_epochs is not None
+            else min(3, max(1, epochs // 4))
         )
         output = args.output
 
+    if args.input:
+        _require_residual_outcomes(
+            dataset, architecture, args.outcome_weight
+        )
+
+    float_checkpoint_path = args.float_checkpoint
+    if float_checkpoint_path is None and not args.self_test:
+        float_checkpoint_path = output.with_suffix(output.suffix + ".float")
+
+    clipped_target_count = 0
+    if args.target_cp_clip is not None:
+        finite_cp = np.isfinite(dataset.target_cp)
+        clipped_target_count = int(
+            np.sum(np.abs(dataset.target_cp[finite_cp]) > args.target_cp_clip)
+        )
+        dataset.target_cp[finite_cp] = np.clip(
+            dataset.target_cp[finite_cp],
+            -args.target_cp_clip,
+            args.target_cp_clip,
+        )
+
     train_indices = dataset.indices(0)
-    initial = FloatNetwork.initialize(args.seed).quantize()
+    if args.initial_float_checkpoint is not None:
+        initial_model = FloatNetwork.read_checkpoint(args.initial_float_checkpoint)
+    elif args.initial_network is not None:
+        initial_quantized = QuantizedNetwork.read(args.initial_network)
+        if initial_quantized.architecture != architecture:
+            raise ValueError(
+                "--initial-network semantics do not match "
+                f"--network-semantics {args.network_semantics}: "
+                f"network is {ARCHITECTURE_NAMES[initial_quantized.architecture]}"
+            )
+        initial_model = FloatNetwork.from_quantized(initial_quantized)
+    else:
+        initial_model = FloatNetwork.initialize(args.seed)
+    initial = initial_model.quantize(architecture)
     initial_metrics = evaluate(
         dataset,
         train_indices,
@@ -1183,18 +2329,49 @@ def main(argv: list[str] | None = None) -> int:
         f"dropped={dataset.input_collision_rows_dropped}",
         flush=True,
     )
-    model, history = train(
+    model, history, selected_epoch = train(
         dataset,
+        architecture=architecture,
         seed=args.seed,
         epochs=epochs,
         qat_epochs=qat_epochs,
         batch_size=args.batch_size,
         learning_rate=args.learning_rate,
+        feature_transformer_learning_rate_scale=(
+            args.feature_transformer_learning_rate_scale
+        ),
+        dense_bias_learning_rate_scale=args.dense_bias_learning_rate_scale,
+        dense_weight_learning_rate_scale=args.dense_weight_learning_rate_scale,
+        output_learning_rate_scale=args.output_learning_rate_scale,
+        qat_learning_rate_scale=args.qat_learning_rate_scale,
+        initial_model=initial_model,
+        stratified_batches=not args.unstratified_batches,
         cp_weight=args.cp_weight,
         outcome_weight=args.outcome_weight,
         quiet=args.quiet,
     )
-    network = model.quantize()
+    network = model.quantize(architecture)
+
+    current_input_pins = [_file_pin(path) for path in args.input]
+    if current_input_pins != input_pins:
+        raise ValueError("an input file changed while training was in progress")
+    current_initial_network_pin = (
+        _file_pin(args.initial_network) if args.initial_network is not None else None
+    )
+    if current_initial_network_pin != initial_network_pin:
+        raise ValueError("the initial network changed while training was in progress")
+    current_initial_float_checkpoint_pin = (
+        _file_pin(args.initial_float_checkpoint)
+        if args.initial_float_checkpoint is not None
+        else None
+    )
+    if current_initial_float_checkpoint_pin != initial_float_checkpoint_pin:
+        raise ValueError(
+            "the initial float checkpoint changed while training was in progress"
+        )
+    if _runtime_manifest()["tools"] != runtime_manifest["tools"]:
+        raise ValueError("trainer source changed while training was in progress")
+
     all_indices = np.arange(dataset.count, dtype=np.int64)
     round_trip = run_round_trip(
         output, network, dataset, all_indices, args.batch_size
@@ -1228,6 +2405,41 @@ def main(argv: list[str] | None = None) -> int:
             args.outcome_weight,
         ),
     }
+    quantization_metrics = {
+        "train": quantization_penalty(
+            dataset,
+            dataset.indices(0),
+            model,
+            network,
+            args.batch_size,
+        ),
+        "validation": quantization_penalty(
+            dataset,
+            dataset.indices(1),
+            model,
+            network,
+            args.batch_size,
+        ),
+        "test": quantization_penalty(
+            dataset,
+            dataset.indices(2),
+            model,
+            network,
+            args.batch_size,
+        ),
+    }
+    float_checkpoint_pin = None
+    if float_checkpoint_path is not None:
+        model.write_checkpoint(float_checkpoint_path)
+        reloaded_float = FloatNetwork.read_checkpoint(float_checkpoint_path)
+        for name, value in model.parameters().items():
+            if not np.array_equal(
+                value, reloaded_float.parameters()[name], equal_nan=False
+            ):
+                raise AssertionError(
+                    f"float checkpoint changed parameter {name!r} on round trip"
+                )
+        float_checkpoint_pin = _file_pin(float_checkpoint_path)
 
     if args.self_test:
         corrupt_file_must_fail(output)
@@ -1245,14 +2457,19 @@ def main(argv: list[str] | None = None) -> int:
             flush=True,
         )
 
-    current_input_pins = [_file_pin(path) for path in args.input]
-    if current_input_pins != input_pins:
-        raise ValueError("an input file changed while training was in progress")
     manifest = {
         "schemaVersion": 2,
         "formatVersion": FORMAT_VERSION,
+        "networkSemantics": args.network_semantics,
         "architecture": {
+            "id": architecture,
             "name": "PS104-shared-1668x128-256x32x1",
+            "outputSemantics": args.network_semantics,
+            "runtimeEvaluation": (
+                "handcrafted-plus-network-correction"
+                if architecture == ARCHITECTURE_RESIDUAL
+                else "network"
+            ),
             "headerBytes": HEADER_BYTES,
             "payloadBytes": PAYLOAD_BYTES,
             "features": FEATURE_COUNT,
@@ -1263,8 +2480,13 @@ def main(argv: list[str] | None = None) -> int:
             "outputDivisor": OUTPUT_DIVISOR,
         },
         "inputs": input_pins,
-        "environment": _runtime_manifest(),
+        "initialNetwork": initial_network_pin,
+        "initialFloatCheckpoint": initial_float_checkpoint_pin,
+        "floatCheckpoint": float_checkpoint_pin,
+        "environment": runtime_manifest,
         "seed": args.seed,
+        "modelSeed": args.seed,
+        "splitSeed": split_seed,
         "groups": len(set(dataset.groups)),
         "records": {
             "read": dataset.records_read,
@@ -1273,6 +2495,13 @@ def main(argv: list[str] | None = None) -> int:
             "train": int(dataset.indices(0).size),
             "validation": int(dataset.indices(1).size),
             "test": int(dataset.indices(2).size),
+            "absoluteOutcomeTargets": int(np.isfinite(dataset.outcome).sum()),
+            "searchOutcomeTargets": int(
+                np.isfinite(dataset.search_outcome).sum()
+            ),
+            "handcraftedBaselines": int(
+                np.isfinite(dataset.handcrafted_cp).sum()
+            ),
         },
         "inputCollisions": {
             "policy": dataset.collision_policy,
@@ -1297,24 +2526,71 @@ def main(argv: list[str] | None = None) -> int:
             "qatEpochs": qat_epochs,
             "batchSize": args.batch_size,
             "learningRate": args.learning_rate,
+            "featureTransformerLearningRateScale": (
+                args.feature_transformer_learning_rate_scale
+            ),
+            "denseBiasLearningRateScale": args.dense_bias_learning_rate_scale,
+            "denseWeightLearningRateScale": (
+                args.dense_weight_learning_rate_scale
+            ),
+            "outputLearningRateScale": args.output_learning_rate_scale,
+            "qatLearningRateScale": args.qat_learning_rate_scale,
+            "batchOrdering": (
+                "plain-shuffle"
+                if args.unstratified_batches
+                else "phase-score-interleaved"
+            ),
             "cpWeight": args.cp_weight,
             "outcomeWeight": args.outcome_weight,
+            "outcomeSupervision": {
+                "targetFields": (
+                    ["searchOutcomeStm", "searchSideToMoveScore"]
+                    if architecture == ARCHITECTURE_RESIDUAL
+                    else ["outcomeStm", "sideToMoveScore"]
+                ),
+                "score": (
+                    "handcraftedCpStm + network correction"
+                    if architecture == ARCHITECTURE_RESIDUAL
+                    else "network output"
+                ),
+                "fixedBaselineField": (
+                    "handcraftedCpStm"
+                    if architecture == ARCHITECTURE_RESIDUAL
+                    else None
+                ),
+                "gradientDestination": "network output",
+            },
+            "targetCpClip": args.target_cp_clip,
+            "targetsClipped": clipped_target_count,
             "cpNormalizer": CP_NORMALIZER,
             "cpHuberDeltaNormalized": CP_HUBER_DELTA,
             "outcomeLogisticScale": OUTCOME_LOGISTIC_SCALE,
             "groupField": args.group_field,
             "collisionPolicy": args.collision_policy,
+            "residualTargetsValidated": residual_targets_validated,
             "trainPercent": 100.0 if args.self_test else args.train_percent,
             "validationPercent": (
                 0.0 if args.self_test else args.validation_percent
             ),
         },
         "initialQuantizedTrain": initial_metrics,
+        "initialQuantizedValidation": history[0]["quantizedValidation"],
         "finalQuantized": final_metrics,
+        "quantizationPenalty": quantization_metrics,
         "roundTrip": round_trip,
         "goldenPython": golden_python,
         "crossRuntime": cross_runtime,
         "history": history,
+        "selectedEpoch": selected_epoch,
+        "selection": {
+            "metric": "quantized loss",
+            "split": (
+                "validation" if dataset.indices(1).size else "train"
+            ),
+            "baselineEpoch": 0,
+            "selectedEpoch": selected_epoch,
+            "selectedInitialCheckpoint": selected_epoch == 0,
+        },
         "selfTest": bool(args.self_test),
     }
     manifest_path = args.manifest

@@ -145,6 +145,7 @@ std::int64_t divide_round(std::int64_t value, std::int64_t divisor) {
 
 struct Runtime_Network::Network_Data {
    std::string path;
+   bool residual_correction;
    std::array<std::int16_t, format::Accumulator_Size> ft_bias;
    std::vector<std::int16_t> ft_weights;
    std::array<std::int32_t, format::Hidden_Size> hidden_bias;
@@ -154,6 +155,7 @@ struct Runtime_Network::Network_Data {
 
    Network_Data()
       : path(),
+        residual_correction(false),
         ft_bias(),
         ft_weights(),
         hidden_bias(),
@@ -397,7 +399,8 @@ Configure_Result Runtime_Network::configure(
       return failure("unsupported format version in " + file_name,
                      previous != nullptr);
    }
-   if (architecture != format::Architecture_Id) {
+   if (architecture != format::Architecture_Absolute
+    && architecture != format::Architecture_Residual) {
       return failure("unsupported architecture in " + file_name,
                      previous != nullptr);
    }
@@ -423,6 +426,8 @@ Configure_Result Runtime_Network::configure(
 
    std::shared_ptr<Network_Data> next(new Network_Data());
    next->path = file_name;
+   next->residual_correction =
+      architecture == format::Architecture_Residual;
    next->ft_weights.resize(
       std::size_t(format::Feature_Count) * format::Accumulator_Size
    );
@@ -478,7 +483,10 @@ Configure_Result Runtime_Network::configure(
 
    Configure_Result result;
    result.ok = true;
-   result.message = "Omega NNUE loaded: PS104-128x2-32 from " + file_name;
+   result.message = next->residual_correction
+                  ? "Omega NNUE loaded: PS104-128x2-32 residual correction from "
+                    + file_name
+                  : "Omega NNUE loaded: PS104-128x2-32 from " + file_name;
    return result;
 }
 
@@ -486,9 +494,20 @@ bool Runtime_Network::evaluate(
    const Pos & pos,
    int & side_to_move_cp
 ) const {
+   bool residual_correction = false;
+   return evaluate(pos, side_to_move_cp, residual_correction);
+}
+
+bool Runtime_Network::evaluate(
+   const Pos & pos,
+   int & side_to_move_cp,
+   bool & residual_correction
+) const {
+   residual_correction = false;
    const std::shared_ptr<const Network_Data> network =
       std::atomic_load(&p_network);
    if (network == nullptr || !variant_is_omega()) return false;
+   residual_correction = network->residual_correction;
 
    std::array<
       std::array<std::int32_t, format::Accumulator_Size>,

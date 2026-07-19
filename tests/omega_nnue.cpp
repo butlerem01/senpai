@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <limits>
 #include <set>
 #include <string>
 #include <utility>
@@ -33,6 +34,9 @@ namespace fmt = omega_nnue::format;
 
 const std::string Good_A { "omega-nnue-good-a-test.omnnue" };
 const std::string Good_B { "omega-nnue-good-b-test.omnnue" };
+const std::string Good_Residual {
+   "omega-nnue-good-residual-test.omnnue"
+};
 const std::string Bad_File { "omega-nnue-bad-test.omnnue" };
 const std::string Missing_File { "omega-nnue-missing-test.omnnue" };
 
@@ -162,7 +166,10 @@ std::size_t hidden_weight_offset(int neuron, int input) {
         + std::size_t(input);
 }
 
-std::vector<unsigned char> make_fixture(int output_adjust_cp = 0) {
+std::vector<unsigned char> make_fixture(
+   int output_adjust_cp = 0,
+   std::uint32_t architecture = fmt::Architecture_Absolute
+) {
    std::vector<unsigned char> bytes(
       static_cast<std::size_t>(fmt::File_Bytes), 0
    );
@@ -175,7 +182,7 @@ std::vector<unsigned char> make_fixture(int output_adjust_cp = 0) {
    put_u32(bytes, 8, fmt::Endian_Tag);
    put_u32(bytes, 12, fmt::Format_Version);
    put_u32(bytes, 16, fmt::Header_Bytes);
-   put_u32(bytes, 20, fmt::Architecture_Id);
+   put_u32(bytes, 20, architecture);
    put_u32(bytes, 24, fmt::Square_Count);
    put_u32(bytes, 28, fmt::Piece_Count);
    put_u32(bytes, 32, fmt::Feature_Count);
@@ -355,6 +362,43 @@ void select_variant(Variant value) {
    bit::init(value);
    pawn::init();
    clear_pawn_table();
+}
+
+void initialize_omega_runtime() {
+   math::init();
+   bit::init(Chess);
+   hash::init();
+   pawn::init();
+   pos::init();
+   var::init();
+   select_variant(Omega);
+}
+
+int evaluate_handcrafted_stream() {
+   initialize_omega_runtime();
+   var::set("UseOmegaNNUE", "false");
+   var::update();
+
+   std::string ofen;
+   std::size_t line = 0;
+   while (std::getline(std::cin, ofen)) {
+      line++;
+      try {
+         const Pos pos = pos_from_fen(ofen, Omega);
+         const int side_to_move_cp = int(eval(pos, pos.turn()));
+         std::cout << side_to_move_cp << std::endl;
+      } catch (const std::exception &) {
+         std::cerr << "invalid Omega OFEN on input line " << line
+                   << std::endl;
+         return 5;
+      }
+   }
+
+   if (!std::cin.eof()) {
+      std::cerr << "failed while reading Omega OFEN input" << std::endl;
+      return 6;
+   }
+   return 0;
 }
 
 void test_feature_map() {
@@ -600,7 +644,7 @@ void test_loader_corruption(const std::vector<unsigned char> & good) {
       { 8U,  0x04030201U },
       { 12U, fmt::Format_Version + 1U },
       { 16U, fmt::Header_Bytes + 4U },
-      { 20U, fmt::Architecture_Id + 1U },
+      { 20U, fmt::Architecture_Residual + 1U },
       { 24U, 64U }, // a standard-chess network is not an Omega network
       { 28U, fmt::Piece_Count - 1U },
       { 32U, fmt::Feature_Count - 1U },
@@ -658,7 +702,11 @@ void test_loading_and_inference(
 
    int raw_original = 0;
    int raw_mirrored = 0;
-   assert(network.evaluate(original, raw_original));
+   bool residual_correction = true;
+   assert(network.evaluate(
+      original, raw_original, residual_correction
+   ));
+   assert(!residual_correction);
    assert(network.evaluate(mirrored, raw_mirrored));
    assert(raw_original == -8);
    assert(raw_mirrored == raw_original);
@@ -738,11 +786,78 @@ void test_loading_and_inference(
    assert(int(eval(original, White)) == fallback);
 }
 
+void test_residual_evaluation() {
+   std::vector<unsigned char> residual_bytes = make_fixture(
+      5, fmt::Architecture_Residual
+   );
+   write_bytes(Good_Residual, residual_bytes);
+
+   const Pos original = pos_from_ofen(diagnostic_source());
+   const Pos draw = pos_from_fen(
+      "5k4/10/10/10/10/10/10/10/10/4K5[-/-/-/-] w - - 0 1",
+      Omega
+   );
+   assert(draw.is_draw());
+
+   var::set("UseOmegaNNUE", "false");
+   var::update();
+   const int handcrafted = int(eval(original, White));
+
+   const nn::Configure_Result loaded =
+      nn::G_Network.configure(Good_Residual);
+   assert(loaded.ok);
+   assert(loaded.message ==
+          "Omega NNUE loaded: PS104-128x2-32 residual correction from "
+          + Good_Residual);
+
+   int correction = 0;
+   bool residual_correction = false;
+   assert(nn::G_Network.evaluate(
+      original, correction, residual_correction
+   ));
+   assert(residual_correction);
+   assert(correction == -3);
+
+   var::set("UseOmegaNNUE", "true");
+   var::update();
+   const int combined = int(eval(original, White));
+   assert(combined == handcrafted + correction);
+   assert(int(eval(original, Black)) == -combined);
+
+   // Draw adjudication is upstream of both HCE and correction.  The raw
+   // network is deliberately non-zero here, so this catches an accidental
+   // residual addition before the draw bypass.
+   int draw_correction = 0;
+   assert(nn::G_Network.evaluate(draw, draw_correction));
+   assert(draw_correction != 0);
+   assert(int(eval(draw, White)) == 0);
+   assert(int(eval(draw, Black)) == 0);
+
+   // An extreme but structurally valid correction must remain an evaluation
+   // score rather than leaking into the search's mate-score range.
+   put_i32(
+      residual_bytes,
+      Output_Bias_Offset,
+      std::numeric_limits<std::int32_t>::max()
+   );
+   put_u64(
+      residual_bytes,
+      64,
+      fnv1a(residual_bytes, fmt::Header_Bytes)
+   );
+   write_bytes(Good_Residual, residual_bytes);
+   assert(nn::G_Network.configure(Good_Residual).ok);
+   const Score safe = eval(original, White);
+   assert(score::is_eval(safe));
+   assert(safe == score::Eval_Inf);
+}
+
 struct Cleanup {
    ~Cleanup() {
       nn::G_Network.configure("");
       std::remove(Good_A.c_str());
       std::remove(Good_B.c_str());
+      std::remove(Good_Residual.c_str());
       std::remove(Bad_File.c_str());
       std::remove(Missing_File.c_str());
    }
@@ -756,14 +871,12 @@ int main(int argc, char * argv[]) {
       write_bytes(argv[2], make_fixture());
       return 0;
    }
+   if (argc == 2
+    && std::string(argv[1]) == "--evaluate-handcrafted-stream") {
+      return evaluate_handcrafted_stream();
+   }
    if (argc == 4 && std::string(argv[1]) == "--evaluate-network") {
-      math::init();
-      bit::init(Chess);
-      hash::init();
-      pawn::init();
-      pos::init();
-      var::init();
-      select_variant(Omega);
+      initialize_omega_runtime();
 
       nn::Runtime_Network network;
       const nn::Configure_Result loaded = network.configure(argv[2]);
@@ -798,6 +911,7 @@ int main(int argc, char * argv[]) {
    const std::vector<unsigned char> good_b = make_fixture(5);
    test_loader_corruption(good_a);
    test_loading_and_inference(good_a, good_b);
+   test_residual_evaluation();
 
    return 0;
 }

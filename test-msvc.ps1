@@ -102,8 +102,25 @@ if ($LASTEXITCODE -ne 0) {
 $python = Get-Command python.exe -ErrorAction SilentlyContinue
 $numpyAvailable = $false
 if ($null -ne $python) {
+    & $python.Source `
+        (Join-Path $root "tools\omega_nnue\label_hce.py") `
+        "--self-test" `
+        "--cpp-evaluator" (Join-Path $executables "omega_nnue.exe")
+    if ($LASTEXITCODE -ne 0) {
+        throw "Omega HCE JSONL labeling test failed with exit code $LASTEXITCODE"
+    }
+
+    & $python.Source `
+        (Join-Path $root "tools\omega_nnue\build_residual_targets.py") `
+        "--self-test"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Omega residual-target alignment test failed with exit code $LASTEXITCODE"
+    }
+
     & $python.Source -c "import numpy" 2>$null
     $numpyAvailable = $LASTEXITCODE -eq 0
+} else {
+    Write-Host "Skipping Omega HCE JSONL labeling test: Python is unavailable"
 }
 
 if ($numpyAvailable) {

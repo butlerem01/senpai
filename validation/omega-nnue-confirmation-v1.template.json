@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "expectedHarnessSha256": "<OMEGAMATCH_DLL_SHA256>",
+  "expectedHarnessBundleSha256": "<OMEGAMATCH_RUNTIME_BUNDLE_SHA256>",
+  "expectedOpeningSuiteSha256": "<FROZEN_CONFIRMATION_ROOTS_SHA256>",
+  "runId": "confirm-omega-nnue-<CANDIDATE_SHA12>-128",
+  "outputDirectory": "<FROZEN_CONFIRMATION_RUN_DIRECTORY>",
+  "seed": 20260718,
+  "engines": [
+    {
+      "id": "nnue-candidate",
+      "executable": "<PINNED_SAME_EXECUTABLE_FOR_BOTH_SIDES>",
+      "expectedSha256": "<EXECUTABLE_SHA256>",
+      "expectedAssetSha256": {
+        "OmegaNNUEFile": "<CANDIDATE_NETWORK_SHA256>"
+      },
+      "options": {
+        "Threads": "1",
+        "Hash": "128",
+        "Ponder": "false",
+        "OwnBook": "false",
+        "UCI_Chess960": "false",
+        "UCI_Variant": "omega",
+        "UseOmegaNNUE": "true",
+        "OmegaNNUEFile": "<FROZEN_CANDIDATE_NETWORK>"
+      }
+    },
+    {
+      "id": "hce-control",
+      "executable": "<PINNED_SAME_EXECUTABLE_FOR_BOTH_SIDES>",
+      "expectedSha256": "<EXECUTABLE_SHA256>",
+      "options": {
+        "Threads": "1",
+        "Hash": "128",
+        "Ponder": "false",
+        "OwnBook": "false",
+        "UCI_Chess960": "false",
+        "UCI_Variant": "omega",
+        "UseOmegaNNUE": "false"
+      }
+    }
+  ],
+  "match": {
+    "engineA": "nnue-candidate",
+    "engineB": "hce-control",
+    "openingsFile": "<FROZEN_CONFIRMATION_ROOTS_JSON>",
+    "repeats": 1,
+    "maxPlies": 300,
+    "absoluteMaxPlies": 400,
+    "mode": "nodes",
+    "nodes": 50000,
+    "searchTimeoutMs": 60000,
+    "stopGraceMs": 2000,
+    "bootstrapIterations": 20000,
+    "sequentialGate": {
+      "candidateEngine": "nnue-candidate",
+      "minimumPairs": 64,
+      "nullElo": 10.0,
+      "promotionAlpha": 0.05,
+      "futilityBeta": 0.1
+    },
+    "freshProcessPerGame": true
+  }
+}

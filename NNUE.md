@@ -39,6 +39,14 @@ corners map `w1 <-> w4` and `w2 <-> w3`. The binary file is exactly 435,692
 bytes: a 72-byte little-endian `OMNNUE1` header and a 435,620-byte payload
 protected by FNV-1a-64.
 
+The unchanged tensor layout supports two self-described output meanings in
+the header. Architecture `1` is the original absolute evaluator; all existing
+v1 files retain their bytes and behavior. Architecture `2` is a correction:
+the runtime adds its side-to-move output to the handcrafted Omega evaluation.
+The engine obtains that meaning from the file header rather than its filename.
+Draw adjudication still bypasses evaluation, and the combined score is clamped
+to the normal non-mate evaluation range.
+
 ## CoreChess
 
 Add `build-msvc/senpai-omega-nnue.exe` as a UCI engine. Keep the established
@@ -77,6 +85,20 @@ python .\tools\omega_nnue\train.py `
   --output .\build-msvc\omega-nnue-v1.nnue `
   --seed 20260718 --epochs 12 --qat-epochs 3
 ```
+
+For residual training, run `label_hce.py` over the exact search-teacher
+corpus, align it with `build_residual_targets.py`, then pass
+`--network-semantics residual`. The alignment tool requires matching unique
+`sampleId`, normalized OFEN, and exact NNUE input signatures; it emits the
+tagged target `searchTargetCpStm - handcraftedCpStm`. The trainer refuses
+untagged residual input or an initial network with different semantics. Full
+commands and the alignment self-test are documented in
+`tools/omega_nnue/README.md`.
+
+Residual CP loss fits the correction itself. Residual outcome loss uses
+`handcraftedCpStm + predicted correction`, then propagates the BCE gradient
+through the correction. Architecture-1 training continues to use the original
+outcome fields and raw network score without a baseline.
 
 Splits are made by whole groups rather than individual positions. Exact NNUE
 inputs that still cross split boundaries are audited; the safe default

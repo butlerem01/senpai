@@ -21,7 +21,12 @@ namespace format {
 constexpr std::uint32_t Endian_Tag          = 0x01020304U;
 constexpr std::uint32_t Format_Version      = 1U;
 constexpr std::uint32_t Header_Bytes        = 72U;
-constexpr std::uint32_t Architecture_Id     = 1U;
+// The tensor layout remains OMNNUE1 for both meanings.  Architecture 1 is
+// the original absolute evaluator; architecture 2 is a correction that the
+// Omega adapter adds to the handcrafted evaluation.
+constexpr std::uint32_t Architecture_Absolute = 1U;
+constexpr std::uint32_t Architecture_Residual = 2U;
+constexpr std::uint32_t Architecture_Id       = Architecture_Absolute;
 constexpr std::uint32_t Square_Count        = 104U;
 constexpr std::uint32_t Piece_Count         = 8U;
 constexpr std::uint32_t Occupancy_Features  = 1664U;
@@ -78,6 +83,16 @@ public:
    // Returns a score from the side-to-move perspective.  False means that no
    // network is loaded or that the active board variant is not Omega.
    bool evaluate(const Pos & pos, int & side_to_move_cp) const;
+
+   // The three-argument form reports the output semantics from the same
+   // immutable network snapshot used for inference.  This prevents a
+   // reconfiguration from pairing one network's score with another network's
+   // semantics.
+   bool evaluate(
+      const Pos & pos,
+      int & side_to_move_cp,
+      bool & residual_correction
+   ) const;
 
    bool loaded() const;
    std::string path() const;

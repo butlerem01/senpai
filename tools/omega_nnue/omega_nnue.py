@@ -25,7 +25,17 @@ MAGIC = b"OMNNUE1\0"
 ENDIAN_TAG = 0x01020304
 FORMAT_VERSION = 1
 HEADER_BYTES = 72
-ARCHITECTURE = 1
+ARCHITECTURE_ABSOLUTE = 1
+ARCHITECTURE_RESIDUAL = 2
+# Preserve the original public constant for callers that construct an
+# absolute OMNNUE1 network. The header's architecture field now also
+# self-describes residual/correction semantics without changing the tensor
+# layout or invalidating any architecture-1 file.
+ARCHITECTURE = ARCHITECTURE_ABSOLUTE
+ARCHITECTURE_NAMES = {
+    ARCHITECTURE_ABSOLUTE: "absolute",
+    ARCHITECTURE_RESIDUAL: "residual",
+}
 SQUARE_COUNT = 104
 PIECE_COUNT = 8
 FEATURE_COUNT = 1668
@@ -106,8 +116,13 @@ class QuantizedNetwork:
     dense_weights: np.ndarray
     output_bias: int
     output_weights: np.ndarray
+    architecture: int = ARCHITECTURE_ABSOLUTE
 
     def validate(self) -> None:
+        if self.architecture not in ARCHITECTURE_NAMES:
+            raise ValueError(
+                f"unsupported architecture semantics {self.architecture}"
+            )
         expected = (
             ("ft_bias", self.ft_bias, (ACCUMULATOR_SIZE,), np.int16),
             (
@@ -158,7 +173,7 @@ class QuantizedNetwork:
             ENDIAN_TAG,
             FORMAT_VERSION,
             HEADER_BYTES,
-            ARCHITECTURE,
+            self.architecture,
             SQUARE_COUNT,
             PIECE_COUNT,
             FEATURE_COUNT,
@@ -207,7 +222,6 @@ class QuantizedNetwork:
             (endian, ENDIAN_TAG, "endian tag"),
             (version, FORMAT_VERSION, "format version"),
             (header_bytes, HEADER_BYTES, "header size"),
-            (architecture, ARCHITECTURE, "architecture"),
             (squares, SQUARE_COUNT, "square count"),
             (pieces, PIECE_COUNT, "piece count"),
             (features, FEATURE_COUNT, "feature count"),
@@ -221,6 +235,10 @@ class QuantizedNetwork:
         for actual, wanted, label in expected:
             if actual != wanted:
                 raise ValueError(f"bad {label}: {actual!r}; expected {wanted!r}")
+        if architecture not in ARCHITECTURE_NAMES:
+            raise ValueError(
+                f"unsupported architecture semantics {architecture}"
+            )
 
         payload = data[HEADER_BYTES:]
         actual_hash = fnv1a64(payload)
@@ -261,6 +279,7 @@ class QuantizedNetwork:
             dense_weights=dense_weights,
             output_bias=output_bias,
             output_weights=output_weights,
+            architecture=architecture,
         )
         result.validate()
         return result
@@ -554,6 +573,8 @@ class Dataset:
     side_to_move_white: np.ndarray
     target_cp: np.ndarray
     outcome: np.ndarray
+    search_outcome: np.ndarray
+    handcrafted_cp: np.ndarray
     split: np.ndarray
     groups: list[str]
     sample_ids: list[str]
@@ -612,6 +633,7 @@ def load_dataset(
     strict: bool = False,
     all_train: bool = False,
     collision_policy: str = "drop",
+    residual_outcomes: bool = False,
 ) -> Dataset:
     if not paths:
         raise ValueError("at least one JSONL input is required")
@@ -631,6 +653,8 @@ def load_dataset(
     stm_rows: list[bool] = []
     cp_rows: list[float] = []
     outcome_rows: list[float] = []
+    search_outcome_rows: list[float] = []
+    handcrafted_cp_rows: list[float] = []
     split_rows: list[int] = []
     groups: list[str] = []
     sample_ids: list[str] = []
@@ -667,10 +691,45 @@ def load_dataset(
                 )
             if outcome is not None and not 0.0 <= outcome <= 1.0:
                 raise ValueError("outcome target is outside 0..1")
+            if residual_outcomes:
+                search_outcome = _finite_number(
+                    record.get("searchOutcomeStm"), "searchOutcomeStm"
+                )
+                search_side_score = _finite_number(
+                    record.get("searchSideToMoveScore"),
+                    "searchSideToMoveScore",
+                )
+                if (
+                    search_outcome is not None
+                    and search_side_score is not None
+                    and search_outcome != search_side_score
+                ):
+                    raise ValueError(
+                        "searchOutcomeStm and searchSideToMoveScore disagree"
+                    )
+                if search_outcome is None:
+                    search_outcome = search_side_score
+                if (
+                    search_outcome is not None
+                    and not 0.0 <= search_outcome <= 1.0
+                ):
+                    raise ValueError("search outcome target is outside 0..1")
+                handcrafted_cp = _finite_number(
+                    record.get("handcraftedCpStm"), "handcraftedCpStm"
+                )
+                if search_outcome is not None and handcrafted_cp is None:
+                    raise ValueError(
+                        "search outcome supervision requires handcraftedCpStm"
+                    )
+            else:
+                search_outcome = None
+                handcrafted_cp = None
             if cp is None and outcome is None:
                 records_skipped += 1
                 if strict:
-                    raise ValueError("record has neither a CP nor outcome target")
+                    raise ValueError(
+                        "record has neither a CP nor outcome target"
+                    )
                 continue
 
             group = group_id(record, ofen, explicit_group_field)
@@ -692,6 +751,12 @@ def load_dataset(
             stm_rows.append(ofen_side == "w")
             cp_rows.append(float("nan") if cp is None else cp)
             outcome_rows.append(float("nan") if outcome is None else outcome)
+            search_outcome_rows.append(
+                float("nan") if search_outcome is None else search_outcome
+            )
+            handcrafted_cp_rows.append(
+                float("nan") if handcrafted_cp is None else handcrafted_cp
+            )
             split_rows.append(
                 0
                 if all_train
@@ -771,6 +836,8 @@ def load_dataset(
         stm_rows = retain(stm_rows)
         cp_rows = retain(cp_rows)
         outcome_rows = retain(outcome_rows)
+        search_outcome_rows = retain(search_outcome_rows)
+        handcrafted_cp_rows = retain(handcrafted_cp_rows)
         split_rows = retain(split_rows)
         groups = retain(groups)
         sample_ids = retain(sample_ids)
@@ -795,6 +862,8 @@ def load_dataset(
         side_to_move_white=np.asarray(stm_rows, dtype=np.bool_),
         target_cp=np.asarray(cp_rows, dtype=np.float32),
         outcome=np.asarray(outcome_rows, dtype=np.float32),
+        search_outcome=np.asarray(search_outcome_rows, dtype=np.float32),
+        handcrafted_cp=np.asarray(handcrafted_cp_rows, dtype=np.float32),
         split=np.asarray(split_rows, dtype=np.int8),
         groups=groups,
         sample_ids=sample_ids,
@@ -813,6 +882,7 @@ def make_dataset_from_records(
     records: Iterable[dict[str, Any]],
     seed: int = 1,
     collision_policy: str = "drop",
+    residual_outcomes: bool = False,
 ) -> Dataset:
     handle, name = tempfile.mkstemp(suffix=".jsonl")
     try:
@@ -826,6 +896,7 @@ def make_dataset_from_records(
             validation_percent=0.0,
             all_train=True,
             collision_policy=collision_policy,
+            residual_outcomes=residual_outcomes,
         )
     finally:
         try:
