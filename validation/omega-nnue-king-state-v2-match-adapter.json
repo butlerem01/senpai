@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "kind": "omega-nnue-king-state-v2-match-adapter-contract",
+  "profileId": "king-state-v2-deep-hce-v3",
+  "purpose": "Apply only the generation-2 fresh match-suite seeds and provenance envelope to the unchanged, pre-label-pinned generation-1 match implementation.",
+  "compatibilityCore": {
+    "path": "tools/omega_nnue/king_state_matches.py",
+    "bytes": 128443,
+    "sha256": "4bc5bf281ae8be08b2934e1f66b7d4462366ea7d2c1899b091385d2b2bbdf9b8"
+  },
+  "declarations": {
+    "compatibilityProtocol": {
+      "path": "validation/omega-nnue-king-state-v1-protocol.json",
+      "bytes": 11861,
+      "sha256": "1dab498f8373e5b25d614172afb847362bf65384c644d6d585e131530816e1f9"
+    },
+    "generation2Preregistration": {
+      "path": "validation/omega-nnue-king-state-v2-preregistration.json",
+      "bytes": 5371,
+      "sha256": "954f6e13bc04d3f610869621769e269aefe585af12e5464c22803d153bde5378"
+    },
+    "generation2Amendment": {
+      "path": "validation/omega-nnue-king-state-v2-amendment.json",
+      "bytes": 5326,
+      "sha256": "fcd5651d1af3efb36023cff71956bfe14010a304aedd168205a70c896258a7d2"
+    }
+  },
+  "permittedSubstitution": {
+    "protocolGeneration": 2,
+    "dataProfile": "deep-hce-v3",
+    "seeds": {
+      "development": 2026072001,
+      "equal-node": 2026072002,
+      "equal-time": 2026072003
+    }
+  },
+  "unchangedCoreDegrees": [
+    "rules-only sampler algorithm and policy",
+    "root quotas and phase/side balance",
+    "candidate-blind deterministic ranking",
+    "conservative symmetry-orbit exclusion",
+    "mutual fresh-suite orbit disjointness",
+    "inverse seeded schedule construction",
+    "engine options and same-binary control",
+    "node and time budgets",
+    "sequential decision thresholds",
+    "safety and equal-time telemetry checks"
+  ],
+  "freshTrainingCorpus": "build-msvc/data-generation/deep-hce-v3/deep-hce-v2-residual.jsonl",
+  "requiredExplicitExclusionRoots": [
+    "build-msvc",
+    "validation",
+    "../match-runs/configs",
+    "../match-runs/output",
+    "../omega-lab/regressions"
+  ],
+  "coveragePolicy": {
+    "jsonAndJsonlForbiddenInput": true,
+    "recognizedOfenKeys": [
+      "ofen",
+      "initialOfen",
+      "preOfen",
+      "postOfen",
+      "finalOfen"
+    ],
+    "pgnAndCcsfPolicy": "Every recursively discovered CCSF and every PGN mainline is identity-pinned and replayed by the Omega-aware ChessLib helper before winner selection. A PGN containing any recursive annotation variation is rejected before ChessLib.PGN.LoadFile can discard it. Initial, every pre/post-ply, and final OFEN are validated and supplied to the core selector as an additional forbidden JSONL input.",
+    "pgnRecursiveAnnotationVariationsAllowed": false,
+    "pgnSourcesWithRecursiveAnnotationVariationsRejected": true,
+    "historySnapshotTool": "tools/omega_nnue/OmegaHistorySnapshot/Program.cs",
+    "historyReadinessTool": "tools/omega_nnue/king_state_match_readiness.py",
+    "readinessSeal": "build-king-state-v2/readiness/king-state-v2-match-readiness.seal.json",
+    "futureCurrentRunSubtree": "../match-runs/output/king-state-v2",
+    "futureCurrentRunSubtreeMustBeAbsentAtReadinessSeal": true,
+    "futureCurrentRunSubtreeMustRemainAbsentThroughOuterSeal": true,
+    "sealedMatchOutputRootMustEqualFutureCurrentRunSubtree": true,
+    "generation2TrainingPlanMustBeAbsentAtReadinessSeal": true,
+    "generation2ValidationSelectionMustBeAbsentAtReadinessSeal": true,
+    "generation2OfflineAccessClaimMustBeAbsentAtReadinessSeal": true,
+    "generation2OfflineReportMustBeAbsentAtReadinessSeal": true,
+    "generation2OfflineSufficientAttestationMustBeAbsentAtReadinessSeal": true,
+    "offlineSufficientWrapper": "tools/omega_nnue/king_state_offline_generation2.py",
+    "offlineSufficientAttestation": "build-msvc/king-state-v2/offline-test.sufficient.json",
+    "offlineWrapperPinnedBeforeSelection": true,
+    "exactValidationSelectionRecomputedBeforeHeldOutAccess": true,
+    "readinessSealVerifiedBeforeHeldOutAccess": true,
+    "unchangedGeneration2OfflineTestInvokedExactlyOnceByWrapper": true,
+    "directUnattestedOfflineTestCannotQualifyForMatchSealing": true,
+    "preexistingReplayArtifactsMayBeSealed": false,
+    "freshReplayBuiltInPrivateStagingTree": true,
+    "runtimeReplayManifestAndSealPublishedBySingleDirectoryRename": true,
+    "readinessBuildRequiresFrozenWorkspaceDotnetHost": true,
+    "readinessSealPinsDotnetHostAndDeepHceFreeze": true,
+    "pinnedFilesMustExactlyEqualRecomputedCanonicalInventory": true,
+    "historyManifestFieldParserRootsAndIgnoredSubtreesMustMatchExactly": true,
+    "historySourceSetMustBeOrderedUniqueAndExact": true,
+    "exactHistoricalSourceSetEqualityRequired": true,
+    "parseOrReplayErrorsAllowed": 0,
+    "allThreeSuitesSealedTogetherBeforeCandidatePlay": true
+  },
+  "outerSeal": {
+    "kind": "omega-nnue-king-state-v2-match-seal",
+    "pinsAdapter": true,
+    "pinsCompatibilityCore": true,
+    "pinsActivePrelabelSeal": true,
+    "pinsCompatibilityProtocol": true,
+    "pinsGeneration2Declarations": true,
+    "pinsOfflineWrapperViaReadinessSeal": true,
+    "pinsCanonicalMatchOutputRoot": true,
+    "exclusiveDescriptorHeldThroughOuterSealVerification": true,
+    "failedOuterSealIsRetainedForDiagnosisAndBlocksRetry": true,
+    "automaticFailedOuterSealDeletionAllowed": false,
+    "pinsInnerCoreSeal": true,
+    "pinsExclusionInventoryAtSealTime": true
+  },
+  "selectionAuthenticity": {
+    "generation2SelectionVerifierRequired": true,
+    "readinessAndSelectionIdentitiesCapturedBeforeDeepVerification": true,
+    "identityDriftRejectedImmediatelyBeforeHeldOutAccess": true,
+    "validationLabelsAndCandidateOutputsRecomputedBeforeHeldOutAccessAndAtMatchSeal": true,
+    "validationMetricsHealthDecisionAndWinnerMustMatchExactly": true,
+    "generation2CanonicalManifestVerifierRequired": true,
+    "testAccessClaimIdentityRequired": true,
+    "testAccessClaimCanonicalPathRequired": true,
+    "offlineSufficientStatisticsAttestationRequired": true,
+    "offlinePublicMetricsAndBootstrapRecomputedFromAttestation": true,
+    "offlineFieldInventoryExact": true,
+    "offlineThresholdChecksRecomputed": true,
+    "offlineAggregateDecisionRecomputed": true,
+    "heldOutTargetsMayBeDecodedAgain": false
+  }
+}
