@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "kind": "omega-nnue-king-state-v2-protocol-amendment",
+  "amendmentId": "king-state-v2-deployment-float-checkpoint",
+  "createdUtc": "2026-07-19T08:18:00Z",
+  "effectivePoint": {
+    "generation1ValidationDecoded": true,
+    "generation1SelectionSucceeded": false,
+    "heldOutTargetsDecoded": false,
+    "heldOutMetricsComputed": false,
+    "matchCandidateBuilt": false
+  },
+  "reason": {
+    "generation1Result": "K1 and K2 passed every validation-quality check and every exported-network check, but both failed the float-versus-quantized health check.",
+    "rootCause": "The original --float-checkpoint is the unconstrained optimizer shadow used by straight-through quantization-aware training. QAT forward and deployment use projected quantized parameters, so the raw shadow is not a deployment-equivalent float representation.",
+    "validationOnlyEvidence": {
+      "K1": {
+        "relativeHuberImprovement": 0.0115019,
+        "cpMaeImprovement": 1.7821,
+        "meanShadowPenaltyCp": 79.7368,
+        "maximumShadowPenaltyCp": 153.2746
+      },
+      "K2": {
+        "relativeHuberImprovement": 0.0399977,
+        "cpMaeImprovement": 6.7893,
+        "meanShadowPenaltyCp": 77.4055,
+        "maximumShadowPenaltyCp": 128.9959
+      }
+    }
+  },
+  "predecessorEvidence": {
+    "protocol": {
+      "bytes": 11861,
+      "sha256": "1dab498f8373e5b25d614172afb847362bf65384c644d6d585e131530816e1f9"
+    },
+    "prelabelSeal": {
+      "bytes": 18791,
+      "sha256": "901e70b538d6348524c9b4a94493d4f57c81c826d1c0ca9c36ed13455613a2f4"
+    },
+    "residualCorpus": {
+      "bytes": 16268210,
+      "sha256": "728b5426e737978a591c5c962038f9a3a8285cdcd315b373c1573c0b23177754"
+    },
+    "residualManifest": {
+      "bytes": 1650,
+      "sha256": "5a30571f251485b7eceb02967ffed9277adf6b09510be4bc98e7a6090eb91120"
+    }
+  },
+  "generation2DataPolicy": {
+    "generation1Status": "failed",
+    "trainingCorpus": "fresh target-blind sample, fresh orbit-disjoint teacher suite, and fresh teacher labels",
+    "trainingCorpusMayReuseGeneration1Rows": false,
+    "trainingCorpusMayReuseGeneration1TeacherLabels": false,
+    "samplerAndSelectorSeed": 2026071904,
+    "forbiddenRootPolicy": "Exclude every generation-1 source corpus, teacher suite, teacher result, residual corpus, training artifact, screen, confirmation, and match artifact discoverable before the generation-2 freeze.",
+    "matchPolicy": "After one-time offline promotion, create fresh paired screen and confirmation suites that are orbit-disjoint from both generations' training, validation, test, and prior match positions.",
+    "freshMatchSuiteSeeds": {
+      "developmentScreen": 2026072001,
+      "equalNodeConfirmation": 2026072002,
+      "equalTimeConfirmation": 2026072003,
+      "configSeedEqualsSuiteSeed": true
+    },
+    "preLabelSealRequired": true,
+    "teacherLabelsMayStartBeforeSeal": false
+  },
+  "unchangedContracts": {
+    "candidateRecipes": "K0, K1, and K2 use the exact original seeds, epochs, learning rates, and K1/K2 feature-transformer scales on the fresh generation-2 corpus.",
+    "splitRouting": "The original deterministic groupId split algorithm and amendment 001 cross-phase clustering remain unchanged; the actual groups and rows are fresh.",
+    "selectionThresholds": "All validation and health limits remain unchanged.",
+    "offlineThresholds": "All point-estimate, phase, robustness, and bootstrap limits remain unchanged.",
+    "oneTimeHeldOutAccess": true,
+    "productionArtifact": "The exported quantized NNUE remains the only engine runtime model."
+  },
+  "amendedContracts": {
+    "optimizerShadowCheckpoint": "Preserve the lossless float optimizer shadow and its original quantization-penalty report under explicit optimizer-shadow artifact names.",
+    "deploymentFloatCheckpoint": "The planned float checkpoint is reconstructed losslessly from the exported QuantizedNetwork using FloatNetwork.from_quantized, round-tripped, and required to requantize to byte-identical NNUE payload bytes.",
+    "healthMetricSubjectChange": "Generation 1 applied the float-versus-quantized health limits to the raw straight-through optimizer shadow. Generation 2 applies the same numeric limits to the deployment-equivalent float checkpoint reconstructed from the exported network. This changes the artifact measured, not the thresholds or the deployed network.",
+    "healthInput": "The frozen 2 cp mean and 10 cp maximum float-versus-quantized health limits apply to the deployment-equivalent float checkpoint.",
+    "manifest": "Pin both checkpoints, the original optimizer-shadow manifest, the canonicalizing wrapper, and the exact byte-identical requantization proof.",
+    "informationBoundary": "Canonicalization reads network parameters and feature-only health inputs; it does not decode held-out targets."
+  },
+  "forbiddenAlternatives": [
+    "Do not delete or overwrite the optimizer shadow.",
+    "Do not lower the 2 cp mean or 10 cp maximum health limits.",
+    "Do not change K1/K2 recipes in this generation.",
+    "Do not inspect held-out labels before a winner hash is sealed.",
+    "Do not reuse generation 1 as a successful selection.",
+    "Do not train generation 2 on generation-1 positions or teacher labels.",
+    "Do not reuse a generation-1 screen or confirmation suite."
+  ]
+}

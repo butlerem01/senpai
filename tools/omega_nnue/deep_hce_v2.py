@@ -3220,6 +3220,22 @@ def _synthetic_ofen(phase: str, flavor: str, stm: str, index: int) -> str:
 def _self_test() -> None:
     root = Path(tempfile.mkdtemp(prefix="omega-deep-hce-v2-selftest-"))
     try:
+        default_prepare = _parse_args(["prepare"])
+        expected_rules_root = _default_paths()["sampled_roots"]
+        if default_prepare.rules_only_root != [expected_rules_root]:
+            raise AssertionError("prepare lost its default rules-only root")
+        explicit_rules_root = Path("fresh-rules-only-roots.jsonl")
+        explicit_prepare = _parse_args(
+            [
+                "prepare",
+                "--rules-only-root",
+                str(explicit_rules_root),
+            ]
+        )
+        if explicit_prepare.rules_only_root != [explicit_rules_root]:
+            raise AssertionError(
+                "explicit rules-only root did not replace the default"
+            )
         if SENPAI_ACCEPTANCE_COMMAND != "go depth 1":
             raise AssertionError(
                 "acceptance probe regressed to a node-capped false-terminal path"
@@ -3632,7 +3648,7 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--rules-only-root",
         action="append",
         type=Path,
-        default=[defaults["sampled_roots"]],
+        default=None,
     )
     prepare.add_argument(
         "--exclude-source-pattern",
@@ -3699,7 +3715,10 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     verify.add_argument("--lock", required=True, type=Path)
 
     subparsers.add_parser("self-test")
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.command == "prepare" and args.rules_only_root is None:
+        args.rules_only_root = [defaults["sampled_roots"]]
+    return args
 
 
 def main(argv: Sequence[str] | None = None) -> int:

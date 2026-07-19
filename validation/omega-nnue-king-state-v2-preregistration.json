@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "kind": "omega-nnue-king-state-v2-preregistration",
+  "profileId": "king-state-v2-deep-hce-v3",
+  "createdUtc": "2026-07-19T07:43:35.8078897Z",
+  "compatibility": {
+    "protocolPath": "validation/omega-nnue-king-state-v1-protocol.json",
+    "protocolSha256": "1dab498f8373e5b25d614172afb847362bf65384c644d6d585e131530816e1f9",
+    "deepHceImplementation": "tools/omega_nnue/deep_hce_v2.py",
+    "legacySealFilename": "king-state-v1-prelabel.seal.json",
+    "legacySealKind": "omega-nnue-king-state-v1-prelabel-seal",
+    "legacyGenerationId": "king-state-v1-deep-hce-v2",
+    "reason": "The existing teacher and trainer readers require these envelope identifiers. The true protocol generation and data profile are the mandatory v2/v3 fields below."
+  },
+  "protocolGeneration": 2,
+  "dataProfile": "deep-hce-v3",
+  "freshTeacherGeneration": {
+    "directoryName": "deep-hce-v3",
+    "seed": 2026071904,
+    "fixedNodesPerRoot": 100000,
+    "targetPairs": 4096,
+    "targetPairsPerPhase": 1024,
+    "reservePairsPerPhase": 64,
+    "mandatoryForbiddenRoots": [
+      "build-msvc/data-generation/deep-hce-v2",
+      "build-msvc/data-generation/deep-hce-v2.invalid-pre-stream-seal-20260719T0505Z",
+      "build-msvc/data-generation/deep-hce-v2.partial-reject18-20260719T0452Z",
+      "build-msvc/data-generation/deep-hce-v2.partial-stopped-20260719T0433Z",
+      "build-msvc/data-generation/deep-hce-v2-random-roots.jsonl",
+      "build-msvc/data-generation/deep-hce-v2-random-roots.jsonl.freeze.json",
+      "build-msvc/data-generation/deep-hce-v2-random-roots.jsonl.manifest.json",
+      "build-msvc/data-generation/sampler-smoke-2.jsonl",
+      "build-msvc/data-generation/sampler-smoke-2.jsonl.manifest.json",
+      "build-msvc/king-state-v1",
+      "build-msvc/screening-catalog-v1"
+    ],
+    "mandatoryForbiddenRootCount": 11,
+    "everyJsonOrJsonlUnderMandatoryRootsExactPinned": true,
+    "teacherArtifactsAbsentBeforeSeal": true,
+    "preflightRejectionPolicy": {
+      "observedCountIsFreezeDerived": true,
+      "exactObservedCountPreregistered": false,
+      "mustNotExceedFrozenSanityCap": true,
+      "wholePairExclusion": true,
+      "directRejectedRootInventoryMustMatch": true
+    }
+  },
+  "candidateMatrix": {
+    "changesOriginalProtocol": false,
+    "primarySeed": 20260725,
+    "robustnessSeed": 20260726,
+    "candidates": [
+      {
+        "id": "K0",
+        "train": false
+      },
+      {
+        "id": "K1",
+        "train": true,
+        "learningRate": 0.003,
+        "featureTransformerLearningRateScale": 0.5,
+        "epochs": 24,
+        "qatEpochs": 4
+      },
+      {
+        "id": "K2",
+        "train": true,
+        "learningRate": 0.003,
+        "featureTransformerLearningRateScale": 1.0,
+        "epochs": 24,
+        "qatEpochs": 4
+      }
+    ]
+  },
+  "prelabelAmendments": {
+    "phaseIncidenceGrouping": {
+      "sourceDeclaration": "validation/omega-nnue-king-state-v1-amendment-001.json",
+      "groupPhasePurityRequired": false,
+      "splitUnit": "global leakage component groupId",
+      "splitRouting": "Route every row carrying one groupId to one frozen split, across every phase in which that group occurs.",
+      "metric": "Average rows within each (phase,groupId), average group means within each phase, then equally average the four phase means.",
+      "bootstrapUnit": "global leakage component groupId",
+      "bootstrapStratification": "exact phase-incidence set",
+      "bootstrapSampling": "Sample each observed phase-incidence stratum with replacement and reuse one global groupId multiplicity in every phase cell belonging to that group.",
+      "minimumGroupsPerObservedStratum": 2,
+      "iterations": 10000,
+      "seed": 20260727,
+      "pairedCandidateAndBaselines": true,
+      "requiredLowerBoundExclusive": 0
+    },
+    "canonicalDeploymentFloat": {
+      "sourceDeclaration": "validation/omega-nnue-king-state-v2-amendment.json",
+      "productionArtifact": "exported quantized NNUE",
+      "optimizerShadowPreserved": true,
+      "deploymentFloatDerivedFromQuantizedNetwork": true,
+      "deploymentFloatRequantizesByteIdentically": true,
+      "deploymentFloatParameterRoundTripExact": true,
+      "healthMetricSubject": "deployment-equivalent float checkpoint",
+      "healthThresholdsChanged": false,
+      "heldOutTargetsDecodedByCanonicalization": false,
+      "candidateRecipesChanged": false
+    }
+  },
+  "freshMatchSuites": {
+    "developmentScreenSeed": 2026072001,
+    "equalNodeConfirmationSeed": 2026072002,
+    "equalTimeConfirmationSeed": 2026072003,
+    "configSeedEqualsSuiteSeed": true,
+    "orbitDisjointFromBothTrainingGenerationsAndPriorMatches": true
+  },
+  "requiredPinnedTooling": [
+    "tools/omega_nnue/train.py",
+    "tools/omega_nnue/train_canonical.py",
+    "tools/omega_nnue/king_state_train.py",
+    "tools/omega_nnue/king_state_train_amended.py",
+    "tools/omega_nnue/king_state_train_generation2.py",
+    "tools/omega_nnue/king_state_v2.py"
+  ],
+  "immutability": {
+    "effectiveBeforeTeacherLabels": true,
+    "candidateMatrixMayChangeAfterLabels": false,
+    "groupingOrBootstrapMayChangeAfterLabels": false,
+    "deploymentFloatSemanticsMayChangeAfterLabels": false,
+    "heldOutTargetsMaySelectRecipe": false,
+    "matchResultsMaySelectRecipe": false,
+    "failedGenerationRequiresFreshOrbitDisjointTeacherAndMatchSuites": true
+  }
+}

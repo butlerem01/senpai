@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "kind": "omega-nnue-king-state-v1-protocol-amendment",
+  "amendmentId": "king-state-v1-cross-phase-cluster-bootstrap",
+  "createdUtc": "2026-07-19T06:56:03.1760387Z",
+  "effectivePoint": {
+    "candidatePlanCreated": false,
+    "candidateTrainingStarted": false,
+    "validationTargetsDecoded": false,
+    "heldOutTargetsDecoded": false,
+    "selectionMade": false,
+    "matchCandidateBuilt": false
+  },
+  "reason": {
+    "failure": "The target-opaque plan audit rejected a groupId that appeared in both middlegame and endgame.",
+    "rootCause": "deep-hce-v2 deliberately assigns every selected position from one AB/BA source trajectory family to one leakage component across all phases. The original trainer assertion and groupPhasePurityRequired declaration contradicted that frozen grouping contract.",
+    "scopeAudit": {
+      "rows": 8192,
+      "groups": 2071,
+      "crossPhaseGroups": 1653,
+      "crossPhaseRows": 7348,
+      "phasePureGroups": 418,
+      "phasePureRows": 844
+    },
+    "decisionBasis": "Group and phase metadata only. No target field was decoded by the failing plan audit or used to choose this amendment."
+  },
+  "pinnedInputs": {
+    "protocol": {
+      "bytes": 11861,
+      "sha256": "1dab498f8373e5b25d614172afb847362bf65384c644d6d585e131530816e1f9"
+    },
+    "prelabelSeal": {
+      "bytes": 18791,
+      "sha256": "901e70b538d6348524c9b4a94493d4f57c81c826d1c0ca9c36ed13455613a2f4"
+    },
+    "residualCorpus": {
+      "bytes": 16268210,
+      "sha256": "728b5426e737978a591c5c962038f9a3a8285cdcd315b373c1573c0b23177754"
+    },
+    "residualManifest": {
+      "bytes": 1650,
+      "sha256": "5a30571f251485b7eceb02967ffed9277adf6b09510be4bc98e7a6090eb91120"
+    }
+  },
+  "unchangedContracts": {
+    "splitRouting": "Route every row by the unchanged frozen groupId. All phases of one source trajectory family remain in the same train, validation, or held-out split.",
+    "phaseMetric": "Average rows within each (phase,groupId), average group means within each phase, then equally average the four phase means.",
+    "pairedComparisons": true,
+    "candidateRecipes": "K0, K1, and K2 are unchanged.",
+    "selectionThresholds": "All validation and offline thresholds are unchanged.",
+    "oneTimeHeldOutAccess": true
+  },
+  "amendedContracts": {
+    "groupPhasePurityRequired": false,
+    "bootstrapUnit": "global leakage component groupId",
+    "bootstrapStratification": "phase-incidence set",
+    "bootstrapSampling": "Partition held-out groupIds by the exact set of frozen phases in which each groupId occurs. For each replicate and each sorted incidence stratum S, draw n_S groupIds with replacement from that stratum. Convert all stratum draws to one multiplicity per global groupId and apply that same multiplicity to every phase in which the groupId occurs. Within each phase compute the multiplicity-weighted mean of its group losses, then equally average the four phase means.",
+    "stratificationInvariant": "Every replicate preserves the original number of sampled group cells in each phase and cannot leave a phase empty, while a cross-phase group has one shared multiplicity across all of its phase cells.",
+    "minimumGroupsPerObservedStratum": 2,
+    "pairing": "Use identical group multiplicities for the candidate, K0, and zero-residual baseline.",
+    "iterations": 10000,
+    "seed": 20260727,
+    "lowerBound": "5th percentile via numpy.quantile(method='linear')",
+    "requiredLowerBoundExclusive": 0
+  },
+  "forbiddenAlternatives": [
+    "Do not append phase to groupId.",
+    "Do not reroute rows independently by phase.",
+    "Do not inspect validation or held-out targets to revise this amendment.",
+    "Do not weaken any promotion threshold."
+  ]
+}
