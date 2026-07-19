@@ -1,0 +1,762 @@
+{
+  "schemaVersion": 1,
+  "kind": "omega-nnue-king-state-v3-preregistration",
+  "profileId": "king-state-v3-deep-hce-v4",
+  "createdUtc": "2026-07-19T09:08:52.1591052Z",
+  "status": "target-blind design frozen before generation-3 teacher labels",
+  "purpose": "If protocol generation 2 does not satisfy every promotion gate, train at most three deployment-compatible architecture-3 residual candidates on a fresh orbit-disjoint teacher corpus, select exactly once on validation, and require one-time offline and fresh paired match superiority over the unchanged handcrafted evaluator.",
+  "informationBoundary": {
+    "generation2LiveResultsInspectedToChooseThisDesign": false,
+    "generation2HeldOutTargetsInspectedToChooseThisDesign": false,
+    "generation3TeacherTargetsAvailableAtDeclaration": false,
+    "generation3ValidationTargetsAvailableAtDeclaration": false,
+    "generation3HeldOutTargetsAvailableAtDeclaration": false,
+    "allowedPrelabelCorpusFields": [
+      "groupId",
+      "ofen",
+      "phase"
+    ],
+    "sideToMoveMayBeDerivedFromOfen": true,
+    "featureRowsMayBeDerivedFromOfen": true,
+    "targetFieldsDecodedByPrelabelAudits": 0,
+    "targetFieldsEmittedByPrelabelAudits": 0
+  },
+  "immutability": {
+    "effectiveBeforeGeneration3TeacherLabels": true,
+    "dataSeedsAndQuotasMayChangeAfterAnyGeneration3Label": false,
+    "initializerRuleMayChangeAfterAnyGeneration3Label": false,
+    "candidateMatrixMayChangeAfterAnyGeneration3Label": false,
+    "optimizerOrObjectiveMayChangeAfterAnyGeneration3Label": false,
+    "validationMaySelectRecipe": true,
+    "heldOutMaySelectRecipe": false,
+    "matchResultsMaySelectRecipe": false,
+    "runnerUpFallbackAfterHeldOutOrMatchAccess": false,
+    "failedGenerationRequiresASeparateFreshPreregistration": true
+  },
+  "designEvidence": {
+    "scope": "generation-1 aggregate validation metrics and target-opaque feature metadata only",
+    "generation1Validation": {
+      "K1RelativeHuberImprovementOverK0": 0.0115019,
+      "K1CpMaeImprovementOverK0": 1.7821,
+      "K2RelativeHuberImprovementOverK0": 0.0399977,
+      "K2CpMaeImprovementOverK0": 6.7893,
+      "K1SelectedEpoch": 24,
+      "K2SelectedEpoch": 24,
+      "totalEpochs": 24,
+      "qatEpochs": 4,
+      "K2QuantizedValidationLossEpoch21": 2.7196810245513916,
+      "K2QuantizedValidationLossEpoch24": 2.709156036376953,
+      "K2FinalDenseActiveFraction": 0.5238037109375,
+      "K2FinalDeadDenseUnits": 1,
+      "K2FinalSaturatedDenseUnits": 0,
+      "interpretation": "The stronger feature-transformer scale was still improving at the final epoch and throughout QAT, with healthy dense activation."
+    },
+    "generation1TargetOpaqueFeatureAudit": {
+      "corpusRows": 8192,
+      "trainRows": 6510,
+      "conditionedPieceRowsPossible": 48256,
+      "uniqueConditionedPieceRowsSeenInTrain": 12504,
+      "trainCoverageFraction": 0.25911803713527853,
+      "singletonConditionedRows": 4866,
+      "medianOccurrencesPerSeenConditionedRow": 2,
+      "validationUniqueConditionedRowsUnseenInTrain": 684,
+      "validationUnseenConditionedOccurrenceFraction": 0.01797157311491207,
+      "heldOutUniqueConditionedRowsUnseenInTrain": 574,
+      "heldOutUnseenConditionedOccurrenceFraction": 0.01467630722083892,
+      "targetsDecoded": 0,
+      "interpretation": "Architecture 3 is data-sparse; longer optimization and target-blind statistical sharing are preferred over a larger deployed table."
+    }
+  },
+  "deploymentCompatibility": {
+    "containerMagic": "OMNNUE1",
+    "formatVersion": 1,
+    "architectureId": 3,
+    "networkSemantics": "king-state-residual",
+    "runtimeEvaluation": "handcrafted Omega evaluation plus side-to-move NNUE correction",
+    "featureRows": 48376,
+    "conditionedPieceRows": 48256,
+    "kingBuckets": 29,
+    "accumulatorSize": 128,
+    "denseInputSize": 256,
+    "hiddenSize": 32,
+    "activationMaximum": 127,
+    "hiddenDivisor": 64,
+    "outputDivisor": 64,
+    "payloadBytes": 12392868,
+    "fileBytes": 12392940,
+    "runtimeSourceChangesPermittedForThisGeneration": false,
+    "incrementalAccumulatorOrSimdChangesPermittedForThisGeneration": false,
+    "allCandidatesHaveIdenticalRuntimeDimensionsAndFileSize": true,
+    "productionArtifact": "exported quantized architecture-3 NNUE",
+    "optimizerShadowIsProductionArtifact": false
+  },
+  "freshTeacherGeneration": {
+    "dataProfile": "deep-hce-v4",
+    "directoryName": "deep-hce-v4",
+    "samplerAndSelectorSeed": 2026072104,
+    "rulesOnlySampler": {
+      "deterministicPrng": "SplitMix64",
+      "trajectoryPairs": 4096,
+      "independentTrajectoriesPerPair": 2,
+      "maxPlies": 220,
+      "positionsPerPhaseAndSide": 2,
+      "captureSelectionPercent": 72,
+      "mayStartAnEngineOrEvaluator": false
+    },
+    "teacher": {
+      "sameFrozenSenpaiHceExecutableForEveryRoot": true,
+      "UseOmegaNNUE": false,
+      "OmegaNNUEFile": "<empty>",
+      "Threads": 1,
+      "HashMiB": 128,
+      "OwnBook": false,
+      "Ponder": false,
+      "UciVariant": "omega",
+      "fixedNodesPerRoot": 100000,
+      "acceptExactCpOnly": true,
+      "rejectMateScores": true,
+      "rejectBoundScores": true,
+      "rejectShortNodeSearches": true,
+      "wholePairExclusionOnInvalidMember": true
+    },
+    "phasesInFrozenOrder": [
+      "opening",
+      "middlegame",
+      "late",
+      "endgame"
+    ],
+    "targetPairs": 8192,
+    "targetPairsPerPhase": 2048,
+    "targetRoots": 16384,
+    "reservePairsPerPhase": 128,
+    "reservePairsTotal": 512,
+    "maximumCandidatePairs": 8704,
+    "maximumCandidateRoots": 17408,
+    "oppositeSideToMoveWithinEveryPair": true,
+    "wholePairReplacementWithinSamePhase": true,
+    "replacementOrder": "frozen candidate-blind rank within the same phase",
+    "grouping": {
+      "splitUnit": "global leakage component groupId",
+      "allPhasesOfOneTrajectoryFamilyShareOneGroupId": true,
+      "allRepeatedLaunchAncestrySharesOneGroupId": true,
+      "crossPhaseGroupsAllowed": true,
+      "appendPhaseToGroupId": false
+    },
+    "forbiddenOrbitPolicy": {
+      "exactAndConservativeSymmetryOrbitUniqueWithinFreshPool": true,
+      "excludeEveryGeneration1AndGeneration2TrainingPosition": true,
+      "excludeEveryGeneration1AndGeneration2ValidationPosition": true,
+      "excludeEveryGeneration1AndGeneration2HeldOutPosition": true,
+      "excludeEveryPriorNnueScreenAndConfirmationPosition": true,
+      "excludeEveryPriorNnueMatchPosition": true,
+      "excludeEveryPositionBearingArtifactDiscoverableBeforeFreeze": true,
+      "inventoryEveryJsonAndJsonlUnderDeclaredPriorRoots": true,
+      "pinCompleteExclusionInventoryBeforeLabels": true
+    },
+    "preLabelSealRequired": true,
+    "teacherLabelsMayStartBeforeSeal": false,
+    "estimatedTargetTeacherNodes": 1638400000,
+    "maximumTeacherNodesIfEveryReserveIsUsed": 1740800000
+  },
+  "featureOnlyPrelabelAbortGates": {
+    "auditMoment": "after candidate-blind root freeze and deterministic group split, before the first teacher label",
+    "split": {
+      "groupField": "groupId",
+      "splitSeed": 4989,
+      "trainPercent": 80,
+      "validationPercent": 10,
+      "heldOutPercent": 10,
+      "collisionPolicy": "error",
+      "routeWholeGlobalGroupAcrossEveryObservedPhase": true
+    },
+    "requiredChecks": {
+      "targetsDecoded": 0,
+      "targetsEmitted": 0,
+      "crossSplitExactInputCollisions": 0,
+      "crossSplitConservativeOrbitCollisions": 0,
+      "everyPhaseNonemptyInEverySplit": true,
+      "maximumValidationPhaseRelativeDeviationFromEqual": 0.1,
+      "maximumHeldOutPhaseRelativeDeviationFromEqual": 0.1,
+      "maximumValidationSideToMoveImbalanceFraction": 0.05,
+      "maximumHeldOutSideToMoveImbalanceFraction": 0.05,
+      "everyValidationKingBucketAlsoObservedInTrain": true,
+      "everyHeldOutKingBucketAlsoObservedInTrain": true,
+      "maximumValidationConditionedFeatureOccurrenceFractionUnseenInTrain": 0.02,
+      "maximumHeldOutConditionedFeatureOccurrenceFractionUnseenInTrain": 0.02,
+      "minimumGroupsPerObservedPhaseIncidenceStratum": 2
+    },
+    "failureAction": {
+      "abortBeforeTeacherLabels": true,
+      "mayChangeSplitSeedInsideThisProfile": false,
+      "mayChangeSamplerSeedInsideThisProfile": false,
+      "mayAddOrRemoveRootsInsideThisProfile": false,
+      "mayInspectTargetsToRepairFailure": false,
+      "requiredFallback": "declare a separate generation with a new profile id, new seeds, a new pre-label seal, and a newly frozen candidate matrix"
+    }
+  },
+  "conditionalInitializer": {
+    "initializerId": "I0",
+    "decisionMoment": "before generation-3 teacher labels and before any generation-3 target field exists",
+    "orderedRule": [
+      {
+        "priority": 1,
+        "condition": "Generation 2 has an immutable validation-selection seal; its selected exported quantized network passed every canonical deployment health, whole-corpus Python/C++ parity, file-format, and round-trip gate; generation 2 failed only after validation selection at the offline-strength or formal match-strength stage; and there was no network-attributable safety failure.",
+        "initializer": "the exact generation-2 validation-sealed exported quantized network"
+      },
+      {
+        "priority": 2,
+        "condition": "The priority-1 condition is not fully satisfied.",
+        "initializer": "generation-2 K0, the exact architecture-2-to-architecture-3 migrated quantized control"
+      }
+    ],
+    "numericGeneration2MetricsMayInfluenceInitializerRule": false,
+    "onlyPublicStatusAndArtifactIdentityMetadataMayResolveRule": true,
+    "resolvedNetworkPathBytesAndSha256PinnedBeforeLabels": true,
+    "initialFloatModel": "lossless FloatNetwork.from_quantized reconstruction of I0",
+    "initialQuantizedPredictionsMustMatchI0ExactlyOnWholeFreshCorpus": true,
+    "rawGeneration2OptimizerShadowMayBeUsed": false,
+    "generation2AdamMomentsMayBeUsed": false,
+    "adamStateReset": true,
+    "baselineRoles": {
+      "I0": "epoch-zero deployment-compatible incremental-strength baseline",
+      "zeroResidual": "unchanged handcrafted evaluator with correction fixed to zero"
+    }
+  },
+  "modelSeeds": {
+    "primarySharedAcrossAllCandidates": 20260731,
+    "robustnessSelectedRecipeOnly": 20260732,
+    "offlineBootstrap": 20260733
+  },
+  "candidateMatrix": {
+    "maximumTrainedCandidates": 3,
+    "executionOrder": [
+      "G3A",
+      "G3B",
+      "G3C"
+    ],
+    "allCandidatesStartFromExactSameI0": true,
+    "allCandidatesUseExactSameTrainValidationSplit": true,
+    "allCandidatesMustRunUnlessTheirOwnFatalTrainingFailureOccurs": true,
+    "intermediateCandidateResultsMayStopLaterCandidates": false,
+    "commonTraining": {
+      "epochs": 48,
+      "qatEpochs": 12,
+      "nonQatEpochsInclusive": [
+        1,
+        36
+      ],
+      "qatEpochsInclusive": [
+        37,
+        48
+      ],
+      "batchSize": 256,
+      "optimizer": "Adam",
+      "learningRate": 0.003,
+      "adamBeta1": 0.9,
+      "adamBeta2": 0.999,
+      "adamEpsilon": 1e-8,
+      "denseBiasLearningRateScale": 0.1,
+      "denseWeightLearningRateScale": 0.01,
+      "outputLearningRateScale": 0.25,
+      "qatGlobalLearningRateScale": 0.1,
+      "batchOrdering": "deterministic phase-score interleaving; every train row occurs exactly once per epoch",
+      "targetResidualField": "targetCpStm",
+      "targetResidualDefinition": "searchTargetCpStm - handcraftedCpStm",
+      "targetCpClipInclusive": [
+        -2000,
+        2000
+      ],
+      "cpNormalizer": 100,
+      "huberDeltaNormalized": 2,
+      "huberDeltaCp": 200,
+      "actualOutcomeWeight": 0,
+      "strict": true,
+      "cppParity": true,
+      "rawOptimizerShadowPreservedForProvenance": true,
+      "deploymentFloatReconstructedFromExportedQuantizedNetwork": true,
+      "candidateCheckpointEligibleEpochs": [
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48
+      ],
+      "preQatEpochMayBeExportedAsCandidate": false,
+      "epochExtensionBeyond48Allowed": false
+    },
+    "candidates": [
+      {
+        "id": "G3A",
+        "name": "long-direct-king-state",
+        "hypothesis": "Generation-1 K2 was under-optimized; a longer float stage and three times as many QAT epochs improve the existing full architecture-3 table without changing runtime.",
+        "featureParameterization": "direct materialized architecture-3 feature table",
+        "featureTransformerLearningRateScale": 1.0,
+        "rowWeighting": "one equal weight per train row",
+        "cpHuberWeight": 1.0,
+        "softWdlWeight": 0.0,
+        "additionalRegularization": "none"
+      },
+      {
+        "id": "G3B",
+        "name": "shared-plus-supported-king-delta",
+        "hypothesis": "Target-blind pooling improves rare and unseen king-conditioned rows while retaining bucket-specific capacity where the fresh train split supplies enough occurrences.",
+        "conditionedOccupancyParameterization": {
+          "formula": "W[b,p] = S[p] + D[b,p]",
+          "bucketRangeInclusive": [
+            0,
+            28
+          ],
+          "basePieceFeatureRangeInclusive": [
+            0,
+            1663
+          ],
+          "initialSharedValue": "For each p, S[p] is the canonical float value of I0 conditioned row (bucket 10, p).",
+          "initialDeltaValue": "For each (b,p), D[b,p] is the canonical float I0 value at (b,p) minus S[p].",
+          "initialMaterializationMustRequantizeByteIdenticallyToI0": true,
+          "sharedLearningRateScale": 0.5,
+          "deltaLearningRateScale": 1.0,
+          "globalCastlingEpClockPhaseRowLearningRateScale": 1.0,
+          "deltaFrozenEpochsInclusive": [
+            1,
+            8
+          ],
+          "deltaConditionalTrainingEpochsInclusive": [
+            9,
+            48
+          ],
+          "deltaOccurrenceThreshold": 8,
+          "occurrenceDefinition": "Count each active (bucket,base-piece-feature) occurrence once across both perspectives of every split-0 row; do not read a target field.",
+          "deltaAtOrAboveThreshold": "train with its own Adam moments",
+          "deltaBelowThreshold": "remain fixed at its initialized value for all 48 epochs and do not update Adam moments",
+          "sharedGradient": "sum the gradients of every active bucket instance for the same base piece feature into S[p]",
+          "qatForward": "materialize every S[p]+D[b,p], quantize the ordinary architecture-3 table, and apply the straight-through gradient to S and eligible D",
+          "export": "materialize the ordinary 48,376-row architecture-3 feature table; no latent S or D tensor is present in the deployed file"
+        },
+        "rowWeighting": "one equal weight per train row",
+        "cpHuberWeight": 1.0,
+        "softWdlWeight": 0.0
+      },
+      {
+        "id": "G3C",
+        "name": "shared-king-delta-phase-group-aligned-soft-wdl",
+        "hypothesis": "The G3B capacity control plus a train objective aligned with the phase-macro group-balanced gate and a modest teacher soft-WDL term improves search-relevant calibration.",
+        "conditionedOccupancyParameterization": "exactly G3B",
+        "featureLearningRateScalesAndFreezeRules": "exactly G3B",
+        "rowWeighting": {
+          "phases": 4,
+          "formula": "w_i = N / (4 * G_p * n_pg)",
+          "N": "number of split-0 rows",
+          "G_p": "number of distinct global groupIds represented in frozen phase p in split 0",
+          "n_pg": "number of split-0 rows in frozen (phase p, global groupId g)",
+          "crossPhaseGroupRule": "one global groupId remains one split unit, but its point-estimate row weights are computed separately in every phase cell in which it occurs",
+          "batchNormalization": "divide the weighted batch sum by the sum of weights in that batch",
+          "epochInvariant": "visit every split-0 row exactly once per epoch"
+        },
+        "objective": {
+          "weightedResidualHuberWeight": 1.0,
+          "softWdlWeight": 0.25,
+          "softWdlTeacherScore": "searchTargetCpStm",
+          "softWdlStudentScore": "handcraftedCpStm + predicted residual correction",
+          "logisticScaleCp": 173.71779276130073,
+          "teacherProbability": "sigmoid(searchTargetCpStm / 173.71779276130073)",
+          "studentProbability": "sigmoid((handcraftedCpStm + predicted correction) / 173.71779276130073)",
+          "loss": "weighted binary cross-entropy with the teacher probability as the soft target, evaluated with a numerically stable logit formula",
+          "mateOrBoundTeacherRowsAllowed": false,
+          "actualGameOutcomeLabelsUsed": false
+        },
+        "candidateSelectionUsesCompositeTrainingObjective": false
+      }
+    ]
+  },
+  "validationSelection": {
+    "candidateCheckpointMetric": "phase-macro group-balanced quantized residual Huber loss",
+    "candidateCheckpointEligibleEpochs": "QAT epochs 37 through 48 only",
+    "commonMetricIndependentOfCandidateTrainingObjective": true,
+    "targetAndLoss": {
+      "prediction": "quantized residual correction in side-to-move centipawns",
+      "target": "targetCpStm clipped inclusively to [-2000,2000]",
+      "errorCp": "prediction minus clipped target",
+      "normalizerCp": 100,
+      "huberDeltaNormalized": 2,
+      "huberFormula": "0.5*e^2 when abs(e)<=2; 2*(abs(e)-1) otherwise, where e=errorCp/100"
+    },
+    "aggregation": {
+      "rowToPhaseGroup": "arithmetic mean of row losses for each frozen (phase,global groupId) cell",
+      "phaseGroupToPhase": "arithmetic mean of group-cell means in the frozen phase",
+      "phaseToMetric": "equal arithmetic mean of opening, middlegame, late, and endgame",
+      "sameAggregationForCpMae": true,
+      "missingPhase": "candidate is ineligible"
+    },
+    "eligibility": {
+      "minimumRelativeHuberImprovementOverI0": 0.005,
+      "mustLowerPhaseMacroCpMaeVersusI0": true,
+      "mustHaveLowerHuberLossThanZeroResidual": true,
+      "maximumAnyPhaseCpMaeRegressionVersusI0": 5,
+      "mustPassEveryDeploymentHealthGate": true
+    },
+    "winner": "eligible candidate with the lowest common validation metric",
+    "tieRelativeLoss": 0.0025,
+    "tieFormula": "abs(leftLoss-rightLoss)/min(leftLoss,rightLoss) <= 0.0025",
+    "tiePriority": [
+      "G3B",
+      "G3C",
+      "G3A"
+    ],
+    "tieRationale": "Prefer target-blind capacity control, then the same capacity control with the additional objective, then the unrestricted table.",
+    "ifNoneEligible": "fail generation without decoding held-out targets or creating match suites",
+    "fatalCandidateFailure": "mark only that candidate ineligible and continue the other preregistered candidates without changing any recipe"
+  },
+  "deploymentHealthGate": {
+    "metricSubject": "deployment-equivalent float checkpoint reconstructed from the exported quantized network",
+    "optimizerShadowExcludedFromHealthThresholds": true,
+    "maximumMeanFloatQuantizationPenaltyCp": 2,
+    "maximumSingleFloatQuantizationPenaltyCp": 10,
+    "maximumSaturatedDenseUnits": 0,
+    "maximumDeadDenseUnits": 8,
+    "deadDenseUnitsMayExceedI0": false,
+    "denseActiveFractionRangeInclusive": [
+      0.2,
+      0.75
+    ],
+    "maximumAbsoluteCorrectionCp": 2500,
+    "requireFinitePredictions": true,
+    "requireExpectedFileSize": true,
+    "requireRoundTripHash": true,
+    "requireDeploymentFloatParameterRoundTripExact": true,
+    "requireDeploymentFloatRequantizationByteIdentical": true,
+    "wholeCorpusExactPythonCppIntegerAgreement": true,
+    "wholeCorpusMigrationParityForI0": true
+  },
+  "robustnessRun": {
+    "recipe": "selected validation recipe only",
+    "seed": 20260732,
+    "sameDataSplitAndEveryHyperparameterExceptSeed": true,
+    "mayReplacePrimary": false,
+    "mustPassDeploymentHealthGate": true,
+    "mustImproveDirectionallyAgainstI0OnCommonValidationMetric": true,
+    "mustImproveDirectionallyAgainstZeroResidualOnCommonValidationMetric": true,
+    "failureAction": "stop without decoding held-out targets"
+  },
+  "offlineTestGate": {
+    "access": {
+      "winnerNetworkPathBytesAndSha256RecordedBeforeAccess": true,
+      "exclusiveNoClobberAccessClaimBeforeFirstTargetDecode": true,
+      "oneTimeAccess": true,
+      "runnerUpMayBeEvaluatedAfterAccess": false
+    },
+    "primaryMetric": "the same phase-macro group-balanced quantized Huber loss used for validation selection",
+    "baselines": [
+      "I0",
+      "zeroResidual"
+    ],
+    "allPointAndIntervalRequirementsMustPassSeparatelyAgainstEveryBaseline": true,
+    "minimumRelativeHuberImprovementAgainstEachBaseline": 0.01,
+    "minimumPhaseMacroCpMaeImprovementAgainstEachBaselineCp": 2,
+    "maximumAnyPhaseCpMaeRegressionAgainstEachBaselineCp": 5,
+    "bootstrap": {
+      "paired": true,
+      "clusterUnit": "global leakage component groupId",
+      "stratification": "exact frozen phase-incidence set",
+      "sampling": "Within every observed phase-incidence stratum, sample its global groupIds with replacement; assign one multiplicity to each sampled global groupId and reuse that multiplicity in every phase cell belonging to the group.",
+      "identicalMultiplicitiesForCandidateAndBaselines": true,
+      "iterations": 10000,
+      "rng": "NumPy Generator PCG64",
+      "seed": 20260733,
+      "oneSidedConfidence": 0.95,
+      "statistic": "(baselineLoss-candidateLoss)/baselineLoss",
+      "lowerBound": "5th percentile via numpy.quantile(method='linear')",
+      "requiredLowerBoundExclusive": 0
+    },
+    "robustnessPrimaryMayReplacePrimary": false,
+    "robustnessMustImproveDirectionallyAgainstEveryBaseline": true,
+    "failureAction": "fail generation; do not test a runner-up and do not create or run a match suite"
+  },
+  "freshMatchSuites": {
+    "creationMoment": "only after the primary winner passes the one-time offline gate",
+    "rulesOnlyAndCandidateBlind": true,
+    "mutuallyExactAndConservativeOrbitDisjoint": true,
+    "orbitDisjointFromEveryGeneration1Generation2AndGeneration3TrainingValidationHeldOutAndPriorMatchPosition": true,
+    "seeds": {
+      "developmentScreen": 2026072201,
+      "equalNodeConfirmation": 2026072202,
+      "equalTimeConfirmation": 2026072203,
+      "configSeedEqualsSuiteSeed": true
+    },
+    "sampler": {
+      "deterministicPrng": "SplitMix64",
+      "trajectoryPairs": 4096,
+      "independentTrajectoriesPerPair": 2,
+      "maxPlies": 220,
+      "positionsPerPhaseAndSide": 2,
+      "captureSelectionPercent": 72
+    },
+    "schedule": {
+      "balancedPairBlockSize": 4,
+      "onePairFromEachPhasePerBlock": true,
+      "rootSideToMoveConstantWithinBlock": true,
+      "rootSideToMoveAlternatesBetweenBlocks": true,
+      "inverseArrangeForSeededDotNetRandomShuffle": true
+    },
+    "engineAssignment": {
+      "sameExecutable": true,
+      "candidate": {
+        "UseOmegaNNUE": true,
+        "OmegaNNUEFile": "exact offline-passing winner hash"
+      },
+      "control": {
+        "UseOmegaNNUE": false,
+        "OmegaNNUEFile": "<empty>"
+      }
+    },
+    "commonEngineOptions": {
+      "Threads": 1,
+      "HashMiB": 128,
+      "Ponder": false,
+      "OwnBook": false,
+      "UciChess960": false,
+      "UciVariant": "omega",
+      "freshProcessPerGame": true,
+      "repeats": 1,
+      "maxPlies": 300,
+      "absoluteMaxPlies": 400,
+      "stopGraceMs": 2000
+    },
+    "developmentScreen": {
+      "promotionEvidence": false,
+      "roots": 32,
+      "rootsPerPhase": 8,
+      "rootsPerPhaseAndSideToMove": 4,
+      "games": 64,
+      "gamesPerRoot": 2,
+      "colorOrder": "AB then BA",
+      "mode": "nodes",
+      "nodesPerMove": 20000,
+      "minimumCandidateScore": 0.4,
+      "maximumSafetyFailures": 0,
+      "mustCompleteAllPairs": true,
+      "failureAction": "stop without running either formal gate"
+    },
+    "equalNodeGate": {
+      "independentSuite": true,
+      "maximumPairs": 128,
+      "pairsPerPhase": 32,
+      "pairsPerPhaseAndSideToMove": 16,
+      "maximumGames": 256,
+      "gamesPerPair": 2,
+      "colorOrder": "AB then BA",
+      "mode": "nodes",
+      "nodesPerMove": 50000,
+      "minimumPairsBeforeDecision": 64,
+      "nullElo": 10,
+      "alpha": 0.05,
+      "beta": 0.1,
+      "promotionEValue": 20,
+      "futilityEValue": 10,
+      "balancedBlockChecksOnly": true,
+      "maximumSafetyFailures": 0,
+      "continueAtMaximumPairs": "inconclusive and generation failure"
+    },
+    "equalTimeGate": {
+      "independentSuite": true,
+      "maximumPairs": 128,
+      "pairsPerPhase": 32,
+      "pairsPerPhaseAndSideToMove": 16,
+      "maximumGames": 256,
+      "gamesPerPair": 2,
+      "colorOrder": "AB then BA",
+      "mode": "movetime",
+      "moveTimeMs": 1000,
+      "oneGameAtATime": true,
+      "idleMachineAttestationRequired": true,
+      "minimumPairsBeforeDecision": 64,
+      "nullElo": 10,
+      "alpha": 0.05,
+      "beta": 0.1,
+      "promotionEValue": 20,
+      "futilityEValue": 10,
+      "balancedBlockChecksOnly": true,
+      "maximumSafetyFailures": 0,
+      "requiredTelemetry": [
+        "nodes",
+        "depth",
+        "nps",
+        "elapsed time",
+        "deadline compliance"
+      ],
+      "continueAtMaximumPairs": "inconclusive and generation failure"
+    },
+    "runnerUpMayUseAnyGeneration3Suite": false,
+    "failedOrInconclusiveSuiteMayBeReusedByANewCandidate": false
+  },
+  "stoppingAndFallbackRules": [
+    {
+      "order": 1,
+      "stage": "feature-only prelabel audit",
+      "stopWhen": "any feature-only abort gate fails",
+      "action": "abort before labels; no in-profile seed, split, quota, or root fallback"
+    },
+    {
+      "order": 2,
+      "stage": "I0 migration and deployment parity",
+      "stopWhen": "I0 cannot be resolved, pinned, loaded, reconstructed, or proved prediction-identical",
+      "action": "abort before candidate training"
+    },
+    {
+      "order": 3,
+      "stage": "G3A, G3B, G3C training",
+      "stopWhen": "one candidate has nonfinite loss or parameters, all dense units die, export fails, or parity fails",
+      "action": "mark only that candidate ineligible; continue remaining preregistered candidates unchanged"
+    },
+    {
+      "order": 4,
+      "stage": "validation selection",
+      "stopWhen": "no candidate is eligible",
+      "action": "fail generation without held-out access"
+    },
+    {
+      "order": 5,
+      "stage": "winner robustness rerun",
+      "stopWhen": "health or either directional comparison fails",
+      "action": "fail generation without held-out access"
+    },
+    {
+      "order": 6,
+      "stage": "one-time offline test",
+      "stopWhen": "any point, phase, bootstrap, health, or robustness requirement fails",
+      "action": "fail generation; no runner-up test and no matches"
+    },
+    {
+      "order": 7,
+      "stage": "development screen",
+      "stopWhen": "score is below 0.4, any safety failure occurs, or the full balanced schedule is incomplete",
+      "action": "fail generation; do not run formal gates"
+    },
+    {
+      "order": 8,
+      "stage": "equal-node gate",
+      "stopWhen": "decision is futility, safety-fail, or inconclusive at 128 pairs",
+      "action": "fail generation; do not substitute a candidate or reuse the suite"
+    },
+    {
+      "order": 9,
+      "stage": "equal-time gate",
+      "stopWhen": "decision is futility, safety-fail, invalid-attestation, deadline-fail, or inconclusive at 128 pairs",
+      "action": "fail generation; do not substitute a candidate or reuse the suite"
+    },
+    {
+      "order": 10,
+      "stage": "promotion",
+      "stopWhen": "both formal decisions are promote and every preceding gate passed",
+      "action": "the exact sealed primary network is promotion-eligible"
+    }
+  ],
+  "requiredPrelabelImplementationVerification": {
+    "generation3TrainerImplementationExistsAtDeclaration": false,
+    "trainerCodeMayBeImplementedAfterThisDeclarationButBeforeLabels": true,
+    "candidateSemanticsMayChangeDuringImplementation": false,
+    "requiredSelfTestsBeforePrelabelSeal": [
+      "protocol-pretest routing discards split-2 rows before JSON target decoding",
+      "G3B/G3C S-plus-D initialization materializes and requantizes byte-identically to I0",
+      "frequency threshold counts both perspectives from split 0 without target access",
+      "frozen deltas never update parameters or Adam moments",
+      "QAT forward materialization exactly matches exported architecture-3 inference",
+      "weighted Huber and soft-WDL analytic gradients pass deterministic finite-difference checks",
+      "cross-phase group weighting implements the declared formula exactly",
+      "candidate checkpoint selection ignores epochs 0 through 36",
+      "deployment-equivalent float reconstruction requantizes byte-identically",
+      "whole-corpus Python and C++ predictions agree exactly",
+      "identical seed and inputs reproduce byte-identical networks and manifests"
+    ],
+    "pinBeforeLabels": [
+      "this preregistration",
+      "generation3 trainer and orchestrator sources",
+      "canonical deployment-float wrapper",
+      "feature encoder and network serializer",
+      "static HCE and C++ parity helper",
+      "rules-only sampler and selector",
+      "fresh corpus freeze and exclusion inventory",
+      "resolved I0 network and provenance",
+      "complete exact G3A/G3B/G3C argument vectors"
+    ],
+    "implementationFailureAction": "abort before labels; do not weaken or reinterpret this preregistration"
+  },
+  "computeNotes": {
+    "teacherTargetNodes": 1638400000,
+    "teacherMaximumNodesWithAllReserves": 1740800000,
+    "teacherOneWorkerHoursAt40000Nps": 11.377777777777778,
+    "teacherOneWorkerHoursAt15000Nps": 30.340740740740742,
+    "teacherIdealFourWorkerHoursAt40000Nps": 2.8444444444444446,
+    "teacherIdealFourWorkerHoursAt15000Nps": 7.5851851851851855,
+    "generation1ObservedSecondsPer24EpochCandidateOn6510TrainRows": 190,
+    "estimatedGeneration3MinutesPerDirectCandidate": 13,
+    "estimatedGeneration3MinutesPerSharedOrWeightedCandidateRange": [
+      15,
+      20
+    ],
+    "estimatedThreePrimaryPlusOneRobustnessTrainingHours": [
+      0.8,
+      1.3
+    ],
+    "developmentMaximumSearchedNodesAt300PliesPerGame": 384000000,
+    "equalNodeMaximumSearchedNodesAt300PliesPerGame": 3840000000,
+    "equalTimeMaximumPureThinkHoursAt300PliesPerGame": 21.333333333333332,
+    "sequentialFormalGatesMayStopAtHalfMaximumPairs": true,
+    "dominantComputeRisk": "formal matches, not candidate training"
+  },
+  "risks": [
+    {
+      "id": "static-loss-to-elo",
+      "risk": "A lower residual Huber loss may not improve move choice or Elo.",
+      "mitigation": "Require independent paired equal-node and equal-time promotion; match results may reject but never select a different recipe."
+    },
+    {
+      "id": "king-sharing-underfit",
+      "risk": "G3B/G3C can underfit genuinely bucket-specific tactics in rare king regions.",
+      "mitigation": "Retain unrestricted G3A, preserve I0 rare deltas, and select on a common validation metric."
+    },
+    {
+      "id": "soft-wdl-not-independent",
+      "risk": "G3C soft-WDL targets are a transformation of the same teacher CP, not independent game outcomes.",
+      "mitigation": "Use weight 0.25, keep Huber weight 1.0, and never select on the composite training loss."
+    },
+    {
+      "id": "feature-coverage",
+      "risk": "Even the doubled corpus can leave rare king, en-passant, clock, Champion, Wizard, or detached-corner rows weakly observed.",
+      "mitigation": "Apply feature-only prelabel coverage gates, migration fallback, and frequency-gated deltas."
+    },
+    {
+      "id": "full-refresh-speed",
+      "risk": "Residual runtime evaluates HCE plus a full-refresh 12.39 MB NNUE, so equal-time strength can fail despite equal-node gains.",
+      "mitigation": "Keep runtime dimensions fixed and require equal-time telemetry; treat accumulator or SIMD work as a separate preregistered runtime experiment."
+    },
+    {
+      "id": "conditional-weight-transfer",
+      "risk": "Reusing a safe generation-2 selected export could be interpreted as indirect reuse of failed-generation labels.",
+      "mitigation": "Resolve the public-status-only initializer rule before generation-3 labels, use a fresh orbit-disjoint corpus and suites, and fall back to generation-2 K0 unless every priority-1 condition is satisfied."
+    },
+    {
+      "id": "new-trainer-complexity",
+      "risk": "The S-plus-D optimizer and weighted soft-WDL objective add implementation and provenance risk.",
+      "mitigation": "Require deterministic finite-difference, materialization, replay, canonical export, and whole-corpus C++ parity self-tests before the pre-label seal."
+    }
+  ],
+  "clearlySuperiorDefinition": {
+    "featureOnlyPrelabelAuditPasses": true,
+    "validationWinnerEligible": true,
+    "robustnessRunPasses": true,
+    "offlineTestPassesAgainstI0AndZeroResidual": true,
+    "developmentScreenPasses": true,
+    "equalNodeDecision": "promote",
+    "equalTimeDecision": "promote",
+    "allSafetyRuntimeAndTelemetryGatesPass": true,
+    "exactPrimaryWinnerHashUnchangedAcrossOfflineAndMatches": true,
+    "continueAtMaximumPairsMeansPromotion": false
+  }
+}
