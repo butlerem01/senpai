@@ -1,0 +1,350 @@
+{
+  "schemaVersion": 1,
+  "kind": "omega-nnue-king-state-v1-preregistration",
+  "generationId": "king-state-v1-deep-hce-v2",
+  "declaredUtc": "2026-07-19T05:10:20.3400938Z",
+  "purpose": "Select one king-state residual NNUE recipe without tuning on held-out labels or match outcomes, then require independent equal-node and equal-time superiority over HCE.",
+  "immutability": {
+    "effectiveBeforeTeacherLabels": true,
+    "candidateMatrixMayChangeAfterLabels": false,
+    "validationMaySelectRecipe": true,
+    "testMaySelectRecipe": false,
+    "matchResultsMaySelectRecipe": false,
+    "failedGenerationRequiresFreshOrbitDisjointTeacherAndMatchSuites": true
+  },
+  "architecture": {
+    "id": 3,
+    "name": "king-state-residual",
+    "initializer": {
+      "path": "../build-msvc/experimental-networks/omega-nnue-residual-v3-feature.nnue",
+      "sha256": "d81ba391cdacfd847b3e356a9ac439b9e3c5e0ace40b9dbbfd3d103fa197cbd1",
+      "migration": "replicate every architecture-2 piece-square row into all 29 king buckets; copy castling and dense/output tensors exactly; initialize en-passant, clock, and phase rows to zero",
+      "requiredParity": "K0 must exactly reproduce architecture-2 predictions on all deep-HCE-v2 roots"
+    }
+  },
+  "dataSplit": {
+    "groupField": "groupId",
+    "splitSeed": 4989,
+    "trainPercent": 80,
+    "validationPercent": 10,
+    "testPercent": 10,
+    "collisionPolicy": "error",
+    "requiredPhaseBalanceAudit": true,
+    "requiredSideToMoveBalanceAudit": true,
+    "maximumRelativeDeviationFromEqualPhaseCount": 0.15,
+    "maximumAbsoluteSideToMoveImbalanceFraction": 0.1
+  },
+  "deepHceTeacherPreparation": {
+    "targetPairs": 4096,
+    "reservePairsPerPhase": 64,
+    "preflightExtraPairsPerPhase": 64,
+    "preflightPairsProbed": 4608,
+    "maximumPreflightRejectedPairs": 32,
+    "wholePairExclusionRequired": true,
+    "rejectionReasonsRecorded": true,
+    "replacementOrder": "frozen candidate-blind rank within the same phase",
+    "observedBeforeLabels": {
+      "rejectedPairs": 18,
+      "teacherLabelsStarted": false,
+      "scoresReadForSelection": false,
+      "maximumRejectedFractionAtCap": 0.006944444444444444
+    }
+  },
+  "modelSeeds": {
+    "primary": 20260725,
+    "robustness": 20260726
+  },
+  "candidates": [
+    {
+      "id": "K0",
+      "role": "epoch-zero migrated control",
+      "train": false
+    },
+    {
+      "id": "K1",
+      "role": "conservative king-bucket learning",
+      "train": true,
+      "learningRate": 0.003,
+      "featureTransformerLearningRateScale": 0.5
+    },
+    {
+      "id": "K2",
+      "role": "faster king-bucket learning",
+      "train": true,
+      "learningRate": 0.003,
+      "featureTransformerLearningRateScale": 1.0
+    }
+  ],
+  "commonTraining": {
+    "networkSemantics": "king-state-residual",
+    "epochs": 24,
+    "qatEpochs": 4,
+    "batchSize": 256,
+    "denseWeightLearningRateScale": 0.01,
+    "denseBiasLearningRateScale": 0.1,
+    "outputLearningRateScale": 0.25,
+    "qatLearningRateScale": 0.1,
+    "cpWeight": 1.0,
+    "outcomeWeight": 0.0,
+    "targetCpClip": 2000,
+    "stratifiedBatches": true,
+    "strict": true,
+    "cppParity": true,
+    "epochSelection": "minimum quantized validation Huber loss, including epoch zero"
+  },
+  "validationSelection": {
+    "metric": "row-weighted quantized Huber loss over clipped residual targets",
+    "minimumRelativeHuberImprovementOverK0": 0.005,
+    "mustLowerCpMae": true,
+    "maximumPhaseMaeRegressionCp": 5,
+    "requireAllHealthChecks": true,
+    "winner": "lowest quantized validation Huber loss",
+    "tieRelativeLoss": 0.0025,
+    "tieFormula": "abs(K1Loss-K2Loss)/min(K1Loss,K2Loss) <= tieRelativeLoss",
+    "tieRequiresFinitePositiveLosses": true,
+    "tieWinner": "K1",
+    "ifNoneEligible": "fail generation without consulting test",
+    "robustnessRun": {
+      "recipe": "selected validation recipe only",
+      "seed": 20260726,
+      "mayReplacePrimary": false
+    }
+  },
+  "offlineTestGate": {
+    "unsealAfterCandidateHashRecorded": true,
+    "primaryMetric": "phase-macro group-balanced quantized Huber loss",
+    "targetAndLoss": {
+      "targetField": "targetCpStm",
+      "targetClipCpInclusive": [
+        -2000,
+        2000
+      ],
+      "predictionField": "quantized residual correction in side-to-move centipawns",
+      "errorCp": "predictionCp-clippedTargetCp",
+      "normalizerCp": 100,
+      "huberDeltaNormalized": 2,
+      "huberFormula": "0.5*e^2 when abs(e)<=2; 2*(abs(e)-1) otherwise, where e=errorCp/100",
+      "maeFormula": "abs(errorCp)"
+    },
+    "aggregation": {
+      "requiredFrozenPhases": [
+        "opening",
+        "middlegame",
+        "late",
+        "endgame"
+      ],
+      "groupPhasePurityRequired": true,
+      "rowToGroup": "arithmetic mean of rows for each (phase,groupId)",
+      "groupToPhase": "arithmetic mean of group means within each frozen phase",
+      "phaseToMetric": "equal arithmetic mean of the four phase means",
+      "appliesTo": [
+        "Huber loss",
+        "centipawn MAE"
+      ],
+      "missingOrEmptyPhase": "fail gate"
+    },
+    "bootstrap": {
+      "paired": true,
+      "phaseStratified": true,
+      "unit": "unique groupId within frozen phase",
+      "sampling": "within each phase sample N_phase groupIds with replacement; preserve multiplicity and use identical draws for candidate, K0, and zero residual",
+      "rng": "NumPy Generator PCG64",
+      "iterations": 10000,
+      "oneSidedConfidence": 0.95,
+      "seed": 20260727,
+      "statistic": "(baselineLoss-candidateLoss)/baselineLoss, computed separately for each baseline",
+      "lowerBound": "5th percentile via numpy.quantile(method='linear')",
+      "requiredLowerBoundExclusive": 0
+    },
+    "baselines": {
+      "K0": "migrated residual-v3 epoch-zero control",
+      "zeroResidual": "plain HCE with a zero correction"
+    },
+    "comparisonPolicy": "all point-estimate and bootstrap requirements must pass separately against each baseline",
+    "minimumRelativeLossImprovementAgainstEach": 0.01,
+    "minimumMaeImprovementCpAgainstEach": 2,
+    "requirePositiveFifthPercentileAgainstEach": true,
+    "maximumPhaseMaeRegressionCp": 5,
+    "robustness": {
+      "metric": "the same frozen phase-macro group-balanced quantized Huber loss",
+      "mustImproveDirectionallyAgainstK0": true,
+      "mustImproveDirectionallyAgainstZeroResidual": true,
+      "mayReplacePrimary": false
+    },
+    "fallbackAfterTestFailure": false
+  },
+  "quantizationAndRuntimeGate": {
+    "exactPythonCppAgreement": "whole corpus",
+    "wholeCorpusParity": {
+      "helperIdentity": "staticHceEvaluator pinned by pre-label seal",
+      "command": "--evaluate-network-stream <network>",
+      "input": "one nonempty printable-ASCII Omega OFEN per stdin line; terminal CR is trimmed",
+      "output": "one bare signed integer residual correction per accepted input line",
+      "failClosed": "nonzero exit with stderr diagnostic on load, malformed input, non-residual network, evaluation, read, or write failure",
+      "maximumInputLineBytes": 4096,
+      "exactIntegerAgreementRequiredForEveryCorpusRow": true
+    },
+    "maximumMeanFloatQuantizationPenaltyCp": 2,
+    "maximumSingleFloatQuantizationPenaltyCp": 10,
+    "maximumSaturatedDenseUnits": 0,
+    "maximumDeadDenseUnits": 8,
+    "deadDenseUnitsMayExceedK0": false,
+    "denseActiveFractionRange": [
+      0.2,
+      0.75
+    ],
+    "maximumAbsoluteCorrectionCp": 2500,
+    "requireFinitePredictions": true,
+    "requireExpectedFileSizeAndRoundTripHash": true
+  },
+  "freshSuiteGeneration": {
+    "rulesOnlySamplerPolicy": {
+      "deterministicPrng": "SplitMix64",
+      "trajectoryPairs": 2048,
+      "independentTrajectoriesPerPair": 2,
+      "maxPlies": 220,
+      "positionsPerPhaseAndSide": 2,
+      "captureSelectionPercent": 72
+    },
+    "selectorPolicy": {
+      "maximumRootsPerTrajectoryPairPerSuite": 1,
+      "rank": "candidate-blind deterministic hash of suite seed and root identity",
+      "exactInputUniqueWithinAndAcrossSuites": true,
+      "conservativeSymmetryOrbitUniqueWithinAndAcrossSuites": true,
+      "trainingAndPriorSuiteOrbitsExcluded": true
+    },
+    "developmentScreenSeed": 2026071901,
+    "equalNodeConfirmationSeed": 2026071902,
+    "equalTimeConfirmationSeed": 2026071903,
+    "configSeedEqualsSuiteSeed": true,
+    "schedule": {
+      "inverseArrangeForSeededDotNetRandomShuffle": true,
+      "balancedPairBlockSize": 4,
+      "onePairFromEachPhasePerBlock": true,
+      "rootSideToMoveConstantWithinBlock": true,
+      "rootSideToMoveAlternatesBetweenBlocks": true
+    },
+    "requiredOrbitDisjointFrom": [
+      "all training inputs",
+      "all prior NNUE screens",
+      "all prior NNUE confirmations",
+      "the other two fresh match suites"
+    ]
+  },
+  "matchExecution": {
+    "engineAssignment": {
+      "candidate": "engineA",
+      "control": "engineB",
+      "sameExecutable": true,
+      "candidateUseOmegaNNUE": true,
+      "candidateOmegaNNUEFile": "exact frozen candidate network",
+      "controlUseOmegaNNUE": false
+    },
+    "commonEngineOptions": {
+      "Threads": 1,
+      "Hash": 128,
+      "Ponder": false,
+      "OwnBook": false,
+      "UCI_Chess960": false,
+      "UCI_Variant": "omega"
+    },
+    "repeats": 1,
+    "freshProcessPerGame": true,
+    "maxPlies": 300,
+    "absoluteMaxPlies": 400,
+    "stopGraceMs": 2000,
+    "bootstrapIterations": 20000,
+    "searchTimeoutMs": {
+      "developmentScreen": 60000,
+      "equalNode": 60000,
+      "equalTime": 5000
+    }
+  },
+  "developmentScreen": {
+    "promotionEvidence": false,
+    "suiteSeed": 2026071901,
+    "configSeed": 2026071901,
+    "roots": 32,
+    "rootsPerPhase": 8,
+    "rootsPerPhaseAndSideToMove": 4,
+    "games": 64,
+    "gamesPerRoot": 2,
+    "colorOrder": "AB then BA",
+    "mode": "nodes",
+    "nodesPerMove": 20000,
+    "threads": 1,
+    "hashMiB": 128,
+    "ownBook": false,
+    "ponder": false,
+    "minimumCandidateScore": 0.4,
+    "maximumSafetyFailures": 0
+  },
+  "equalNodeGate": {
+    "independentSuite": true,
+    "suiteSeed": 2026071902,
+    "configSeed": 2026071902,
+    "maximumPairs": 128,
+    "pairsPerPhase": 32,
+    "pairsPerPhaseAndSideToMove": 16,
+    "maximumGames": 256,
+    "gamesPerPair": 2,
+    "colorOrder": "AB then BA",
+    "mode": "nodes",
+    "nodesPerMove": 50000,
+    "minimumPairsBeforeDecision": 64,
+    "nullElo": 10,
+    "alpha": 0.05,
+    "beta": 0.1,
+    "promotionEValue": 20,
+    "futilityEValue": 10,
+    "balancedBlockChecksOnly": true,
+    "maximumSafetyFailures": 0
+  },
+  "equalTimeGate": {
+    "independentSuite": true,
+    "suiteSeed": 2026071903,
+    "configSeed": 2026071903,
+    "maximumPairs": 128,
+    "pairsPerPhase": 32,
+    "pairsPerPhaseAndSideToMove": 16,
+    "maximumGames": 256,
+    "gamesPerPair": 2,
+    "colorOrder": "AB then BA",
+    "mode": "movetime",
+    "moveTimeMs": 1000,
+    "oneGameAtATime": true,
+    "idleMachineRequired": true,
+    "minimumPairsBeforeDecision": 64,
+    "nullElo": 10,
+    "alpha": 0.05,
+    "beta": 0.1,
+    "promotionEValue": 20,
+    "futilityEValue": 10,
+    "balancedBlockChecksOnly": true,
+    "maximumSafetyFailures": 0,
+    "record": [
+      "nodes",
+      "depth",
+      "nps",
+      "deadline compliance"
+    ],
+    "idleAttestation": {
+      "required": true,
+      "kind": "omega-equal-time-idle-attestation-v1",
+      "runId": "must exactly equal the frozen equal-time config runId",
+      "idleMachine": true,
+      "oneGameAtATime": true,
+      "concurrentMatchProcesses": 1,
+      "createdUtc": "required ISO-8601 UTC timestamp",
+      "operator": "optional nonempty string"
+    }
+  },
+  "clearlySuperiorDefinition": {
+    "offlineTestGatePasses": true,
+    "developmentScreenPasses": true,
+    "equalNodeDecision": "promote",
+    "equalTimeDecision": "promote",
+    "allSafetyGatesPass": true,
+    "continueAtMaximumPairsMeans": "inconclusive, not promotion"
+  }
+}

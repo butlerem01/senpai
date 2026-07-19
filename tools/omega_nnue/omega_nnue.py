@@ -27,6 +27,7 @@ FORMAT_VERSION = 1
 HEADER_BYTES = 72
 ARCHITECTURE_ABSOLUTE = 1
 ARCHITECTURE_RESIDUAL = 2
+ARCHITECTURE_KING_STATE_RESIDUAL = 3
 # Preserve the original public constant for callers that construct an
 # absolute OMNNUE1 network. The header's architecture field now also
 # self-describes residual/correction semantics without changing the tensor
@@ -35,16 +36,38 @@ ARCHITECTURE = ARCHITECTURE_ABSOLUTE
 ARCHITECTURE_NAMES = {
     ARCHITECTURE_ABSOLUTE: "absolute",
     ARCHITECTURE_RESIDUAL: "residual",
+    ARCHITECTURE_KING_STATE_RESIDUAL: "king-state-residual",
 }
 SQUARE_COUNT = 104
 PIECE_COUNT = 8
 FEATURE_COUNT = 1668
+KING_BUCKET_COUNT = 29
+KING_STATE_OCCUPANCY_FEATURES = (
+    KING_BUCKET_COUNT * 2 * PIECE_COUNT * SQUARE_COUNT
+)
+KING_STATE_CASTLING_FEATURE_BASE = KING_STATE_OCCUPANCY_FEATURES
+KING_STATE_EP_FEATURE_BASE = KING_STATE_CASTLING_FEATURE_BASE + 4
+KING_STATE_HALFMOVE_FEATURE_BASE = KING_STATE_EP_FEATURE_BASE + SQUARE_COUNT
+KING_STATE_HALFMOVE_BINS = 8
+KING_STATE_PHASE_FEATURE_BASE = (
+    KING_STATE_HALFMOVE_FEATURE_BASE + KING_STATE_HALFMOVE_BINS
+)
+KING_STATE_PHASE_BINS = 4
+KING_STATE_FEATURE_COUNT = KING_STATE_PHASE_FEATURE_BASE + KING_STATE_PHASE_BINS
 ACCUMULATOR_SIZE = 128
 HIDDEN_SIZE = 32
 ACTIVATION_MAX = 127
 HIDDEN_DIVISOR = 64
 OUTPUT_DIVISOR = 64
 PAYLOAD_BYTES = 435620
+KING_STATE_PAYLOAD_BYTES = (
+    ACCUMULATOR_SIZE * 2
+    + KING_STATE_FEATURE_COUNT * ACCUMULATOR_SIZE * 2
+    + HIDDEN_SIZE * 4
+    + HIDDEN_SIZE * ACCUMULATOR_SIZE * 2
+    + 4
+    + HIDDEN_SIZE
+)
 
 FNV64_OFFSET_BASIS = 14695981039346656037
 FNV64_PRIME = 1099511628211
@@ -64,6 +87,29 @@ CASTLING_FEATURE_BASE = 2 * PIECE_COUNT * SQUARE_COUNT
 PAD_FEATURE = FEATURE_COUNT
 
 HEADER_STRUCT = struct.Struct("<8s12I2Q")
+
+
+def is_residual_architecture(architecture: int) -> bool:
+    return architecture in (
+        ARCHITECTURE_RESIDUAL,
+        ARCHITECTURE_KING_STATE_RESIDUAL,
+    )
+
+
+def feature_count_for_architecture(architecture: int) -> int:
+    if architecture in (ARCHITECTURE_ABSOLUTE, ARCHITECTURE_RESIDUAL):
+        return FEATURE_COUNT
+    if architecture == ARCHITECTURE_KING_STATE_RESIDUAL:
+        return KING_STATE_FEATURE_COUNT
+    raise ValueError(f"unsupported architecture semantics {architecture}")
+
+
+def payload_bytes_for_architecture(architecture: int) -> int:
+    if architecture in (ARCHITECTURE_ABSOLUTE, ARCHITECTURE_RESIDUAL):
+        return PAYLOAD_BYTES
+    if architecture == ARCHITECTURE_KING_STATE_RESIDUAL:
+        return KING_STATE_PAYLOAD_BYTES
+    raise ValueError(f"unsupported architecture semantics {architecture}")
 
 
 def fnv1a64(data: bytes) -> int:
@@ -123,12 +169,13 @@ class QuantizedNetwork:
             raise ValueError(
                 f"unsupported architecture semantics {self.architecture}"
             )
+        feature_count = feature_count_for_architecture(self.architecture)
         expected = (
             ("ft_bias", self.ft_bias, (ACCUMULATOR_SIZE,), np.int16),
             (
                 "ft_weights",
                 self.ft_weights,
-                (FEATURE_COUNT, ACCUMULATOR_SIZE),
+                (feature_count, ACCUMULATOR_SIZE),
                 np.int16,
             ),
             ("dense_bias", self.dense_bias, (HIDDEN_SIZE,), np.int32),
@@ -150,6 +197,7 @@ class QuantizedNetwork:
 
     def payload(self) -> bytes:
         self.validate()
+        payload_bytes = payload_bytes_for_architecture(self.architecture)
         payload = b"".join(
             (
                 _little_bytes(self.ft_bias, "<i2"),
@@ -160,14 +208,16 @@ class QuantizedNetwork:
                 _little_bytes(self.output_weights, "i1"),
             )
         )
-        if len(payload) != PAYLOAD_BYTES:
+        if len(payload) != payload_bytes:
             raise AssertionError(
-                f"payload is {len(payload)} bytes, expected {PAYLOAD_BYTES}"
+                f"payload is {len(payload)} bytes, expected {payload_bytes}"
             )
         return payload
 
     def to_bytes(self) -> bytes:
         payload = self.payload()
+        feature_count = feature_count_for_architecture(self.architecture)
+        payload_bytes = payload_bytes_for_architecture(self.architecture)
         header = HEADER_STRUCT.pack(
             MAGIC,
             ENDIAN_TAG,
@@ -176,13 +226,13 @@ class QuantizedNetwork:
             self.architecture,
             SQUARE_COUNT,
             PIECE_COUNT,
-            FEATURE_COUNT,
+            feature_count,
             ACCUMULATOR_SIZE,
             HIDDEN_SIZE,
             ACTIVATION_MAX,
             HIDDEN_DIVISOR,
             OUTPUT_DIVISOR,
-            PAYLOAD_BYTES,
+            payload_bytes,
             fnv1a64(payload),
         )
         if len(header) != HEADER_BYTES:
@@ -194,10 +244,9 @@ class QuantizedNetwork:
 
     @classmethod
     def from_bytes(cls, data: bytes) -> "QuantizedNetwork":
-        if len(data) != HEADER_BYTES + PAYLOAD_BYTES:
+        if len(data) < HEADER_BYTES:
             raise ValueError(
-                f"network is {len(data)} bytes; expected "
-                f"{HEADER_BYTES + PAYLOAD_BYTES}"
+                f"network is {len(data)} bytes; shorter than the {HEADER_BYTES}-byte header"
             )
         fields = HEADER_STRUCT.unpack_from(data)
         (
@@ -217,6 +266,12 @@ class QuantizedNetwork:
             payload_bytes,
             payload_hash,
         ) = fields
+        if architecture not in ARCHITECTURE_NAMES:
+            raise ValueError(
+                f"unsupported architecture semantics {architecture}"
+            )
+        expected_feature_count = feature_count_for_architecture(architecture)
+        expected_payload_bytes = payload_bytes_for_architecture(architecture)
         expected = (
             (magic, MAGIC, "magic"),
             (endian, ENDIAN_TAG, "endian tag"),
@@ -224,20 +279,21 @@ class QuantizedNetwork:
             (header_bytes, HEADER_BYTES, "header size"),
             (squares, SQUARE_COUNT, "square count"),
             (pieces, PIECE_COUNT, "piece count"),
-            (features, FEATURE_COUNT, "feature count"),
+            (features, expected_feature_count, "feature count"),
             (accumulator, ACCUMULATOR_SIZE, "accumulator size"),
             (hidden, HIDDEN_SIZE, "hidden size"),
             (activation_max, ACTIVATION_MAX, "activation maximum"),
             (hidden_divisor, HIDDEN_DIVISOR, "hidden divisor"),
             (output_divisor, OUTPUT_DIVISOR, "output divisor"),
-            (payload_bytes, PAYLOAD_BYTES, "payload size"),
+            (payload_bytes, expected_payload_bytes, "payload size"),
         )
         for actual, wanted, label in expected:
             if actual != wanted:
                 raise ValueError(f"bad {label}: {actual!r}; expected {wanted!r}")
-        if architecture not in ARCHITECTURE_NAMES:
+        if len(data) != HEADER_BYTES + expected_payload_bytes:
             raise ValueError(
-                f"unsupported architecture semantics {architecture}"
+                f"network is {len(data)} bytes; expected "
+                f"{HEADER_BYTES + expected_payload_bytes}"
             )
 
         payload = data[HEADER_BYTES:]
@@ -259,10 +315,10 @@ class QuantizedNetwork:
             return result.copy()
 
         ft_bias = take(ACCUMULATOR_SIZE, "<i2").astype(np.int16, copy=False)
-        ft_weights = take(FEATURE_COUNT * ACCUMULATOR_SIZE, "<i2")
-        ft_weights = ft_weights.reshape(FEATURE_COUNT, ACCUMULATOR_SIZE).astype(
-            np.int16, copy=False
-        )
+        ft_weights = take(expected_feature_count * ACCUMULATOR_SIZE, "<i2")
+        ft_weights = ft_weights.reshape(
+            expected_feature_count, ACCUMULATOR_SIZE
+        ).astype(np.int16, copy=False)
         dense_bias = take(HIDDEN_SIZE, "<i4").astype(np.int32, copy=False)
         dense_weights = take(HIDDEN_SIZE * ACCUMULATOR_SIZE * 2, "i1")
         dense_weights = dense_weights.reshape(
@@ -270,7 +326,7 @@ class QuantizedNetwork:
         ).astype(np.int8, copy=False)
         output_bias = int(take(1, "<i4")[0])
         output_weights = take(HIDDEN_SIZE, "i1").astype(np.int8, copy=False)
-        if offset != PAYLOAD_BYTES:
+        if offset != expected_payload_bytes:
             raise AssertionError("internal payload-offset error")
         result = cls(
             ft_bias=ft_bias,
@@ -354,12 +410,25 @@ def _parse_rank(rank_text: str) -> list[str | None]:
     return squares
 
 
-def parse_ofen(ofen: str) -> tuple[list[tuple[int, int, int]], str, str]:
-    """Return ``(piece, side, square)`` triples, side to move, and castling."""
+def _ofen_regular_square(text: str) -> int:
+    if len(text) != 2:
+        raise ValueError(f"invalid OFEN square {text!r}")
+    file = ord(text[0].lower()) - ord("a")
+    rank = ord(text[1]) - ord("0")
+    if not 0 <= file < 10 or not 0 <= rank < 10:
+        raise ValueError(f"invalid OFEN square {text!r}")
+    return file * 10 + rank
+
+
+def _parse_ofen_extended(
+    ofen: str,
+) -> tuple[list[tuple[int, int, int]], str, str, tuple[int, ...], int]:
+    """Return every position field consumed by an OMNNUE architecture."""
+
     fields = ofen.split()
     if len(fields) != 6:
         raise ValueError("Omega OFEN must contain exactly six fields")
-    placement, side_to_move, castling = fields[0], fields[1], fields[2]
+    placement, side_to_move, castling, ep_text, halfmove_text, fullmove_text = fields
     if side_to_move not in ("w", "b"):
         raise ValueError(f"invalid side-to-move field {side_to_move!r}")
     bracket = placement.find("[")
@@ -396,6 +465,40 @@ def parse_ofen(ofen: str) -> tuple[list[tuple[int, int, int]], str, str]:
             raise ValueError(f"invalid castling rights {castling!r}")
         if len(set(castling)) != len(castling):
             raise ValueError(f"duplicate castling rights {castling!r}")
+
+    if ep_text == "-":
+        ep_squares: tuple[int, ...] = ()
+    else:
+        ep_parts = ep_text.split(",")
+        if not 1 <= len(ep_parts) <= 2 or any(not item for item in ep_parts):
+            raise ValueError(f"invalid en-passant field {ep_text!r}")
+        ep_squares = tuple(_ofen_regular_square(item) for item in ep_parts)
+        if len(set(ep_squares)) != len(ep_squares):
+            raise ValueError(f"duplicate en-passant targets {ep_text!r}")
+        if len(ep_squares) == 2:
+            first_file, first_rank = divmod(ep_squares[0], 10)
+            second_file, second_rank = divmod(ep_squares[1], 10)
+            if first_file != second_file or abs(first_rank - second_rank) != 1:
+                raise ValueError(
+                    "two Omega en-passant targets must be adjacent on one file"
+                )
+
+    try:
+        halfmove_clock = int(halfmove_text)
+        fullmove_number = int(fullmove_text)
+    except ValueError as error:
+        raise ValueError("OFEN move counters must be integers") from error
+    if halfmove_clock < 0:
+        raise ValueError("OFEN halfmove clock cannot be negative")
+    if fullmove_number < 1:
+        raise ValueError("OFEN fullmove number must be positive")
+    return pieces, side_to_move, castling, ep_squares, halfmove_clock
+
+
+def parse_ofen(ofen: str) -> tuple[list[tuple[int, int, int]], str, str]:
+    """Return triples, side to move, and castling (legacy public contract)."""
+
+    pieces, side_to_move, castling, _, _ = _parse_ofen_extended(ofen)
     return pieces, side_to_move, castling
 
 
@@ -412,22 +515,57 @@ def orient_square(square: int, perspective: int) -> int:
     return 100 + (3 - (square - 100))
 
 
+def king_bucket(square: int, perspective: int) -> int:
+    """Map the friendly king to 25 regular 2x2 or four corner buckets."""
+
+    oriented = orient_square(square, perspective)
+    if oriented < 100:
+        file, rank = divmod(oriented, 10)
+        return (file // 2) * 5 + rank // 2
+    return 25 + (oriented - 100)
+
+
+def halfmove_clock_bin(halfmove_clock: int) -> int:
+    """Return one of eight bins, with extra resolution near the draw limit."""
+
+    if halfmove_clock < 0:
+        raise ValueError("halfmove clock cannot be negative")
+    boundaries = (1, 4, 16, 32, 50, 75, 90)
+    return sum(halfmove_clock >= boundary for boundary in boundaries)
+
+
+def material_phase_bin(pieces: Sequence[tuple[int, int, int]]) -> int:
+    """Bucket the remaining non-pawn force using Senpai's Omega phase weights."""
+
+    weights = {
+        PIECE_INDEX["n"]: 1,
+        PIECE_INDEX["b"]: 1,
+        PIECE_INDEX["c"]: 1,
+        PIECE_INDEX["w"]: 1,
+        PIECE_INDEX["r"]: 2,
+        PIECE_INDEX["q"]: 4,
+    }
+    remaining = min(32, sum(weights.get(piece, 0) for piece, _, _ in pieces))
+    if remaining >= 24:
+        return 0
+    if remaining >= 16:
+        return 1
+    if remaining >= 8:
+        return 2
+    return 3
+
+
 def _active_features_from_parsed(
     pieces: Sequence[tuple[int, int, int]],
     castling: str,
     perspective: int,
+    ep_squares: Sequence[int] = (),
+    halfmove_clock: int = 0,
+    architecture: int = ARCHITECTURE_ABSOLUTE,
 ) -> tuple[int, ...]:
-    result: list[int] = []
-    for piece, side, square in pieces:
-        relation = 0 if side == perspective else 1
-        feature = (
-            (relation * PIECE_COUNT + piece) * SQUARE_COUNT
-            + orient_square(square, perspective)
-        )
-        result.append(feature)
-
     if perspective not in (0, 1):
         raise ValueError(f"invalid perspective {perspective}")
+    feature_count = feature_count_for_architecture(architecture)
 
     # Pos stores a castling rook square, then runtime feature extraction
     # intersects that metadata with a real same-side Rook and determines its
@@ -439,6 +577,31 @@ def _active_features_from_parsed(
         by_side[side][square] = piece
         if piece == PIECE_INDEX["k"]:
             kings[side].append(square)
+
+    result: list[int] = []
+    if architecture == ARCHITECTURE_KING_STATE_RESIDUAL:
+        if len(kings[perspective]) != 1:
+            raise ValueError(
+                "king-state NNUE requires exactly one friendly king per perspective"
+            )
+        bucket = king_bucket(kings[perspective][0], perspective)
+        for piece, side, square in pieces:
+            relation = 0 if side == perspective else 1
+            base = (
+                (relation * PIECE_COUNT + piece) * SQUARE_COUNT
+                + orient_square(square, perspective)
+            )
+            result.append(bucket * (2 * PIECE_COUNT * SQUARE_COUNT) + base)
+        castling_feature_base = KING_STATE_CASTLING_FEATURE_BASE
+    else:
+        for piece, side, square in pieces:
+            relation = 0 if side == perspective else 1
+            result.append(
+                (relation * PIECE_COUNT + piece) * SQUARE_COUNT
+                + orient_square(square, perspective)
+            )
+        castling_feature_base = CASTLING_FEATURE_BASE
+
     castling_rooks = (
         # side, right character, fixed Omega castling-rook square
         (0, "K", 80),
@@ -463,26 +626,55 @@ def _active_features_from_parsed(
         for right_of_king in sorted(flanks):
             relation = 0 if side == perspective else 1
             result.append(
-                CASTLING_FEATURE_BASE
+                castling_feature_base
                 + relation * 2
                 + (1 if right_of_king else 0)
             )
+
+    if architecture == ARCHITECTURE_KING_STATE_RESIDUAL:
+        for square in ep_squares:
+            if not 0 <= square < 100:
+                raise ValueError("en-passant target must be on the regular board")
+            result.append(
+                KING_STATE_EP_FEATURE_BASE
+                + orient_square(square, perspective)
+            )
+        result.append(
+            KING_STATE_HALFMOVE_FEATURE_BASE
+            + halfmove_clock_bin(halfmove_clock)
+        )
+        result.append(
+            KING_STATE_PHASE_FEATURE_BASE + material_phase_bin(pieces)
+        )
+
     if len(set(result)) != len(result):
         raise ValueError("OFEN produced duplicate NNUE features")
-    if any(feature < 0 or feature >= FEATURE_COUNT for feature in result):
+    if any(feature < 0 or feature >= feature_count for feature in result):
         raise AssertionError("internal feature-index error")
     return tuple(sorted(result))
 
 
-def active_features(ofen: str, perspective: int) -> tuple[int, ...]:
-    pieces, _, castling = parse_ofen(ofen)
-    return _active_features_from_parsed(pieces, castling, perspective)
+def active_features(
+    ofen: str,
+    perspective: int,
+    architecture: int = ARCHITECTURE_ABSOLUTE,
+) -> tuple[int, ...]:
+    pieces, _, castling, ep_squares, halfmove_clock = _parse_ofen_extended(ofen)
+    return _active_features_from_parsed(
+        pieces,
+        castling,
+        perspective,
+        ep_squares,
+        halfmove_clock,
+        architecture,
+    )
 
 
 def nnue_input_signature(
     white_features: Sequence[int],
     black_features: Sequence[int],
     side_to_move_white: bool,
+    architecture: int = ARCHITECTURE_ABSOLUTE,
 ) -> str:
     """Hash the exact ordered pair of feature sets presented to the network.
 
@@ -494,7 +686,12 @@ def nnue_input_signature(
     stm = white_features if side_to_move_white else black_features
     opponent = black_features if side_to_move_white else white_features
     digest = hashlib.sha256()
+    feature_count_for_architecture(architecture)
     digest.update(b"OMNNUE1-input\0")
+    # Preserve every existing architecture-1/2 signature. Architecture 3 has
+    # a different feature namespace and therefore receives an explicit tag.
+    if architecture == ARCHITECTURE_KING_STATE_RESIDUAL:
+        digest.update(struct.pack("<I", architecture))
     for perspective in (stm, opponent):
         if len(perspective) > 0xFFFF:
             raise ValueError("NNUE feature set is too large to sign")
@@ -586,6 +783,7 @@ class Dataset:
     input_collision_rows_dropped: int
     input_collision_dropped_by_split: tuple[int, int, int]
     input_collision_examples: list[dict[str, Any]]
+    architecture: int = ARCHITECTURE_ABSOLUTE
 
     @property
     def count(self) -> int:
@@ -594,6 +792,10 @@ class Dataset:
     @property
     def width(self) -> int:
         return int(self.white_features.shape[1])
+
+    @property
+    def pad_feature(self) -> int:
+        return feature_count_for_architecture(self.architecture)
 
     def indices(self, split: int) -> np.ndarray:
         return np.flatnonzero(self.split == split)
@@ -634,6 +836,7 @@ def load_dataset(
     all_train: bool = False,
     collision_policy: str = "drop",
     residual_outcomes: bool = False,
+    architecture: int = ARCHITECTURE_ABSOLUTE,
 ) -> Dataset:
     if not paths:
         raise ValueError("at least one JSONL input is required")
@@ -647,6 +850,7 @@ def load_dataset(
         raise ValueError("max_records must be positive")
     if collision_policy not in ("drop", "error", "allow"):
         raise ValueError("collision_policy must be drop, error, or allow")
+    feature_count = feature_count_for_architecture(architecture)
 
     white_rows: list[tuple[int, ...]] = []
     black_rows: list[tuple[int, ...]] = []
@@ -669,7 +873,13 @@ def load_dataset(
             if not isinstance(ofen_value, str) or not ofen_value.strip():
                 raise ValueError("missing nonempty 'ofen'")
             ofen = " ".join(ofen_value.split())
-            pieces, ofen_side, castling = parse_ofen(ofen)
+            (
+                pieces,
+                ofen_side,
+                castling,
+                ep_squares,
+                halfmove_clock,
+            ) = _parse_ofen_extended(ofen)
             record_side = record.get("sideToMove")
             if record_side is not None:
                 normalized_side = str(record_side).strip().lower()
@@ -743,10 +953,24 @@ def load_dataset(
                 ).hexdigest()
             )
             white_rows.append(
-                _active_features_from_parsed(pieces, castling, 0)
+                _active_features_from_parsed(
+                    pieces,
+                    castling,
+                    0,
+                    ep_squares,
+                    halfmove_clock,
+                    architecture,
+                )
             )
             black_rows.append(
-                _active_features_from_parsed(pieces, castling, 1)
+                _active_features_from_parsed(
+                    pieces,
+                    castling,
+                    1,
+                    ep_squares,
+                    halfmove_clock,
+                    architecture,
+                )
             )
             stm_rows.append(ofen_side == "w")
             cp_rows.append(float("nan") if cp is None else cp)
@@ -788,7 +1012,9 @@ def load_dataset(
     for index, (white_row, black_row, stm_white) in enumerate(
         zip(white_rows, black_rows, stm_rows)
     ):
-        signature = nnue_input_signature(white_row, black_row, stm_white)
+        signature = nnue_input_signature(
+            white_row, black_row, stm_white, architecture
+        )
         signature_rows.setdefault(signature, []).append(index)
     collisions = {
         signature: indices
@@ -851,8 +1077,12 @@ def load_dataset(
     )
     if max_width <= 0:
         raise ValueError("loaded positions contain no active features")
-    white = np.full((len(stm_rows), max_width), PAD_FEATURE, dtype=np.uint16)
-    black = np.full((len(stm_rows), max_width), PAD_FEATURE, dtype=np.uint16)
+    white = np.full(
+        (len(stm_rows), max_width), feature_count, dtype=np.uint16
+    )
+    black = np.full(
+        (len(stm_rows), max_width), feature_count, dtype=np.uint16
+    )
     for index, (white_row, black_row) in enumerate(zip(white_rows, black_rows)):
         white[index, : len(white_row)] = white_row
         black[index, : len(black_row)] = black_row
@@ -875,6 +1105,7 @@ def load_dataset(
         input_collision_rows_dropped=collision_rows_dropped,
         input_collision_dropped_by_split=tuple(dropped_by_split),
         input_collision_examples=collision_examples,
+        architecture=architecture,
     )
 
 
@@ -883,6 +1114,7 @@ def make_dataset_from_records(
     seed: int = 1,
     collision_policy: str = "drop",
     residual_outcomes: bool = False,
+    architecture: int = ARCHITECTURE_ABSOLUTE,
 ) -> Dataset:
     handle, name = tempfile.mkstemp(suffix=".jsonl")
     try:
@@ -897,6 +1129,7 @@ def make_dataset_from_records(
             all_train=True,
             collision_policy=collision_policy,
             residual_outcomes=residual_outcomes,
+            architecture=architecture,
         )
     finally:
         try:

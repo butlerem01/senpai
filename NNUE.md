@@ -18,6 +18,21 @@ The v0 milestone includes:
 The implementation intentionally recomputes both feature accumulators at each
 evaluation. That keeps the first version easy to verify. Incremental
 make/unmake updates and SIMD are performance work for a later milestone.
+This also avoids a subtle state-aliasing bug: `Pos::key()` does not include the
+halfmove clock, while architecture `3` does. A future accumulator cache must
+identify entries by network generation, position pointer, position key, and
+halfmove bin (the pointer is only a lookup aid, never sufficient identity).
+It must invalidate on null moves because they clear en passant and advance
+the clock. Parent traversal must reject self/cyclic parent links before any
+delta walk.
+
+The safe incremental update is to diff all 16 `(side, piece)` bitboards, which
+covers ordinary moves, captures, promotions, castling, en passant, and
+detached corners, then diff the global castling/EP/clock/phase feature sets.
+When a perspective's friendly king changes bucket, rebuild that perspective's
+piece features; the other perspective may still use deltas. These constraints
+are documented now, but incremental accumulators themselves are deliberately
+deferred until the full-refresh architecture has strength evidence.
 
 ## Network
 
@@ -39,13 +54,34 @@ corners map `w1 <-> w4` and `w2 <-> w3`. The binary file is exactly 435,692
 bytes: a 72-byte little-endian `OMNNUE1` header and a 435,620-byte payload
 protected by FNV-1a-64.
 
-The unchanged tensor layout supports two self-described output meanings in
+The original tensor layout supports two self-described output meanings in
 the header. Architecture `1` is the original absolute evaluator; all existing
 v1 files retain their bytes and behavior. Architecture `2` is a correction:
 the runtime adds its side-to-move output to the handcrafted Omega evaluation.
 The engine obtains that meaning from the file header rather than its filename.
 Draw adjudication still bypasses evaluation, and the combined score is clamped
 to the normal non-mate evaluation range.
+
+Architecture `3` is the next residual experiment,
+`KingPS104-state-128x2-32-CReLU`. It keeps the same accumulator and dense
+layers, but expands the sparse transformer to 48,376 rows:
+
+- each piece-square row is conditioned on the friendly king's bucket;
+- the 10x10 board supplies 25 non-overlapping 2x2 king buckets and the four
+  detached corners supply four more;
+- four castling features remain global (not multiplied by king bucket);
+- 100 usable global rows encode every regular-board en-passant target exactly,
+  including Omega's two-target state; four reserved rows keep the state
+  namespace aligned with the 104-square piece map;
+- one of eight halfmove-clock bins is active (`0`, `1-3`, `4-15`, `16-31`,
+  `32-49`, `50-74`, `75-89`, `90+`), retaining a dedicated danger bin near
+  Omega's automatic 100-ply draw; and
+- one of four material-force phases is active (`24+`, `16-23`, `8-15`,
+  `0-7`) using the HCE's N/B/C/W=1, R=2, Q=4 weights.
+
+Its 12,392,868-byte payload remains in the checksummed `OMNNUE1` container.
+Architecture `3` is always a residual correction; architectures `1` and `2`
+remain byte-for-byte compatible.
 
 ## CoreChess
 
@@ -99,6 +135,25 @@ Residual CP loss fits the correction itself. Residual outcome loss uses
 `handcraftedCpStm + predicted correction`, then propagates the BCE gradient
 through the correction. Architecture-1 training continues to use the original
 outcome fields and raw network score without a baseline.
+
+Select the expanded input map with
+`--network-semantics king-state-residual`. Dataset deduplication and split
+audits hash its exact two-perspective sparse inputs, so king bucket,
+en-passant targets, halfmove bin, material phase, and side to move all
+participate in the signature. Fullmove number is deliberately deferred
+because it has no rules or evaluation meaning after those fields are present.
+
+Do not initialize the 48,376-row transformer randomly when an architecture-2
+checkpoint is available. Pass that residual network with
+`--initial-network <file>` and the explicit
+`--expand-residual-to-king-state` flag. The migration copies every old
+piece-square row into all 29 king buckets, keeps castling and all dense layers
+exact, and zero-initializes EP/clock/phase rows. Its first architecture-3
+prediction is therefore exactly the architecture-2 prediction on every OFEN;
+training starts by learning bucket and state deltas rather than relearning HCE.
+The trainer re-quantizes the float32 shadow and compares every tensor before
+accepting the migration; an unusual int32 bias that cannot survive float32
+losslessly is rejected instead of weakening that guarantee.
 
 Splits are made by whole groups rather than individual positions. Exact NNUE
 inputs that still cross split boundaries are audited; the safe default

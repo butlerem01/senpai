@@ -37,6 +37,9 @@ const std::string Good_B { "omega-nnue-good-b-test.omnnue" };
 const std::string Good_Residual {
    "omega-nnue-good-residual-test.omnnue"
 };
+const std::string Good_King_State {
+   "omega-nnue-good-king-state-test.omnnue"
+};
 const std::string Bad_File { "omega-nnue-bad-test.omnnue" };
 const std::string Missing_File { "omega-nnue-missing-test.omnnue" };
 
@@ -73,6 +76,14 @@ static_assert(fmt::Hidden_Size == 32U, "OMNNUE1 hidden size changed");
 static_assert(fmt::Payload_Bytes == 435620ULL,
               "OMNNUE1 payload size changed");
 static_assert(fmt::File_Bytes == 435692ULL, "OMNNUE1 file size changed");
+static_assert(fmt::King_Bucket_Count == 29U,
+              "king-state bucket count changed");
+static_assert(fmt::King_State_Feature_Count == 48376U,
+              "king-state feature count changed");
+static_assert(fmt::King_State_Payload_Bytes == 12392868ULL,
+              "king-state payload size changed");
+static_assert(fmt::King_State_File_Bytes == 12392940ULL,
+              "king-state file size changed");
 static_assert(Output_Weight_Offset + fmt::Hidden_Size == fmt::File_Bytes,
               "OMNNUE1 payload layout changed");
 
@@ -255,6 +266,44 @@ std::vector<unsigned char> make_fixture(
    return bytes;
 }
 
+std::vector<unsigned char> make_king_state_fixture(int output_cp = 1) {
+   std::vector<unsigned char> bytes(
+      static_cast<std::size_t>(fmt::King_State_File_Bytes), 0
+   );
+   const unsigned char magic[8] {
+      'O', 'M', 'N', 'N', 'U', 'E', '1', 0,
+   };
+   std::copy(magic, magic + 8, bytes.begin());
+   put_u32(bytes, 8, fmt::Endian_Tag);
+   put_u32(bytes, 12, fmt::Format_Version);
+   put_u32(bytes, 16, fmt::Header_Bytes);
+   put_u32(bytes, 20, fmt::Architecture_King_State_Residual);
+   put_u32(bytes, 24, fmt::Square_Count);
+   put_u32(bytes, 28, fmt::Piece_Count);
+   put_u32(bytes, 32, fmt::King_State_Feature_Count);
+   put_u32(bytes, 36, fmt::Accumulator_Size);
+   put_u32(bytes, 40, fmt::Hidden_Size);
+   put_u32(bytes, 44, fmt::Activation_Max);
+   put_u32(bytes, 48, fmt::Hidden_Divisor);
+   put_u32(bytes, 52, fmt::Output_Divisor);
+   put_u64(bytes, 56, fmt::King_State_Payload_Bytes);
+
+   const std::size_t output_bias =
+        fmt::Header_Bytes
+      + fmt::Accumulator_Size * 2U
+      + std::size_t(fmt::King_State_Feature_Count)
+        * fmt::Accumulator_Size * 2U
+      + fmt::Hidden_Size * 4U
+      + std::size_t(fmt::Hidden_Size) * fmt::Dense_Input_Size;
+   put_i32(
+      bytes,
+      output_bias,
+      std::int32_t(output_cp * int(fmt::Output_Divisor))
+   );
+   put_u64(bytes, 64, fnv1a(bytes, fmt::Header_Bytes));
+   return bytes;
+}
+
 void write_bytes(
    const std::string & path,
    const std::vector<unsigned char> & bytes
@@ -273,9 +322,13 @@ bool has(const std::vector<int> & values, int value) {
    return std::find(values.begin(), values.end(), value) != values.end();
 }
 
-std::vector<int> sorted_features(const Pos & pos, Side perspective) {
+std::vector<int> sorted_features(
+   const Pos & pos,
+   Side perspective,
+   std::uint32_t architecture = fmt::Architecture_Absolute
+) {
    std::vector<int> result;
-   fmt::active_features(pos, perspective, result);
+   fmt::active_features(pos, perspective, result, architecture);
    std::sort(result.begin(), result.end());
    return result;
 }
@@ -374,6 +427,34 @@ void initialize_omega_runtime() {
    select_variant(Omega);
 }
 
+const std::size_t Max_Stream_OFEN_Bytes { 4096U };
+
+bool normalize_stream_ofen(std::string & ofen) {
+   if (!ofen.empty() && ofen.back() == '\r') ofen.pop_back();
+   if (ofen.empty() || ofen.size() > Max_Stream_OFEN_Bytes) return false;
+   for (char c : ofen) {
+      const unsigned char byte = static_cast<unsigned char>(c);
+      if (byte < 0x20U || byte > 0x7EU) return false;
+   }
+   return true;
+}
+
+bool evaluate_residual_line(
+   nn::Runtime_Network & network,
+   const std::string & ofen,
+   int & side_to_move_cp
+) {
+   try {
+      const Pos pos = pos_from_fen(ofen, Omega);
+      bool residual_correction = false;
+      return network.evaluate(
+         pos, side_to_move_cp, residual_correction
+      ) && residual_correction;
+   } catch (const std::exception &) {
+      return false;
+   }
+}
+
 int evaluate_handcrafted_stream() {
    initialize_omega_runtime();
    var::set("UseOmegaNNUE", "false");
@@ -391,6 +472,55 @@ int evaluate_handcrafted_stream() {
          std::cerr << "invalid Omega OFEN on input line " << line
                    << std::endl;
          return 5;
+      }
+   }
+
+   if (!std::cin.eof()) {
+      std::cerr << "failed while reading Omega OFEN input" << std::endl;
+      return 6;
+   }
+   return 0;
+}
+
+int evaluate_network_stream(const std::string & network_file) {
+   initialize_omega_runtime();
+
+   nn::Runtime_Network network;
+   const nn::Configure_Result loaded = network.configure(network_file);
+   if (!loaded.ok) {
+      std::cerr << loaded.message << std::endl;
+      return 3;
+   }
+   int probe_cp = 0;
+   bool residual_correction = false;
+   const Pos probe = pos_from_fen(Omega_Start_OFEN, Omega);
+   if (!network.evaluate(probe, probe_cp, residual_correction)
+    || !residual_correction) {
+      std::cerr << "network is not an Omega residual-correction network"
+                << std::endl;
+      return 4;
+   }
+
+   std::string ofen;
+   std::size_t line = 0;
+   while (std::getline(std::cin, ofen)) {
+      line++;
+      if (!normalize_stream_ofen(ofen)) {
+         std::cerr << "invalid Omega OFEN text on input line " << line
+                   << std::endl;
+         return 5;
+      }
+      int side_to_move_cp = 0;
+      if (!evaluate_residual_line(network, ofen, side_to_move_cp)) {
+         std::cerr << "invalid Omega OFEN or non-residual network on input line "
+                   << line << std::endl;
+         return 4;
+      }
+      std::cout << side_to_move_cp << '\n';
+      if (!std::cout) {
+         std::cerr << "failed while writing network correction output"
+                   << std::endl;
+         return 7;
       }
    }
 
@@ -591,6 +721,91 @@ void test_active_features() {
    assert(!has(stale_features, fmt::castling_feature(true, false)));
 }
 
+void test_king_state_features() {
+   assert(fmt::king_bucket(square_from_string("a0"), White) == 0);
+   assert(fmt::king_bucket(square_from_string("b1"), White) == 0);
+   assert(fmt::king_bucket(square_from_string("c0"), White) == 5);
+   assert(fmt::king_bucket(square_from_string("j9"), White) == 24);
+   assert(fmt::king_bucket(square_from_string("w1"), White) == 25);
+   assert(fmt::king_bucket(square_from_string("w4"), White) == 28);
+   assert(fmt::king_bucket(square_from_string("a9"), Black) == 0);
+   assert(fmt::king_bucket(square_from_string("w4"), Black) == 25);
+
+   const Pos start = pos_from_fen(Omega_Start_OFEN, Omega);
+   const std::vector<int> white = sorted_features(
+      start, White, fmt::Architecture_King_State_Residual
+   );
+   const std::vector<int> black = sorted_features(
+      start, Black, fmt::Architecture_King_State_Residual
+   );
+   assert(white.size() == 50U); // 44 pieces, 4 rights, clock, phase
+   assert(white == black);
+   assert(std::adjacent_find(white.begin(), white.end()) == white.end());
+   const int bucket = fmt::king_bucket(start.king(White), White);
+   assert(has(white, fmt::king_state_piece_feature(
+      Champion, White, square_from_string("a0"), White, bucket
+   )));
+   for (int flank = 0; flank < 4; ++flank) {
+      assert(has(
+         white,
+         int(fmt::King_State_Castling_Feature_Base) + flank
+      ));
+   }
+   assert(has(white, int(fmt::King_State_Halfmove_Feature_Base)));
+   assert(has(white, int(fmt::King_State_Phase_Feature_Base)));
+
+   const Pos state = pos_from_fen(
+      "5k4/10/10/10/10/10/10/10/10/4K5[-/-/-/-] "
+      "w - d2,d3 74 42",
+      Omega
+   );
+   const std::vector<int> state_white = sorted_features(
+      state, White, fmt::Architecture_King_State_Residual
+   );
+   const std::vector<int> state_black = sorted_features(
+      state, Black, fmt::Architecture_King_State_Residual
+   );
+   assert(has(
+      state_white,
+      int(fmt::King_State_EP_Feature_Base)
+      + int(square_from_string("d2"))
+   ));
+   assert(has(
+      state_white,
+      int(fmt::King_State_EP_Feature_Base)
+      + int(square_from_string("d3"))
+   ));
+   assert(has(
+      state_black,
+      int(fmt::King_State_EP_Feature_Base)
+      + fmt::orient_square(square_from_string("d2"), Black)
+   ));
+   assert(has(
+      state_black,
+      int(fmt::King_State_EP_Feature_Base)
+      + fmt::orient_square(square_from_string("d3"), Black)
+   ));
+   const std::pair<int, int> clock_cases[] {
+      { 0, 0 }, { 1, 1 }, { 3, 1 }, { 4, 2 },
+      { 15, 2 }, { 16, 3 }, { 31, 3 }, { 32, 4 },
+      { 49, 4 }, { 50, 5 }, { 74, 5 }, { 75, 6 },
+      { 89, 6 }, { 90, 7 }, { 99, 7 }, { 100, 7 },
+   };
+   for (const auto & item : clock_cases) {
+      assert(fmt::halfmove_clock_bin(item.first) == item.second);
+   }
+   assert(has(
+      state_white,
+      int(fmt::King_State_Halfmove_Feature_Base) + 5
+   ));
+   assert(fmt::material_phase_bin(start) == 0);
+   assert(fmt::material_phase_bin(state) == 3);
+   assert(has(
+      state_white,
+      int(fmt::King_State_Phase_Feature_Base) + 3
+   ));
+}
+
 void test_symmetry() {
    const Ofen_Position source = diagnostic_source();
    const Ofen_Position reflected = colour_rank_mirror(source);
@@ -601,6 +816,16 @@ void test_symmetry() {
           == sorted_features(mirrored, Black));
    assert(sorted_features(original, Black)
           == sorted_features(mirrored, White));
+   assert(sorted_features(
+      original, White, fmt::Architecture_King_State_Residual
+   ) == sorted_features(
+      mirrored, Black, fmt::Architecture_King_State_Residual
+   ));
+   assert(sorted_features(
+      original, Black, fmt::Architecture_King_State_Residual
+   ) == sorted_features(
+      mirrored, White, fmt::Architecture_King_State_Residual
+   ));
 }
 
 void require_initial_rejection(
@@ -644,7 +869,7 @@ void test_loader_corruption(const std::vector<unsigned char> & good) {
       { 8U,  0x04030201U },
       { 12U, fmt::Format_Version + 1U },
       { 16U, fmt::Header_Bytes + 4U },
-      { 20U, fmt::Architecture_Residual + 1U },
+      { 20U, fmt::Architecture_King_State_Residual + 1U },
       { 24U, 64U }, // a standard-chess network is not an Omega network
       { 28U, fmt::Piece_Count - 1U },
       { 32U, fmt::Feature_Count - 1U },
@@ -852,12 +1077,67 @@ void test_residual_evaluation() {
    assert(safe == score::Eval_Inf);
 }
 
+void test_king_state_loading() {
+   write_bytes(Good_King_State, make_king_state_fixture(1));
+   const nn::Configure_Result loaded =
+      nn::G_Network.configure(Good_King_State);
+   assert(loaded.ok);
+   assert(loaded.message ==
+          "Omega NNUE loaded: KingPS104-state-128x2-32 "
+          "residual correction from " + Good_King_State);
+
+   const Pos original = pos_from_ofen(diagnostic_source());
+   int correction = 0;
+   bool residual = false;
+   assert(nn::G_Network.evaluate(original, correction, residual));
+   assert(residual);
+   assert(correction == 1);
+}
+
+void test_network_stream_helpers() {
+   std::string valid = ofen_serialize(pos_from_ofen(diagnostic_source()));
+   assert(normalize_stream_ofen(valid));
+
+   std::string crlf = valid + "\r";
+   assert(normalize_stream_ofen(crlf));
+   assert(crlf == valid);
+
+   std::string empty;
+   assert(!normalize_stream_ofen(empty));
+   std::string control = valid;
+   control.push_back('\t');
+   assert(!normalize_stream_ofen(control));
+   std::string embedded_nul("valid\0suffix", 12);
+   assert(!normalize_stream_ofen(embedded_nul));
+   std::string oversized(Max_Stream_OFEN_Bytes + 1U, 'x');
+   assert(!normalize_stream_ofen(oversized));
+
+   nn::Runtime_Network residual;
+   assert(residual.configure(Good_King_State).ok);
+   int correction = 0;
+   assert(evaluate_residual_line(residual, valid, correction));
+   assert(correction == 1);
+   assert(!evaluate_residual_line(
+      residual,
+      "10/10/10/10/10/10/10/10/10/10[-/-/-/-] w - - 0 1",
+      correction
+   ));
+
+   nn::Runtime_Network absolute;
+   assert(absolute.configure(Good_A).ok);
+   assert(!evaluate_residual_line(absolute, valid, correction));
+
+   nn::Runtime_Network unloaded;
+   assert(!evaluate_residual_line(unloaded, valid, correction));
+}
+
 struct Cleanup {
    ~Cleanup() {
       nn::G_Network.configure("");
       std::remove(Good_A.c_str());
       std::remove(Good_B.c_str());
       std::remove(Good_Residual.c_str());
+      std::remove(Good_King_State.c_str());
       std::remove(Bad_File.c_str());
       std::remove(Missing_File.c_str());
    }
@@ -874,6 +1154,10 @@ int main(int argc, char * argv[]) {
    if (argc == 2
     && std::string(argv[1]) == "--evaluate-handcrafted-stream") {
       return evaluate_handcrafted_stream();
+   }
+   if (argc == 3
+    && std::string(argv[1]) == "--evaluate-network-stream") {
+      return evaluate_network_stream(argv[2]);
    }
    if (argc == 4 && std::string(argv[1]) == "--evaluate-network") {
       initialize_omega_runtime();
@@ -905,6 +1189,7 @@ int main(int argc, char * argv[]) {
 
    test_feature_map();
    test_active_features();
+   test_king_state_features();
    test_symmetry();
 
    const std::vector<unsigned char> good_a = make_fixture();
@@ -912,6 +1197,8 @@ int main(int argc, char * argv[]) {
    test_loader_corruption(good_a);
    test_loading_and_inference(good_a, good_b);
    test_residual_evaluation();
+   test_king_state_loading();
+   test_network_stream_helpers();
 
    return 0;
 }

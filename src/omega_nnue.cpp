@@ -145,6 +145,8 @@ std::int64_t divide_round(std::int64_t value, std::int64_t divisor) {
 
 struct Runtime_Network::Network_Data {
    std::string path;
+   std::uint32_t architecture;
+   std::uint32_t feature_count;
    bool residual_correction;
    std::array<std::int16_t, format::Accumulator_Size> ft_bias;
    std::vector<std::int16_t> ft_weights;
@@ -155,6 +157,8 @@ struct Runtime_Network::Network_Data {
 
    Network_Data()
       : path(),
+        architecture(format::Architecture_Absolute),
+        feature_count(format::Feature_Count),
         residual_correction(false),
         ft_bias(),
         ft_weights(),
@@ -210,6 +214,60 @@ int piece_feature(
         + oriented;
 }
 
+int king_bucket(Square king, Side perspective) {
+   const int oriented = orient_square(king, perspective);
+   if (oriented < 0 || oriented >= int(Square_Count)) return -1;
+   if (oriented < int(Square_Count - Corner_Size)) {
+      const int file = oriented / Rank_Capacity;
+      const int rank = oriented % Rank_Capacity;
+      return (file / 2) * 5 + rank / 2;
+   }
+   return 25 + oriented - int(Square_Count - Corner_Size);
+}
+
+int king_state_piece_feature(
+   Piece pc,
+   Side piece_side,
+   Square sq,
+   Side perspective,
+   int bucket
+) {
+   assert(bucket >= 0 && bucket < int(King_Bucket_Count));
+   if (bucket < 0 || bucket >= int(King_Bucket_Count)) return -1;
+   const int base = piece_feature(pc, piece_side, sq, perspective);
+   if (base < 0) return -1;
+   return bucket * int(Occupancy_Features) + base;
+}
+
+int halfmove_clock_bin(int halfmove_clock) {
+   assert(halfmove_clock >= 0);
+   if (halfmove_clock < 0) return -1;
+   const int boundary[] { 1, 4, 16, 32, 50, 75, 90 };
+   int bin = 0;
+   for (int value : boundary) {
+      if (halfmove_clock >= value) ++bin;
+   }
+   return bin;
+}
+
+int material_phase_bin(const Pos & pos) {
+   int remaining = 0;
+   for (int s = 0; s < Side_Size; ++s) {
+      const Side side = side_make(s);
+      remaining += pos.count(Knight, side);
+      remaining += pos.count(Bishop, side);
+      remaining += pos.count(Champion, side);
+      remaining += pos.count(Wizard, side);
+      remaining += pos.count(Rook, side) * 2;
+      remaining += pos.count(Queen, side) * 4;
+   }
+   remaining = std::min(remaining, 32);
+   if (remaining >= 24) return 0;
+   if (remaining >= 16) return 1;
+   if (remaining >= 8) return 2;
+   return 3;
+}
+
 int castling_feature(bool own, bool right_of_king) {
    const int relation = own ? 0 : 1;
    const int flank = right_of_king ? 1 : 0;
@@ -219,13 +277,29 @@ int castling_feature(bool own, bool right_of_king) {
 void active_features(
    const Pos & pos,
    Side perspective,
-   std::vector<int> & output
+   std::vector<int> & output,
+   std::uint32_t architecture
 ) {
    output.clear();
-   output.reserve(48);
+   output.reserve(52);
 
    assert(perspective == White || perspective == Black);
    if (perspective != White && perspective != Black) return;
+   assert(architecture == Architecture_Absolute
+       || architecture == Architecture_Residual
+       || architecture == Architecture_King_State_Residual);
+   if (architecture != Architecture_Absolute
+    && architecture != Architecture_Residual
+    && architecture != Architecture_King_State_Residual) return;
+
+   int bucket = -1;
+   if (architecture == Architecture_King_State_Residual) {
+      const Bit kings = pos.pieces(King, perspective);
+      assert(bit::count(kings) == 1);
+      if (bit::count(kings) != 1) return;
+      bucket = king_bucket(bit::first(kings), perspective);
+      assert(bucket >= 0 && bucket < int(King_Bucket_Count));
+   }
 
    for (int s = 0; s < Side_Size; ++s) {
       const Side piece_side = side_make(s);
@@ -236,10 +310,19 @@ void active_features(
          for (Bit pieces = pos.pieces(pc, piece_side);
               pieces != 0;
               pieces = bit::rest(pieces)) {
-            const int feature = piece_feature(
-               pc, piece_side, bit::first(pieces), perspective
-            );
-            assert(feature >= 0 && feature < int(Occupancy_Features));
+            const int feature =
+               architecture == Architecture_King_State_Residual
+               ? king_state_piece_feature(
+                    pc, piece_side, bit::first(pieces), perspective, bucket
+                 )
+               : piece_feature(
+                    pc, piece_side, bit::first(pieces), perspective
+                 );
+            const int occupancy_limit =
+               architecture == Architecture_King_State_Residual
+               ? int(King_State_Occupancy_Features)
+               : int(Occupancy_Features);
+            assert(feature >= 0 && feature < occupancy_limit);
             if (feature >= 0) output.push_back(feature);
          }
       }
@@ -268,11 +351,35 @@ void active_features(
 
       for (int flank = 0; flank < 2; ++flank) {
          if (flank_seen[flank]) {
-            output.push_back(castling_feature(
-               castling_side == perspective, flank != 0
-            ));
+            const int relation = castling_side == perspective ? 0 : 1;
+            const int relative = relation * 2 + flank;
+            output.push_back(
+               architecture == Architecture_King_State_Residual
+               ? int(King_State_Castling_Feature_Base) + relative
+               : int(Occupancy_Features) + relative
+            );
          }
       }
+   }
+
+   if (architecture == Architecture_King_State_Residual) {
+      for (Bit ep = pos.ep_squares(); ep != 0; ep = bit::rest(ep)) {
+         const Square square = bit::first(ep);
+         const int oriented = orient_square(square, perspective);
+         assert(oriented >= 0
+             && oriented < int(Square_Count - Corner_Size));
+         if (oriented >= 0
+          && oriented < int(Square_Count - Corner_Size)) {
+            output.push_back(int(King_State_EP_Feature_Base) + oriented);
+         }
+      }
+      output.push_back(
+         int(King_State_Halfmove_Feature_Base)
+         + halfmove_clock_bin(pos.halfmove_clock())
+      );
+      output.push_back(
+         int(King_State_Phase_Feature_Base) + material_phase_bin(pos)
+      );
    }
 }
 
@@ -314,10 +421,12 @@ Configure_Result Runtime_Network::configure(
    }
 
    const std::uint64_t file_size = static_cast<std::uint64_t>(end);
-   if (file_size != format::File_Bytes) {
+   if (file_size != format::File_Bytes
+    && file_size != format::King_State_File_Bytes) {
       return failure(
-         "wrong file size in " + file_name
-         + " (expected " + std::to_string(format::File_Bytes)
+         "wrong file size in " + file_name + " (expected "
+         + std::to_string(format::File_Bytes) + " or "
+         + std::to_string(format::King_State_File_Bytes)
          + ", got " + std::to_string(file_size) + ")",
          previous != nullptr
       );
@@ -329,7 +438,7 @@ Configure_Result Runtime_Network::configure(
    }
 
    std::vector<unsigned char> bytes(
-      static_cast<std::size_t>(format::File_Bytes)
+      static_cast<std::size_t>(file_size)
    );
    input.read(
       reinterpret_cast<char *>(bytes.data()),
@@ -400,22 +509,37 @@ Configure_Result Runtime_Network::configure(
                      previous != nullptr);
    }
    if (architecture != format::Architecture_Absolute
-    && architecture != format::Architecture_Residual) {
+    && architecture != format::Architecture_Residual
+    && architecture != format::Architecture_King_State_Residual) {
       return failure("unsupported architecture in " + file_name,
                      previous != nullptr);
    }
+   const bool king_state =
+      architecture == format::Architecture_King_State_Residual;
+   const std::uint32_t expected_features =
+      king_state ? format::King_State_Feature_Count : format::Feature_Count;
+   const std::uint64_t expected_payload =
+      king_state ? format::King_State_Payload_Bytes : format::Payload_Bytes;
+   const std::uint64_t expected_file =
+      king_state ? format::King_State_File_Bytes : format::File_Bytes;
+   if (file_size != expected_file) {
+      return failure(
+         "file size does not match architecture in " + file_name,
+         previous != nullptr
+      );
+   }
    if (squares != format::Square_Count
     || pieces != format::Piece_Count
-    || features != format::Feature_Count
+    || features != expected_features
     || accumulator != format::Accumulator_Size
     || hidden != format::Hidden_Size
     || activation != format::Activation_Max
     || hidden_divisor != format::Hidden_Divisor
     || output_divisor != format::Output_Divisor) {
-      return failure("architecture dimensions do not match PS104-128x2-32 in "
+      return failure("architecture dimensions do not match OMNNUE1 contract in "
                      + file_name, previous != nullptr);
    }
-   if (payload_bytes != format::Payload_Bytes) {
+   if (payload_bytes != expected_payload) {
       return failure("invalid payload length in " + file_name,
                      previous != nullptr);
    }
@@ -426,10 +550,13 @@ Configure_Result Runtime_Network::configure(
 
    std::shared_ptr<Network_Data> next(new Network_Data());
    next->path = file_name;
+   next->architecture = architecture;
+   next->feature_count = expected_features;
    next->residual_correction =
-      architecture == format::Architecture_Residual;
+      architecture == format::Architecture_Residual
+      || architecture == format::Architecture_King_State_Residual;
    next->ft_weights.resize(
-      std::size_t(format::Feature_Count) * format::Accumulator_Size
+      std::size_t(expected_features) * format::Accumulator_Size
    );
    next->hidden_weights.resize(
       std::size_t(format::Hidden_Size) * format::Dense_Input_Size
@@ -483,10 +610,17 @@ Configure_Result Runtime_Network::configure(
 
    Configure_Result result;
    result.ok = true;
-   result.message = next->residual_correction
-                  ? "Omega NNUE loaded: PS104-128x2-32 residual correction from "
-                    + file_name
-                  : "Omega NNUE loaded: PS104-128x2-32 from " + file_name;
+   if (king_state) {
+      result.message =
+         "Omega NNUE loaded: KingPS104-state-128x2-32 residual correction from "
+         + file_name;
+   } else if (next->residual_correction) {
+      result.message =
+         "Omega NNUE loaded: PS104-128x2-32 residual correction from "
+         + file_name;
+   } else {
+      result.message = "Omega NNUE loaded: PS104-128x2-32 from " + file_name;
+   }
    return result;
 }
 
@@ -526,13 +660,15 @@ bool Runtime_Network::evaluate(
          accumulator[s][i] = network->ft_bias[i];
       }
 
-      format::active_features(pos, side_make(s), features);
+      format::active_features(
+         pos, side_make(s), features, network->architecture
+      );
       for (std::size_t feature_pos = 0;
            feature_pos < features.size();
            ++feature_pos) {
          const int feature = features[feature_pos];
-         assert(feature >= 0 && feature < int(format::Feature_Count));
-         if (feature < 0 || feature >= int(format::Feature_Count)) continue;
+         assert(feature >= 0 && feature < int(network->feature_count));
+         if (feature < 0 || feature >= int(network->feature_count)) continue;
 
          const std::size_t offset =
             std::size_t(feature) * format::Accumulator_Size;

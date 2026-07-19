@@ -5,7 +5,8 @@ Senpai's first Omega Chess NNUE experiment. It requires Python 3.12 and NumPy;
 it does not require PyTorch, ONNX, scikit-learn, or an inference library in the
 engine.
 
-The trainer targets the frozen `OMNNUE1` architecture:
+The trainer supports three self-described `OMNNUE1` architectures. The
+original architecture-1/2 tensor is:
 
 - 104 native Omega squares (`a0` through `j9`, followed by `w1` through `w4`);
 - eight piece types and own/enemy relations, plus four castling flags;
@@ -14,16 +15,21 @@ The trainer targets the frozen `OMNNUE1` architecture:
 - a `256 -> 32` clipped hidden layer;
 - one side-to-move centipawn output.
 
-The exported file has a 72-byte little-endian header and a 435,620-byte
-FNV-1a-protected payload. `omega_nnue.py` contains an independent integer
-inference implementation and refuses wrong dimensions, truncated payloads,
-and checksum failures.
+The exported file has a 72-byte little-endian header. Architectures 1/2 use a
+435,620-byte payload; architecture 3 uses a 12,392,868-byte payload. Both are
+FNV-1a protected. `omega_nnue.py` contains an independent integer inference
+implementation and refuses wrong dimensions, truncated payloads, and checksum
+failures.
 
 The header's architecture field self-describes the output meaning without
 changing the frozen tensor layout:
 
 - architecture `1` is the original absolute evaluator and replaces HCE;
 - architecture `2` is a residual evaluator whose output is added to HCE.
+- architecture `3` (`king-state-residual`) keeps residual semantics and uses
+  29 friendly-king buckets, global castling and exact en-passant features,
+  eight halfmove-clock bins, and four material-phase bins. Its transformer has
+  48,376 rows; the dense layers are unchanged.
 
 Every existing architecture-1 `OMNNUE1` file keeps its original bytes and
 runtime behavior. The engine reads the semantics from the header, not from the
@@ -125,6 +131,24 @@ Fine-tuning starts from a previously exported, validated network with
 `--initial-network <file.nnue>`. The quantized tensors are converted to
 exactly representable float parameters, and both the starting file and final
 network are hash-pinned in the manifest.
+
+For the first architecture-3 run, migrate the strongest architecture-2
+checkpoint without changing its predictions:
+
+```powershell
+python .\tools\omega_nnue\train.py `
+  --input .\build-msvc\experimental-networks\omega-teacher-residual-v1.jsonl `
+  --output .\build-msvc\experimental-networks\omega-king-state-v1.nnue `
+  --network-semantics king-state-residual `
+  --initial-network .\build-msvc\experimental-networks\omega-residual-v3.nnue `
+  --expand-residual-to-king-state
+```
+
+The explicit migration replicates each old piece-square row across all 29
+king buckets, copies castling and the dense layers exactly, and leaves new
+EP/clock/phase rows at zero. A built-in parity test proves the migrated
+network initially returns the architecture-2 score on positions with
+castling, two-target en passant, and different halfmove bins.
 
 Normal training also writes `<network>.float`, a deterministic binary shadow
 checkpoint with a payload SHA-256. Resume losslessly with

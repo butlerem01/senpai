@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 import argparse
 import contextlib
 import hashlib
@@ -27,6 +27,7 @@ from omega_nnue import (
     ACCUMULATOR_SIZE,
     ACTIVATION_MAX,
     ARCHITECTURE_ABSOLUTE,
+    ARCHITECTURE_KING_STATE_RESIDUAL,
     ARCHITECTURE_NAMES,
     ARCHITECTURE_RESIDUAL,
     FEATURE_COUNT,
@@ -34,16 +35,25 @@ from omega_nnue import (
     HEADER_BYTES,
     HIDDEN_DIVISOR,
     HIDDEN_SIZE,
+    KING_BUCKET_COUNT,
+    KING_STATE_CASTLING_FEATURE_BASE,
+    KING_STATE_EP_FEATURE_BASE,
+    KING_STATE_FEATURE_COUNT,
+    KING_STATE_HALFMOVE_FEATURE_BASE,
+    KING_STATE_PHASE_FEATURE_BASE,
     OUTPUT_DIVISOR,
-    PAD_FEATURE,
     PAYLOAD_BYTES,
     Dataset,
     QuantizedNetwork,
     active_features,
     deterministic_split,
+    feature_count_for_architecture,
+    halfmove_clock_bin,
+    is_residual_architecture,
     load_dataset,
     make_dataset_from_records,
     make_synthetic_records,
+    payload_bytes_for_architecture,
 )
 
 
@@ -68,6 +78,7 @@ CROSS_RUNTIME_OFENS = (
     INITIAL_OFEN.replace(" w KQkq ", " b KQkq "),
     CHAMPION_C3_OFEN,
     "4k5/10/10/10/10/10/10/10/10/4K5[W/-/-/w] b - - 17 42",
+    "5k4/10/10/10/10/10/10/10/10/4K5[-/-/-/-] w - d2,d3 74 42",
 )
 
 
@@ -88,6 +99,239 @@ def _file_pin(path: Path) -> dict[str, Any]:
         "path": str(resolved),
         "bytes": byte_count,
         "sha256": digest.hexdigest(),
+    }
+
+
+def _skip_json_string(text: str, start: int) -> int:
+    """Return the first index after one JSON string without decoding it."""
+
+    if start >= len(text) or text[start] != '"':
+        raise ValueError("expected JSON string")
+    index = start + 1
+    while index < len(text):
+        character = text[index]
+        if character == '"':
+            return index + 1
+        if character == "\\":
+            index += 2
+        else:
+            if ord(character) < 0x20:
+                raise ValueError("unescaped control character in JSON string")
+            index += 1
+    raise ValueError("unterminated JSON string")
+
+
+def _skip_json_value(text: str, start: int) -> int:
+    """Lexically skip a JSON value while deliberately not decoding it."""
+
+    if start >= len(text):
+        raise ValueError("missing JSON value")
+    if text[start] == '"':
+        return _skip_json_string(text, start)
+    if text[start] in "[{":
+        stack = [text[start]]
+        index = start + 1
+        while index < len(text) and stack:
+            character = text[index]
+            if character == '"':
+                index = _skip_json_string(text, index)
+                continue
+            if character in "[{":
+                stack.append(character)
+            elif character in "]}":
+                opener = stack.pop()
+                if (opener, character) not in (("[", "]"), ("{", "}")):
+                    raise ValueError("mismatched JSON container")
+            index += 1
+        if stack:
+            raise ValueError("unterminated JSON container")
+        return index
+    index = start
+    while index < len(text) and text[index] not in ",}":
+        index += 1
+    if not text[start:index].strip():
+        raise ValueError("empty JSON scalar")
+    return index
+
+
+def _selective_top_level_string(
+    line: str, field: str, *, location: str
+) -> str:
+    """Read one top-level string field without decoding any other value.
+
+    Protocol pre-test filtering uses this before ``json.loads``.  A held-out
+    row is routed by ``groupId`` and discarded while its target fields remain
+    opaque text; malformed or adversarial test labels therefore cannot affect
+    training, validation, manifests, or candidate selection.
+    """
+
+    text = line.lstrip("\ufeff \t\r\n")
+    if not text.startswith("{"):
+        raise ValueError(f"{location}: JSONL row is not an object")
+    index = 1
+    decoder = json.JSONDecoder()
+    while True:
+        while index < len(text) and text[index].isspace():
+            index += 1
+        if index >= len(text):
+            raise ValueError(f"{location}: unterminated JSON object")
+        if text[index] == "}":
+            break
+        if text[index] != '"':
+            raise ValueError(f"{location}: expected a JSON object key")
+        key_end = _skip_json_string(text, index)
+        try:
+            key = decoder.decode(text[index:key_end])
+        except json.JSONDecodeError as error:
+            raise ValueError(f"{location}: invalid JSON object key") from error
+        index = key_end
+        while index < len(text) and text[index].isspace():
+            index += 1
+        if index >= len(text) or text[index] != ":":
+            raise ValueError(f"{location}: missing colon after JSON key")
+        index += 1
+        while index < len(text) and text[index].isspace():
+            index += 1
+        value_end = _skip_json_value(text, index)
+        if key == field:
+            if index >= len(text) or text[index] != '"':
+                raise ValueError(
+                    f"{location}: {field!r} must be a nonempty string"
+                )
+            try:
+                value = decoder.decode(text[index:value_end])
+            except json.JSONDecodeError as error:
+                raise ValueError(
+                    f"{location}: invalid JSON string in {field!r}"
+                ) from error
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(
+                    f"{location}: {field!r} must be a nonempty string"
+                )
+            return value
+        index = value_end
+        while index < len(text) and text[index].isspace():
+            index += 1
+        if index < len(text) and text[index] == ",":
+            index += 1
+            continue
+        if index < len(text) and text[index] == "}":
+            break
+        raise ValueError(f"{location}: malformed JSON object")
+    raise ValueError(f"{location}: missing top-level string field {field!r}")
+
+
+def _iter_selective_string(
+    paths: list[Path], field: str
+) -> Iterator[tuple[str, str]]:
+    for path in paths:
+        resolved = path.resolve(strict=True)
+        with resolved.open("r", encoding="utf-8-sig", newline="") as stream:
+            for line_number, line in enumerate(stream, 1):
+                if not line.strip():
+                    continue
+                location = f"{resolved}:{line_number}"
+                yield (
+                    _selective_top_level_string(
+                        line, field, location=location
+                    ),
+                    location,
+                )
+
+
+def _make_protocol_pretest_input(
+    paths: list[Path],
+    *,
+    split_seed: int,
+    train_percent: float,
+    validation_percent: float,
+    group_field: str | None,
+) -> tuple[tempfile.TemporaryDirectory[str], list[Path], dict[str, Any]]:
+    """Stage only split 0/1 rows; split-2 labels are never JSON-decoded."""
+
+    if group_field != "groupId":
+        raise ValueError(
+            "--protocol-pretest requires the frozen --group-field groupId"
+        )
+    temporary = tempfile.TemporaryDirectory(
+        prefix="omega-nnue-protocol-pretest-"
+    )
+    output = Path(temporary.name) / "train-validation.jsonl"
+    counts = [0, 0, 0]
+    with output.open("w", encoding="utf-8", newline="\n") as destination:
+        for path in paths:
+            resolved = path.resolve(strict=True)
+            with resolved.open(
+                "r", encoding="utf-8-sig", newline=""
+            ) as source:
+                for line_number, line in enumerate(source, 1):
+                    if not line.strip():
+                        continue
+                    location = f"{resolved}:{line_number}"
+                    group = _selective_top_level_string(
+                        line, "groupId", location=location
+                    )
+                    split = deterministic_split(
+                        group,
+                        split_seed,
+                        train_percent,
+                        validation_percent,
+                    )
+                    counts[split] += 1
+                    if split != 2:
+                        # Full decoding is allowed only after routing proves
+                        # that this is a train or validation row.
+                        destination.write(line.rstrip("\r\n") + "\n")
+    if counts[0] == 0 or counts[1] == 0 or counts[2] == 0:
+        temporary.cleanup()
+        raise ValueError(
+            "protocol split must contain train, validation, and held-out rows"
+        )
+    return temporary, [output], {
+        "enabled": True,
+        "routingField": "groupId",
+        "splitSeed": split_seed,
+        "rows": {
+            "train": counts[0],
+            "validation": counts[1],
+            "testWithheld": counts[2],
+        },
+        "heldOutTargetFieldsDecoded": 0,
+        "heldOutRowsWritten": 0,
+        "heldOutMetricsComputed": False,
+        "allowedSplits": [0, 1],
+    }
+
+
+def _experiment_context(args: argparse.Namespace) -> dict[str, Any] | None:
+    paths = {
+        "protocol": args.protocol,
+        "prelabelSeal": args.prelabel_seal,
+        "corpusManifest": args.corpus_manifest,
+        "staticHceEvaluator": args.static_hce_evaluator,
+    }
+    supplied = {name: path for name, path in paths.items() if path is not None}
+    if not supplied and args.candidate_id is None:
+        return None
+    if args.candidate_id not in ("K0", "K1", "K2"):
+        raise ValueError(
+            "protocol training requires --candidate-id K0, K1, or K2"
+        )
+    missing = [name for name, path in paths.items() if path is None]
+    if missing:
+        raise ValueError(
+            "protocol training is missing context: " + ", ".join(missing)
+        )
+    return {
+        "candidateId": args.candidate_id,
+        "protocol": _file_pin(args.protocol),
+        "prelabelSeal": _file_pin(args.prelabel_seal),
+        "corpusManifest": _file_pin(args.corpus_manifest),
+        "staticHceEvaluator": _file_pin(args.static_hce_evaluator),
+        "rawArgv": list(args.raw_argv),
+        "strict": bool(args.strict),
+        "modelSeed": args.seed,
+        "splitSeed": args.seed if args.split_seed is None else args.split_seed,
     }
 
 
@@ -219,10 +463,11 @@ def _blank_quantized_network(
     output_bias: int = 0,
     architecture: int = ARCHITECTURE_ABSOLUTE,
 ) -> QuantizedNetwork:
+    feature_count = feature_count_for_architecture(architecture)
     return QuantizedNetwork(
         ft_bias=np.zeros(ACCUMULATOR_SIZE, dtype=np.int16),
         ft_weights=np.zeros(
-            (FEATURE_COUNT, ACCUMULATOR_SIZE), dtype=np.int16
+            (feature_count, ACCUMULATOR_SIZE), dtype=np.int16
         ),
         dense_bias=np.zeros(HIDDEN_SIZE, dtype=np.int32),
         dense_weights=np.zeros(
@@ -234,9 +479,50 @@ def _blank_quantized_network(
     )
 
 
+def expand_residual_to_king_state(
+    source: QuantizedNetwork,
+) -> QuantizedNetwork:
+    """Lift architecture 2 into architecture 3 without changing any score.
+
+    Every legacy piece-square row is copied into all 29 friendly-king buckets.
+    The four castling rows stay global. Newly observable EP, halfmove, and
+    phase rows start at zero, and all downstream tensors are copied exactly.
+    """
+
+    source.validate()
+    if source.architecture != ARCHITECTURE_RESIDUAL:
+        raise ValueError(
+            "king-state migration source must be architecture-2 residual"
+        )
+    occupancy_features = FEATURE_COUNT - 4
+    expanded = _blank_quantized_network(
+        output_bias=source.output_bias,
+        architecture=ARCHITECTURE_KING_STATE_RESIDUAL
+    )
+    expanded.ft_bias[:] = source.ft_bias
+    for bucket in range(KING_BUCKET_COUNT):
+        begin = bucket * occupancy_features
+        expanded.ft_weights[begin : begin + occupancy_features] = (
+            source.ft_weights[:occupancy_features]
+        )
+    expanded.ft_weights[
+        KING_STATE_CASTLING_FEATURE_BASE
+        : KING_STATE_CASTLING_FEATURE_BASE + 4
+    ] = source.ft_weights[occupancy_features:FEATURE_COUNT]
+    expanded.dense_bias[:] = source.dense_bias
+    expanded.dense_weights[:] = source.dense_weights
+    expanded.output_weights[:] = source.output_weights
+    expanded.validate()
+    return expanded
+
+
 def _predict_ofen(network: QuantizedNetwork, ofen: str) -> int:
-    white = np.asarray([active_features(ofen, 0)], dtype=np.uint16)
-    black = np.asarray([active_features(ofen, 1)], dtype=np.uint16)
+    white = np.asarray(
+        [active_features(ofen, 0, network.architecture)], dtype=np.uint16
+    )
+    black = np.asarray(
+        [active_features(ofen, 1, network.architecture)], dtype=np.uint16
+    )
     if ofen.split()[1] == "w":
         stm, opponent = white, black
     else:
@@ -279,6 +565,19 @@ def _golden_runtime_cases() -> list[dict[str, Any]]:
         output_bias=64,
         architecture=ARCHITECTURE_RESIDUAL,
     )
+    king_state = _blank_quantized_network(
+        architecture=ARCHITECTURE_KING_STATE_RESIDUAL
+    )
+    king_state.ft_weights[KING_STATE_HALFMOVE_FEATURE_BASE + 3, 0] = 1
+    king_state.ft_weights[KING_STATE_EP_FEATURE_BASE + 32, 0] = 2
+    king_state.ft_weights[KING_STATE_EP_FEATURE_BASE + 33, 0] = 4
+    king_state.ft_weights[KING_STATE_PHASE_FEATURE_BASE + 3, 0] = 8
+    king_state.ft_weights[
+        10 * (2 * 8 * 104) + feature_row, 0
+    ] = 16
+    king_state.ft_weights[KING_STATE_CASTLING_FEATURE_BASE, 0] = 32
+    king_state.dense_weights[0, 0] = 64
+    king_state.output_weights[0] = 64
 
     return [
         {
@@ -350,6 +649,37 @@ def _golden_runtime_cases() -> list[dict[str, Any]]:
                     "ofen": SPARSE_OFEN,
                     "expected": 1,
                 }
+            ],
+        },
+        {
+            "name": "king-state-halfmove",
+            "network": king_state,
+            "vectors": [
+                {
+                    "name": "halfmove-bin-17",
+                    "ofen": SPARSE_OFEN.replace(" 0 1", " 17 1"),
+                    "expected": 9,
+                },
+                {
+                    "name": "phase-only-at-halfmove-zero",
+                    "ofen": SPARSE_OFEN,
+                    "expected": 8,
+                },
+                {
+                    "name": "two-target-en-passant",
+                    "ofen": SPARSE_OFEN.replace(" - - 0 1", " - d2,d3 74 1"),
+                    "expected": 14,
+                },
+                {
+                    "name": "king-conditioned-champion",
+                    "ofen": CHAMPION_C3_OFEN.replace(" 0 1", " 17 1"),
+                    "expected": 25,
+                },
+                {
+                    "name": "global-castling-row",
+                    "ofen": INITIAL_OFEN,
+                    "expected": 32,
+                },
             ],
         },
     ]
@@ -499,12 +829,16 @@ class FloatNetwork:
     output_weights: np.ndarray
 
     @classmethod
-    def initialize(cls, seed: int) -> "FloatNetwork":
+    def initialize(
+        cls, seed: int, feature_count: int = FEATURE_COUNT
+    ) -> "FloatNetwork":
+        if feature_count not in (FEATURE_COUNT, KING_STATE_FEATURE_COUNT):
+            raise ValueError(f"unsupported float-network feature count {feature_count}")
         rng = np.random.default_rng(seed)
         return cls(
             ft_bias=np.full(ACCUMULATOR_SIZE, 24.0, dtype=np.float32),
             ft_weights=rng.normal(
-                0.0, 0.50, size=(FEATURE_COUNT, ACCUMULATOR_SIZE)
+                0.0, 0.50, size=(feature_count, ACCUMULATOR_SIZE)
             ).astype(np.float32),
             dense_bias=np.full(HIDDEN_SIZE, 24.0, dtype=np.float32),
             dense_weights=rng.normal(
@@ -546,7 +880,7 @@ class FloatNetwork:
         header = FLOAT_CHECKPOINT_HEADER.pack(
             FLOAT_CHECKPOINT_MAGIC,
             FORMAT_VERSION,
-            FEATURE_COUNT,
+            int(self.ft_weights.shape[0]),
             ACCUMULATOR_SIZE,
             HIDDEN_SIZE,
             len(payload),
@@ -574,7 +908,6 @@ class FloatNetwork:
         expected = (
             (magic, FLOAT_CHECKPOINT_MAGIC, "magic"),
             (format_version, FORMAT_VERSION, "format version"),
-            (features, FEATURE_COUNT, "feature count"),
             (accumulator, ACCUMULATOR_SIZE, "accumulator size"),
             (hidden, HIDDEN_SIZE, "hidden size"),
         )
@@ -583,6 +916,10 @@ class FloatNetwork:
                 raise ValueError(
                     f"bad float-checkpoint {label}: {actual!r}; expected {wanted!r}"
                 )
+        if features not in (FEATURE_COUNT, KING_STATE_FEATURE_COUNT):
+            raise ValueError(
+                f"bad float-checkpoint feature count: {features!r}"
+            )
         payload = data[FLOAT_CHECKPOINT_HEADER.size :]
         if len(payload) != payload_bytes:
             raise ValueError(
@@ -607,7 +944,7 @@ class FloatNetwork:
 
         result = cls(
             ft_bias=take((ACCUMULATOR_SIZE,)),
-            ft_weights=take((FEATURE_COUNT, ACCUMULATOR_SIZE)),
+            ft_weights=take((features, ACCUMULATOR_SIZE)),
             dense_bias=take((HIDDEN_SIZE,)),
             dense_weights=take((HIDDEN_SIZE, ACCUMULATOR_SIZE * 2)),
             output_bias=take((1,)),
@@ -625,7 +962,7 @@ class FloatNetwork:
     def from_quantized(cls, network: QuantizedNetwork) -> "FloatNetwork":
         """Resume training from an exactly representable exported checkpoint."""
 
-        return cls(
+        result = cls(
             ft_bias=network.ft_bias.astype(np.float32),
             ft_weights=network.ft_weights.astype(np.float32),
             dense_bias=(
@@ -641,6 +978,23 @@ class FloatNetwork:
                 network.output_weights.astype(np.float32) / OUTPUT_DIVISOR
             ),
         )
+        recovered = result.quantize(network.architecture)
+        exact = (
+            np.array_equal(recovered.ft_bias, network.ft_bias)
+            and np.array_equal(recovered.ft_weights, network.ft_weights)
+            and np.array_equal(recovered.dense_bias, network.dense_bias)
+            and np.array_equal(recovered.dense_weights, network.dense_weights)
+            and recovered.output_bias == network.output_bias
+            and np.array_equal(
+                recovered.output_weights, network.output_weights
+            )
+        )
+        if not exact:
+            raise ValueError(
+                "quantized checkpoint cannot be represented losslessly by "
+                "the float32 shadow model"
+            )
+        return result
 
     def parameters(self) -> dict[str, np.ndarray]:
         return {
@@ -697,7 +1051,12 @@ class FloatNetwork:
                 float(self.output_bias[0]),
                 self.output_weights,
             )
-        quantized = self.quantize()
+        architecture = (
+            ARCHITECTURE_KING_STATE_RESIDUAL
+            if self.ft_weights.shape[0] == KING_STATE_FEATURE_COUNT
+            else ARCHITECTURE_ABSOLUTE
+        )
+        quantized = self.quantize(architecture)
         return (
             quantized.ft_bias.astype(np.float32),
             quantized.ft_weights.astype(np.float32),
@@ -867,7 +1226,7 @@ def _outcome_supervision(
 
     if architecture == ARCHITECTURE_ABSOLUTE:
         return dataset.outcome[indices], None
-    if architecture != ARCHITECTURE_RESIDUAL:
+    if not is_residual_architecture(architecture):
         raise ValueError(f"unsupported architecture semantics {architecture}")
 
     outcome = dataset.search_outcome[indices]
@@ -887,7 +1246,7 @@ def _require_residual_outcomes(
     outcome_weight: float,
 ) -> None:
     if (
-        architecture == ARCHITECTURE_RESIDUAL
+        is_residual_architecture(architecture)
         and outcome_weight > 0.0
         and not np.any(np.isfinite(dataset.search_outcome))
     ):
@@ -1041,10 +1400,10 @@ def gradients(
     ft_bias_gradient = (stm_gradient + opponent_gradient).sum(axis=0)
     ft_weights_gradient = np.zeros_like(model.ft_weights, dtype=np.float32)
     for row, row_gradient in zip(stm_features, stm_gradient):
-        real = row[row != PAD_FEATURE]
+        real = row[row != dataset.pad_feature]
         np.add.at(ft_weights_gradient, real, row_gradient)
     for row, row_gradient in zip(opponent_features, opponent_gradient):
-        real = row[row != PAD_FEATURE]
+        real = row[row != dataset.pad_feature]
         np.add.at(ft_weights_gradient, real, row_gradient)
 
     return loss, {
@@ -1116,7 +1475,7 @@ def evaluate(
     output_semantics = ARCHITECTURE_NAMES[network.architecture]
     outcome_score_semantics = (
         "handcrafted-plus-network-correction"
-        if network.architecture == ARCHITECTURE_RESIDUAL
+        if is_residual_architecture(network.architecture)
         else "network"
     )
     if indices.size == 0:
@@ -1176,7 +1535,8 @@ def evaluate(
         )
 
         feature_counts = np.sum(
-            dataset.white_features[indices][cp_mask] != PAD_FEATURE, axis=1
+            dataset.white_features[indices][cp_mask] != dataset.pad_feature,
+            axis=1,
         )
         phase_metrics: dict[str, Any] = {}
         for name, phase_mask in (
@@ -1213,7 +1573,7 @@ def _training_strata(
     """Create deterministic phase/score strata without changing sample weight."""
 
     active_features_per_position = np.sum(
-        dataset.white_features[indices] != PAD_FEATURE, axis=1
+        dataset.white_features[indices] != dataset.pad_feature, axis=1
     )
     phase_cuts = np.quantile(active_features_per_position, [1.0 / 3.0, 2.0 / 3.0])
     phase = np.digitize(active_features_per_position, phase_cuts, right=True)
@@ -1335,10 +1695,18 @@ def train(
         raise ValueError("learning rate must be positive")
 
     model = (
-        FloatNetwork.initialize(seed)
+        FloatNetwork.initialize(
+            seed, feature_count_for_architecture(architecture)
+        )
         if initial_model is None
         else initial_model.clone()
     )
+    expected_features = feature_count_for_architecture(architecture)
+    if model.ft_weights.shape != (expected_features, ACCUMULATOR_SIZE):
+        raise ValueError(
+            "initial model feature map does not match architecture "
+            f"{ARCHITECTURE_NAMES[architecture]}"
+        )
     optimizer = Adam(
         model.parameters(),
         learning_rate,
@@ -1585,6 +1953,41 @@ def _feature_self_test() -> None:
         raise AssertionError("feature index exceeds frozen feature count")
     if len(set(white)) != len(white) or len(set(black)) != len(black):
         raise AssertionError("initial OFEN contains duplicate active features")
+    king_state_white = active_features(
+        INITIAL_OFEN, 0, ARCHITECTURE_KING_STATE_RESIDUAL
+    )
+    king_state_black = active_features(
+        INITIAL_OFEN, 1, ARCHITECTURE_KING_STATE_RESIDUAL
+    )
+    if len(king_state_white) != 50 or len(king_state_black) != 50:
+        raise AssertionError("king-state initial OFEN feature count is not 50")
+    if (
+        max(king_state_white) >= KING_STATE_FEATURE_COUNT
+        or max(king_state_black) >= KING_STATE_FEATURE_COUNT
+    ):
+        raise AssertionError("king-state feature index exceeds architecture")
+    clock_changed = active_features(
+        INITIAL_OFEN.replace(" 0 1", " 17 1"),
+        0,
+        ARCHITECTURE_KING_STATE_RESIDUAL,
+    )
+    removed = set(king_state_white) - set(clock_changed)
+    added = set(clock_changed) - set(king_state_white)
+    if removed != {KING_STATE_HALFMOVE_FEATURE_BASE} or added != {
+        KING_STATE_HALFMOVE_FEATURE_BASE + 3
+    }:
+        raise AssertionError("halfmove clock did not change exactly one state feature")
+    clock_cases = (
+        (0, 0), (1, 1), (3, 1), (4, 2), (15, 2), (16, 3),
+        (31, 3), (32, 4), (49, 4), (50, 5), (74, 5), (75, 6),
+        (89, 6), (90, 7), (99, 7), (100, 7),
+    )
+    for clock, expected in clock_cases:
+        if halfmove_clock_bin(clock) != expected:
+            raise AssertionError(
+                f"halfmove bin mismatch at {clock}: "
+                f"{halfmove_clock_bin(clock)} != {expected}"
+            )
 
 
 def _format_semantics_self_test() -> None:
@@ -1609,8 +2012,19 @@ def _format_semantics_self_test() -> None:
         raise AssertionError("residual architecture did not round-trip")
     if residual_round_trip.to_bytes() != residual_bytes:
         raise AssertionError("residual architecture bytes changed on round trip")
+    king_state = _blank_quantized_network(
+        architecture=ARCHITECTURE_KING_STATE_RESIDUAL
+    )
+    king_state_bytes = king_state.to_bytes()
+    king_state_round_trip = QuantizedNetwork.from_bytes(king_state_bytes)
+    if (
+        king_state_round_trip.architecture
+        != ARCHITECTURE_KING_STATE_RESIDUAL
+        or king_state_round_trip.to_bytes() != king_state_bytes
+    ):
+        raise AssertionError("king-state residual architecture did not round-trip")
     bad = bytearray(absolute_bytes)
-    struct.pack_into("<I", bad, 20, 3)
+    struct.pack_into("<I", bad, 20, 99)
     try:
         QuantizedNetwork.from_bytes(bytes(bad))
     except ValueError as error:
@@ -1618,6 +2032,103 @@ def _format_semantics_self_test() -> None:
             raise
     else:
         raise AssertionError("unknown network semantics were accepted")
+
+    unsafe_float_resume = _blank_quantized_network(
+        output_bias=100_000_001,
+        architecture=ARCHITECTURE_RESIDUAL,
+    )
+    try:
+        FloatNetwork.from_quantized(unsafe_float_resume)
+    except ValueError as error:
+        if "cannot be represented losslessly" not in str(error):
+            raise
+    else:
+        raise AssertionError("lossy float32 checkpoint resume was accepted")
+
+
+def _king_state_migration_self_test() -> None:
+    source = FloatNetwork.initialize(314159).quantize(ARCHITECTURE_RESIDUAL)
+    expanded = expand_residual_to_king_state(source)
+    occupancy_features = FEATURE_COUNT - 4
+    for bucket in range(KING_BUCKET_COUNT):
+        begin = bucket * occupancy_features
+        if not np.array_equal(
+            expanded.ft_weights[begin : begin + occupancy_features],
+            source.ft_weights[:occupancy_features],
+        ):
+            raise AssertionError("king-state migration changed a piece-square row")
+    if not np.array_equal(
+        expanded.ft_weights[
+            KING_STATE_CASTLING_FEATURE_BASE
+            : KING_STATE_CASTLING_FEATURE_BASE + 4
+        ],
+        source.ft_weights[occupancy_features:FEATURE_COUNT],
+    ):
+        raise AssertionError("king-state migration changed castling rows")
+    if np.any(
+        expanded.ft_weights[
+            KING_STATE_CASTLING_FEATURE_BASE + 4 :
+        ]
+    ):
+        raise AssertionError("new king-state rule features did not start at zero")
+    for name in (
+        "ft_bias",
+        "dense_bias",
+        "dense_weights",
+        "output_weights",
+    ):
+        if not np.array_equal(getattr(expanded, name), getattr(source, name)):
+            raise AssertionError(f"king-state migration changed {name}")
+    if expanded.output_bias != source.output_bias:
+        raise AssertionError("king-state migration changed output bias")
+    for ofen in CROSS_RUNTIME_OFENS:
+        legacy = _predict_ofen(source, ofen)
+        migrated = _predict_ofen(expanded, ofen)
+        if legacy != migrated:
+            raise AssertionError(
+                "king-state migration changed initial inference for "
+                f"{ofen!r}: {legacy} != {migrated}"
+            )
+    if QuantizedNetwork.from_bytes(expanded.to_bytes()).to_bytes() != expanded.to_bytes():
+        raise AssertionError("migrated king-state network did not round-trip")
+
+    training_dataset = make_dataset_from_records(
+        [
+            {
+                "sampleId": "king-state-gradient-a",
+                "ofen": SPARSE_OFEN,
+                "targetCpStm": -25,
+            },
+            {
+                "sampleId": "king-state-gradient-b",
+                "ofen": CHAMPION_C3_OFEN.replace(
+                    " - - 0 1", " - d2,d3 17 1"
+                ),
+                "targetCpStm": 75,
+            },
+        ],
+        architecture=ARCHITECTURE_KING_STATE_RESIDUAL,
+    )
+    indices = training_dataset.indices(0)
+    float_model = FloatNetwork.from_quantized(expanded)
+    loss, parameter_gradients, _ = gradients(
+        training_dataset,
+        indices,
+        float_model,
+        cp_weight=1.0,
+        outcome_weight=0.0,
+        quantization_aware=False,
+        architecture=ARCHITECTURE_KING_STATE_RESIDUAL,
+    )
+    if not math.isfinite(loss):
+        raise AssertionError("king-state training gradient produced non-finite loss")
+    state_gradient = parameter_gradients["ft_weights"][
+        KING_STATE_CASTLING_FEATURE_BASE:
+    ]
+    if state_gradient.shape[0] != (
+        KING_STATE_FEATURE_COUNT - KING_STATE_CASTLING_FEATURE_BASE
+    ) or not np.any(state_gradient):
+        raise AssertionError("king-state rule features received no training gradient")
 
 
 def _residual_outcome_supervision_self_test() -> None:
@@ -2024,7 +2535,7 @@ def _epoch_zero_selection_self_test() -> None:
 def parse_arguments(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Train and export Senpai's frozen PS104 Omega NNUE architecture "
+            "Train and export Senpai's self-described Omega NNUE architectures "
             "using only NumPy."
         )
     )
@@ -2039,18 +2550,27 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--manifest", type=Path, help="output manifest JSON")
     parser.add_argument(
         "--network-semantics",
-        choices=("absolute", "residual"),
+        choices=("absolute", "residual", "king-state-residual"),
         default="absolute",
         help=(
             "self-described runtime meaning stored in the OMNNUE1 architecture "
             "field: absolute replaces HCE; residual adds a learned correction "
-            "to HCE"
+            "to HCE; king-state-residual adds king-conditioned piece-square "
+            "and exact rule-state features"
         ),
     )
     parser.add_argument(
         "--initial-network",
         type=Path,
         help="quantized checkpoint used to initialize a fine-tuning run",
+    )
+    parser.add_argument(
+        "--expand-residual-to-king-state",
+        action="store_true",
+        help=(
+            "explicitly migrate an architecture-2 --initial-network into "
+            "king-state-residual by replicating legacy piece-square rows"
+        ),
     )
     parser.add_argument(
         "--initial-float-checkpoint",
@@ -2061,6 +2581,39 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
         "--float-checkpoint",
         type=Path,
         help="output lossless float shadow checkpoint (normal default: <output>.float)",
+    )
+    parser.add_argument(
+        "--migrate-only",
+        action="store_true",
+        help=(
+            "export the exact architecture-2 to architecture-3 migration "
+            "without optimization and prove prediction parity on every input OFEN"
+        ),
+    )
+    parser.add_argument(
+        "--protocol-pretest",
+        action="store_true",
+        help=(
+            "route by top-level groupId before JSON decoding, then train and "
+            "report only split 0/1; held-out split-2 labels remain opaque"
+        ),
+    )
+    parser.add_argument(
+        "--candidate-id",
+        choices=("K0", "K1", "K2"),
+        help="frozen king-state-v1 candidate identity",
+    )
+    parser.add_argument("--protocol", type=Path, help="sealed protocol JSON")
+    parser.add_argument(
+        "--prelabel-seal", type=Path, help="pre-label experiment seal"
+    )
+    parser.add_argument(
+        "--corpus-manifest", type=Path, help="frozen residual-corpus manifest"
+    )
+    parser.add_argument(
+        "--static-hce-evaluator",
+        type=Path,
+        help="frozen static-HCE/C++ parity helper",
     )
     parser.add_argument("--seed", type=int, default=20260718)
     parser.add_argument(
@@ -2154,7 +2707,147 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--quiet", action="store_true", help="suppress per-epoch progress"
     )
-    return parser.parse_args(argv)
+    result = parser.parse_args(argv)
+    result.raw_argv = list(argv)
+    return result
+
+
+def _run_migrate_only(
+    args: argparse.Namespace,
+    *,
+    architecture: int,
+    runtime_manifest: dict[str, Any],
+    input_pins: list[dict[str, Any]],
+    experiment_context: dict[str, Any] | None,
+    golden_cases: list[dict[str, Any]],
+) -> int:
+    if architecture != ARCHITECTURE_KING_STATE_RESIDUAL:
+        raise ValueError(
+            "--migrate-only requires --network-semantics king-state-residual"
+        )
+    if not args.expand_residual_to_king_state or args.initial_network is None:
+        raise ValueError(
+            "--migrate-only requires --initial-network and "
+            "--expand-residual-to-king-state"
+        )
+    if args.initial_float_checkpoint is not None:
+        raise ValueError("--migrate-only cannot use --initial-float-checkpoint")
+    if args.float_checkpoint is not None:
+        raise ValueError("--migrate-only does not emit a float checkpoint")
+    if not args.input or args.output is None:
+        raise ValueError("--migrate-only requires --input and --output")
+    if args.protocol_pretest:
+        raise ValueError(
+            "--migrate-only examines every OFEN for parity and must not use "
+            "--protocol-pretest"
+        )
+
+    source_pin = _file_pin(args.initial_network)
+    source = QuantizedNetwork.read(args.initial_network)
+    migrated = expand_residual_to_king_state(source)
+    checked = 0
+    ofen_digest = hashlib.sha256()
+    for ofen, location in _iter_selective_string(args.input, "ofen"):
+        normalized = " ".join(ofen.split())
+        try:
+            source_score = _predict_ofen(source, normalized)
+            migrated_score = _predict_ofen(migrated, normalized)
+        except ValueError as error:
+            raise ValueError(f"{location}: invalid Omega OFEN: {error}") from error
+        if source_score != migrated_score:
+            raise AssertionError(
+                f"{location}: architecture migration changed prediction "
+                f"{source_score} -> {migrated_score}"
+            )
+        ofen_digest.update(normalized.encode("utf-8"))
+        ofen_digest.update(b"\n")
+        checked += 1
+    if checked == 0:
+        raise ValueError("--migrate-only input contains no OFEN rows")
+
+    encoded = migrated.to_bytes()
+    _atomic_bytes(args.output, encoded)
+    reloaded = QuantizedNetwork.read(args.output)
+    if reloaded.to_bytes() != encoded:
+        raise AssertionError("migrated network changed on disk round trip")
+    cross_runtime = _run_cpp_cross_runtime(
+        args.cpp_evaluator, args.output, migrated, golden_cases
+    )
+
+    if [_file_pin(path) for path in args.input] != input_pins:
+        raise ValueError("an input file changed during migration parity")
+    if _file_pin(args.initial_network) != source_pin:
+        raise ValueError("the initializer changed during migration parity")
+    if _runtime_manifest()["tools"] != runtime_manifest["tools"]:
+        raise ValueError("trainer source changed during migration parity")
+
+    manifest: dict[str, Any] = {
+        "schemaVersion": 3,
+        "kind": "omega-nnue-migrate-only",
+        "formatVersion": FORMAT_VERSION,
+        "networkSemantics": "king-state-residual",
+        "candidateId": args.candidate_id,
+        "experiment": experiment_context,
+        "rawArgv": list(args.raw_argv),
+        "inputs": input_pins,
+        "initialNetwork": source_pin,
+        "initialNetworkMigration": {
+            "requested": True,
+            "applied": True,
+            "sourceArchitecture": ARCHITECTURE_RESIDUAL,
+            "targetArchitecture": ARCHITECTURE_KING_STATE_RESIDUAL,
+            "pieceSquareRows": (
+                "replicated-identically-across-29-king-buckets"
+            ),
+            "newStateRows": "zero",
+            "denseLayers": "copied-exactly",
+        },
+        "migrationParity": {
+            "status": "passed",
+            "scope": "all-corpus-ofens",
+            "positionsChecked": checked,
+            "ofenSequenceSha256": ofen_digest.hexdigest(),
+            "sourcePredictionSemantics": "architecture-2 residual correction",
+            "targetPredictionSemantics": "architecture-3 residual correction",
+            "mismatches": 0,
+            "targetFieldsDecoded": 0,
+            "targetFieldsEmitted": 0,
+        },
+        "roundTrip": {
+            "fileBytes": len(encoded),
+            "sha256": hashlib.sha256(encoded).hexdigest(),
+            "payloadFnv1a64": f"{int.from_bytes(encoded[64:72], 'little'):016x}",
+            "predictionsChecked": checked,
+        },
+        "crossRuntime": cross_runtime,
+        "environment": runtime_manifest,
+        "seed": args.seed,
+        "modelSeed": args.seed,
+        "splitSeed": args.seed if args.split_seed is None else args.split_seed,
+        "strict": bool(args.strict),
+        "heldOut": {
+            "labelsLoaded": False,
+            "labelsEvaluated": False,
+            "labelsEmitted": False,
+            "featureOnlyMigrationParityAllowed": True,
+        },
+        "training": {
+            "performed": False,
+            "epochs": 0,
+            "selectedEpoch": 0,
+        },
+    }
+    manifest_path = args.manifest or args.output.with_suffix(
+        args.output.suffix + ".json"
+    )
+    _atomic_json(manifest_path, manifest)
+    print(
+        f"migrated architecture 2 -> 3 with exact parity on {checked} OFENs",
+        flush=True,
+    )
+    print(f"wrote manifest: {manifest_path.resolve()}", flush=True)
+    print(f"wrote network: {args.output.resolve()}", flush=True)
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -2162,11 +2855,22 @@ def main(argv: list[str] | None = None) -> int:
     architecture = {
         "absolute": ARCHITECTURE_ABSOLUTE,
         "residual": ARCHITECTURE_RESIDUAL,
+        "king-state-residual": ARCHITECTURE_KING_STATE_RESIDUAL,
     }[args.network_semantics]
     if args.initial_network is not None and args.initial_float_checkpoint is not None:
         raise ValueError(
             "--initial-network and --initial-float-checkpoint are mutually exclusive"
         )
+    if args.expand_residual_to_king_state:
+        if args.initial_network is None:
+            raise ValueError(
+                "--expand-residual-to-king-state requires --initial-network"
+            )
+        if architecture != ARCHITECTURE_KING_STATE_RESIDUAL:
+            raise ValueError(
+                "--expand-residual-to-king-state requires "
+                "--network-semantics king-state-residual"
+            )
     if args.cp_weight < 0.0 or args.outcome_weight < 0.0:
         raise ValueError("loss weights cannot be negative")
     if args.cp_weight == 0.0 and args.outcome_weight == 0.0:
@@ -2190,11 +2894,8 @@ def main(argv: list[str] | None = None) -> int:
 
     runtime_manifest = _runtime_manifest()
     input_pins = [_file_pin(path) for path in args.input]
-    residual_targets_validated = (
-        _validate_residual_targets(args.input)
-        if architecture == ARCHITECTURE_RESIDUAL and args.input
-        else 0
-    )
+    experiment_context = _experiment_context(args)
+    residual_targets_validated = 0
     split_seed = args.seed if args.split_seed is None else args.split_seed
     initial_network_pin = (
         _file_pin(args.initial_network) if args.initial_network is not None else None
@@ -2206,17 +2907,51 @@ def main(argv: list[str] | None = None) -> int:
     )
     _feature_self_test()
     _format_semantics_self_test()
+    _king_state_migration_self_test()
     _residual_outcome_supervision_self_test()
     _collision_self_test()
     _float_checkpoint_self_test()
     _epoch_zero_selection_self_test()
     golden_cases = _golden_runtime_cases()
     golden_python = _golden_python_self_test(golden_cases)
+    if args.migrate_only:
+        return _run_migrate_only(
+            args,
+            architecture=architecture,
+            runtime_manifest=runtime_manifest,
+            input_pins=input_pins,
+            experiment_context=experiment_context,
+            golden_cases=golden_cases,
+        )
+    if args.protocol_pretest and args.self_test:
+        raise ValueError("--protocol-pretest cannot be combined with --self-test")
+    protocol_temporary: tempfile.TemporaryDirectory[str] | None = None
+    dataset_inputs = args.input
+    pretest_audit: dict[str, Any] | None = None
+    if args.protocol_pretest:
+        if experiment_context is None:
+            raise ValueError(
+                "--protocol-pretest requires the complete sealed experiment context"
+            )
+        protocol_temporary, dataset_inputs, pretest_audit = (
+            _make_protocol_pretest_input(
+                args.input,
+                split_seed=split_seed,
+                train_percent=args.train_percent,
+                validation_percent=args.validation_percent,
+                group_field=args.group_field,
+            )
+        )
+    residual_targets_validated = (
+        _validate_residual_targets(dataset_inputs)
+        if is_residual_architecture(architecture) and dataset_inputs
+        else 0
+    )
     temporary_output: Path | None = None
     if args.self_test:
-        if args.input:
+        if dataset_inputs:
             dataset = load_dataset(
-                args.input,
+                dataset_inputs,
                 seed=split_seed,
                 train_percent=100.0,
                 validation_percent=0.0,
@@ -2230,13 +2965,16 @@ def main(argv: list[str] | None = None) -> int:
                 strict=args.strict,
                 all_train=True,
                 collision_policy=args.collision_policy,
-                residual_outcomes=architecture == ARCHITECTURE_RESIDUAL,
+                residual_outcomes=is_residual_architecture(architecture),
+                architecture=architecture,
             )
         else:
             dataset = make_dataset_from_records(
                 make_synthetic_records(),
                 seed=split_seed,
                 collision_policy=args.collision_policy,
+                residual_outcomes=is_residual_architecture(architecture),
+                architecture=architecture,
             )
         epochs = args.epochs if args.epochs is not None else 200
         qat_epochs = (
@@ -2257,7 +2995,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.output is None:
             raise ValueError("normal training requires --output")
         dataset = load_dataset(
-            args.input,
+            dataset_inputs,
             seed=split_seed,
             train_percent=args.train_percent,
             validation_percent=args.validation_percent,
@@ -2265,7 +3003,8 @@ def main(argv: list[str] | None = None) -> int:
             max_records=args.max_records,
             strict=args.strict,
             collision_policy=args.collision_policy,
-            residual_outcomes=architecture == ARCHITECTURE_RESIDUAL,
+            residual_outcomes=is_residual_architecture(architecture),
+            architecture=architecture,
         )
         epochs = args.epochs if args.epochs is not None else 15
         qat_epochs = (
@@ -2297,11 +3036,23 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     train_indices = dataset.indices(0)
+    migration_applied = False
     if args.initial_float_checkpoint is not None:
         initial_model = FloatNetwork.read_checkpoint(args.initial_float_checkpoint)
+        expected_features = feature_count_for_architecture(architecture)
+        if initial_model.ft_weights.shape[0] != expected_features:
+            raise ValueError(
+                "--initial-float-checkpoint feature map does not match "
+                f"--network-semantics {args.network_semantics}"
+            )
     elif args.initial_network is not None:
         initial_quantized = QuantizedNetwork.read(args.initial_network)
-        if initial_quantized.architecture != architecture:
+        if args.expand_residual_to_king_state:
+            initial_quantized = expand_residual_to_king_state(
+                initial_quantized
+            )
+            migration_applied = True
+        elif initial_quantized.architecture != architecture:
             raise ValueError(
                 "--initial-network semantics do not match "
                 f"--network-semantics {args.network_semantics}: "
@@ -2309,7 +3060,9 @@ def main(argv: list[str] | None = None) -> int:
             )
         initial_model = FloatNetwork.from_quantized(initial_quantized)
     else:
-        initial_model = FloatNetwork.initialize(args.seed)
+        initial_model = FloatNetwork.initialize(
+            args.seed, feature_count_for_architecture(architecture)
+        )
     initial = initial_model.quantize(architecture)
     initial_metrics = evaluate(
         dataset,
@@ -2379,7 +3132,7 @@ def main(argv: list[str] | None = None) -> int:
     cross_runtime = _run_cpp_cross_runtime(
         args.cpp_evaluator, output, network, golden_cases
     )
-    final_metrics = {
+    final_metrics: dict[str, Any] = {
         "train": evaluate(
             dataset,
             dataset.indices(0),
@@ -2396,16 +3149,8 @@ def main(argv: list[str] | None = None) -> int:
             args.cp_weight,
             args.outcome_weight,
         ),
-        "test": evaluate(
-            dataset,
-            dataset.indices(2),
-            network,
-            args.batch_size,
-            args.cp_weight,
-            args.outcome_weight,
-        ),
     }
-    quantization_metrics = {
+    quantization_metrics: dict[str, Any] = {
         "train": quantization_penalty(
             dataset,
             dataset.indices(0),
@@ -2420,14 +3165,23 @@ def main(argv: list[str] | None = None) -> int:
             network,
             args.batch_size,
         ),
-        "test": quantization_penalty(
+    }
+    if not args.protocol_pretest:
+        final_metrics["test"] = evaluate(
+            dataset,
+            dataset.indices(2),
+            network,
+            args.batch_size,
+            args.cp_weight,
+            args.outcome_weight,
+        )
+        quantization_metrics["test"] = quantization_penalty(
             dataset,
             dataset.indices(2),
             model,
             network,
             args.batch_size,
-        ),
-    }
+        )
     float_checkpoint_pin = None
     if float_checkpoint_path is not None:
         model.write_checkpoint(float_checkpoint_path)
@@ -2457,22 +3211,51 @@ def main(argv: list[str] | None = None) -> int:
             flush=True,
         )
 
+    record_counts: dict[str, Any] = {
+        "read": dataset.records_read,
+        "accepted": dataset.count,
+        "skipped": dataset.records_skipped,
+        "train": int(dataset.indices(0).size),
+        "validation": int(dataset.indices(1).size),
+        "absoluteOutcomeTargets": int(np.isfinite(dataset.outcome).sum()),
+        "searchOutcomeTargets": int(
+            np.isfinite(dataset.search_outcome).sum()
+        ),
+        "handcraftedBaselines": int(
+            np.isfinite(dataset.handcrafted_cp).sum()
+        ),
+    }
+    if args.protocol_pretest:
+        assert pretest_audit is not None
+        record_counts["testWithheld"] = pretest_audit["rows"]["testWithheld"]
+    else:
+        record_counts["test"] = int(dataset.indices(2).size)
+
     manifest = {
-        "schemaVersion": 2,
+        "schemaVersion": 3 if args.protocol_pretest else 2,
         "formatVersion": FORMAT_VERSION,
         "networkSemantics": args.network_semantics,
+        "candidateId": args.candidate_id,
+        "experiment": experiment_context,
+        "rawArgv": list(args.raw_argv),
+        "strict": bool(args.strict),
+        "protocolPretest": pretest_audit,
         "architecture": {
             "id": architecture,
-            "name": "PS104-shared-1668x128-256x32x1",
+            "name": (
+                "KingPS104-state-48376x128-256x32x1"
+                if architecture == ARCHITECTURE_KING_STATE_RESIDUAL
+                else "PS104-shared-1668x128-256x32x1"
+            ),
             "outputSemantics": args.network_semantics,
             "runtimeEvaluation": (
                 "handcrafted-plus-network-correction"
-                if architecture == ARCHITECTURE_RESIDUAL
+                if is_residual_architecture(architecture)
                 else "network"
             ),
             "headerBytes": HEADER_BYTES,
-            "payloadBytes": PAYLOAD_BYTES,
-            "features": FEATURE_COUNT,
+            "payloadBytes": payload_bytes_for_architecture(architecture),
+            "features": feature_count_for_architecture(architecture),
             "accumulator": ACCUMULATOR_SIZE,
             "hidden": HIDDEN_SIZE,
             "activationMax": ACTIVATION_MAX,
@@ -2481,6 +3264,27 @@ def main(argv: list[str] | None = None) -> int:
         },
         "inputs": input_pins,
         "initialNetwork": initial_network_pin,
+        "initialNetworkMigration": {
+            "requested": args.expand_residual_to_king_state,
+            "applied": migration_applied,
+            "sourceArchitecture": (
+                None
+                if initial_network_pin is None
+                else (
+                    ARCHITECTURE_RESIDUAL
+                    if migration_applied
+                    else architecture
+                )
+            ),
+            "targetArchitecture": architecture,
+            "pieceSquareRows": (
+                "replicated-identically-across-29-king-buckets"
+                if migration_applied
+                else None
+            ),
+            "newStateRows": "zero" if migration_applied else None,
+            "denseLayers": "copied-exactly" if migration_applied else None,
+        },
         "initialFloatCheckpoint": initial_float_checkpoint_pin,
         "floatCheckpoint": float_checkpoint_pin,
         "environment": runtime_manifest,
@@ -2488,21 +3292,7 @@ def main(argv: list[str] | None = None) -> int:
         "modelSeed": args.seed,
         "splitSeed": split_seed,
         "groups": len(set(dataset.groups)),
-        "records": {
-            "read": dataset.records_read,
-            "accepted": dataset.count,
-            "skipped": dataset.records_skipped,
-            "train": int(dataset.indices(0).size),
-            "validation": int(dataset.indices(1).size),
-            "test": int(dataset.indices(2).size),
-            "absoluteOutcomeTargets": int(np.isfinite(dataset.outcome).sum()),
-            "searchOutcomeTargets": int(
-                np.isfinite(dataset.search_outcome).sum()
-            ),
-            "handcraftedBaselines": int(
-                np.isfinite(dataset.handcrafted_cp).sum()
-            ),
-        },
+        "records": record_counts,
         "inputCollisions": {
             "policy": dataset.collision_policy,
             "signaturesDetected": dataset.input_collision_signatures,
@@ -2545,17 +3335,17 @@ def main(argv: list[str] | None = None) -> int:
             "outcomeSupervision": {
                 "targetFields": (
                     ["searchOutcomeStm", "searchSideToMoveScore"]
-                    if architecture == ARCHITECTURE_RESIDUAL
+                    if is_residual_architecture(architecture)
                     else ["outcomeStm", "sideToMoveScore"]
                 ),
                 "score": (
                     "handcraftedCpStm + network correction"
-                    if architecture == ARCHITECTURE_RESIDUAL
+                    if is_residual_architecture(architecture)
                     else "network output"
                 ),
                 "fixedBaselineField": (
                     "handcraftedCpStm"
-                    if architecture == ARCHITECTURE_RESIDUAL
+                    if is_residual_architecture(architecture)
                     else None
                 ),
                 "gradientDestination": "network output",
@@ -2567,6 +3357,7 @@ def main(argv: list[str] | None = None) -> int:
             "outcomeLogisticScale": OUTCOME_LOGISTIC_SCALE,
             "groupField": args.group_field,
             "collisionPolicy": args.collision_policy,
+            "strict": bool(args.strict),
             "residualTargetsValidated": residual_targets_validated,
             "trainPercent": 100.0 if args.self_test else args.train_percent,
             "validationPercent": (
@@ -2606,6 +3397,8 @@ def main(argv: list[str] | None = None) -> int:
             temporary_output.unlink()
         except OSError:
             pass
+    if protocol_temporary is not None:
+        protocol_temporary.cleanup()
     return 0
 
 

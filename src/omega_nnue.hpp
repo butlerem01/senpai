@@ -14,18 +14,20 @@ namespace omega_nnue {
 
 namespace format {
 
-// OMNNUE v1 is deliberately fixed-size.  Keeping the inference contract
-// explicit lets the engine reject a Stockfish network, a network trained for
-// a different Omega feature map, or a partially written training artifact
-// before any weights become visible to search threads.
+// Each OMNNUE v1 architecture has a deliberately fixed size. Keeping the
+// inference contract explicit lets the engine reject a Stockfish network, a
+// network trained for a different Omega feature map, or a partially written
+// training artifact before any weights become visible to search threads.
 constexpr std::uint32_t Endian_Tag          = 0x01020304U;
 constexpr std::uint32_t Format_Version      = 1U;
 constexpr std::uint32_t Header_Bytes        = 72U;
 // The tensor layout remains OMNNUE1 for both meanings.  Architecture 1 is
 // the original absolute evaluator; architecture 2 is a correction that the
-// Omega adapter adds to the handcrafted evaluation.
+// Omega adapter adds to the handcrafted evaluation. Architecture 3 keeps the
+// residual meaning but uses a king-conditioned, state-complete feature map.
 constexpr std::uint32_t Architecture_Absolute = 1U;
 constexpr std::uint32_t Architecture_Residual = 2U;
+constexpr std::uint32_t Architecture_King_State_Residual = 3U;
 constexpr std::uint32_t Architecture_Id       = Architecture_Absolute;
 constexpr std::uint32_t Square_Count        = 104U;
 constexpr std::uint32_t Piece_Count         = 8U;
@@ -41,6 +43,32 @@ constexpr std::uint32_t Output_Divisor      = 64U;
 constexpr std::uint64_t Payload_Bytes       = 435620ULL;
 constexpr std::uint64_t File_Bytes          = Header_Bytes + Payload_Bytes;
 
+constexpr std::uint32_t King_Bucket_Count = 29U;
+constexpr std::uint32_t King_State_Occupancy_Features =
+   King_Bucket_Count * Occupancy_Features;
+constexpr std::uint32_t King_State_Castling_Feature_Base =
+   King_State_Occupancy_Features;
+constexpr std::uint32_t King_State_EP_Feature_Base =
+   King_State_Castling_Feature_Base + Castling_Features;
+constexpr std::uint32_t King_State_EP_Features = Square_Count;
+constexpr std::uint32_t King_State_Halfmove_Feature_Base =
+   King_State_EP_Feature_Base + King_State_EP_Features;
+constexpr std::uint32_t King_State_Halfmove_Bins = 8U;
+constexpr std::uint32_t King_State_Phase_Feature_Base =
+   King_State_Halfmove_Feature_Base + King_State_Halfmove_Bins;
+constexpr std::uint32_t King_State_Phase_Bins = 4U;
+constexpr std::uint32_t King_State_Feature_Count =
+   King_State_Phase_Feature_Base + King_State_Phase_Bins;
+constexpr std::uint64_t King_State_Payload_Bytes =
+     std::uint64_t(Accumulator_Size) * 2ULL
+   + std::uint64_t(King_State_Feature_Count) * Accumulator_Size * 2ULL
+   + std::uint64_t(Hidden_Size) * 4ULL
+   + std::uint64_t(Hidden_Size) * Dense_Input_Size
+   + 4ULL
+   + std::uint64_t(Hidden_Size);
+constexpr std::uint64_t King_State_File_Bytes =
+   Header_Bytes + King_State_Payload_Bytes;
+
 // Native Omega squares are a0..j9 in file-major order followed by the four
 // detached Wizard squares SW, SE, NE, NW.  Black's perspective reflects ranks
 // but not files, matching the colour/rank symmetry used by the evaluator.
@@ -50,17 +78,32 @@ int orient_square(Square sq, Side perspective);
 // to the requested perspective.  The result is in [0, Occupancy_Features).
 int piece_feature(Piece pc, Side piece_side, Square sq, Side perspective);
 
+// Architecture-3 helpers are public to pin the sparse input contract in
+// tests and to support a future incremental accumulator implementation.
+int king_bucket(Square king, Side perspective);
+int king_state_piece_feature(
+   Piece pc,
+   Side piece_side,
+   Square sq,
+   Side perspective,
+   int bucket
+);
+int halfmove_clock_bin(int halfmove_clock);
+int material_phase_bin(const Pos & pos);
+
 // Castling features follow the occupancy block and are relative to the
 // perspective: own-left, own-right, enemy-left, enemy-right.
 int castling_feature(bool own, bool right_of_king);
 
-// Produces the sparse feature list for one perspective.  The output is
-// cleared first and contains one feature per piece plus at most four distinct
-// castling-right features.
+// Produces the sparse feature list for one perspective. The output is cleared
+// first. Architectures 1/2 emit pieces and castling rights; architecture 3
+// additionally emits exact en-passant targets, a halfmove bin, and a material
+// phase.
 void active_features(
    const Pos & pos,
    Side perspective,
-   std::vector<int> & output
+   std::vector<int> & output,
+   std::uint32_t architecture = Architecture_Absolute
 );
 
 } // namespace format
