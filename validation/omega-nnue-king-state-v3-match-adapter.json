@@ -1,0 +1,108 @@
+{
+  "canonicalPaths": {
+    "compatibilityDirectory": "build-king-state-v3/matches/core-compatibility",
+    "futureMatchRoot": "../match-runs/output/king-state-v3",
+    "samplerDirectory": "build-king-state-v3/matches/sampler",
+    "sealedDirectory": "build-king-state-v3/matches/sealed"
+  },
+  "compatibility": {
+    "compatibilityEnvelopeChangesModelOrDecision": false,
+    "matchCore": "tools/omega_nnue/king_state_matches.py",
+    "protocol": "validation/omega-nnue-king-state-v3-match-protocol.json",
+    "replayCore": "tools/omega_nnue/king_state_match_readiness.py"
+  },
+  "contracts": {
+    "adapterIsSoleAuthorizedOmegaMatchLauncher": true,
+    "allThreeSuitesRulesOnlyCandidateBlindAndSealedTogether": true,
+    "appendOnlyLaunchIntentAndCompletionChainRequired": true,
+    "assessmentEventIdentityMustEqualLatestLaunchCompletion": true,
+    "assessmentProgressDeltaBoundedByLaunchPairBudget": true,
+    "assessmentRequiredBetweenLaunches": true,
+    "authorizationRepairIsIdempotentOnlyBeforeEvents": true,
+    "canonicalGateEvidenceInsideFutureMatchRoot": true,
+    "canonicalOfflinePassRequiredBeforeSuiteSampling": true,
+    "canonicalReadinessRequiredBeforeSuiteSampling": true,
+    "compatibilityEnvelopeIsDerivedOnlyAfterOfflinePass": true,
+    "equalTimeIdleAttestationMustPostdateEqualNodeDecision": true,
+    "failedOuterSealRetainedAndBlocksRetry": true,
+    "futureMatchRootBoundAndAbsentThroughOuterSealPublication": true,
+    "gateOrderMachineEnforcedByAuthorizationAndRunTime": true,
+    "initialAndResumePairBudgetsAreFixedByGate": true,
+    "managedLauncherRehashesAppBundleBeforeAndAfter": true,
+    "managedLauncherSanitizesAmbientDotnetEnvironment": true,
+    "managedLauncherUsesPinnedDotnetSelectionNamespaces": true,
+    "recursiveAnnotationVariationsRejectedBeforeHistoryReplay": true,
+    "runnerUpForbidden": true,
+    "terminalGateDecisionExclusiveAndBlocksRetry": true,
+    "validationSelectionExactlyRecomputedBeforeSamplingAndSealing": true
+  },
+  "declarations": {
+    "amendmentChain": [
+      {
+        "bytes": 8729,
+        "path": "validation/omega-nnue-king-state-v3-amendment-001.json",
+        "sha256": "846f43487558246edec871359f9f0a5dbd0377e69a3b95baee6ab6f47f32f78b"
+      },
+      {
+        "bytes": 7192,
+        "path": "validation/omega-nnue-king-state-v3-amendment-002.json",
+        "sha256": "833886a638ebda8d062dfd195d22cfc482152730284d7da5f73a5066fb69c266"
+      },
+      {
+        "bytes": 68249,
+        "path": "validation/omega-nnue-king-state-v3-amendment-003.json",
+        "sha256": "30d4eeb080d7a8d07d20b11abe8f3b2df19dc8c5e3c4ab354c523fcdce642469"
+      }
+    ],
+    "offlineWrapper": "tools/omega_nnue/king_state_offline_generation3.py",
+    "preregistration": "validation/omega-nnue-king-state-v3-preregistration.json",
+    "readinessWrapper": "tools/omega_nnue/king_state_match_readiness_generation3.py",
+    "trainingOrchestrator": "tools/omega_nnue/king_state_train_generation3.py"
+  },
+  "engine": {
+    "architecture3RuntimeVerified": true,
+    "bytes": 619520,
+    "candidateOmegaNNUEFile": "exact offline-passing winner hash",
+    "candidateRuntimeProof": {
+      "OmegaNnueActiveVerified": true,
+      "externalAssetExactlyCandidateNetworkHash": true,
+      "finalStartupDiagnostic": "info string Omega NNUE evaluation active",
+      "startupDiagnosticsRequireLoadedRecord": true
+    },
+    "candidateUseOmegaNNUE": true,
+    "controlOmegaNNUEFile": "<empty>",
+    "controlRuntimeProof": {
+      "ExternalAssets": [],
+      "OmegaNnueActiveVerified": false,
+      "finalStartupDiagnostic": "info string Omega NNUE disabled; handcrafted evaluation active",
+      "startupDiagnosticsForbidLoadedOrActive": true
+    },
+    "controlUseOmegaNNUE": false,
+    "emptyControlOptionTransmittedExplicitly": true,
+    "path": "tools/omega_nnue/frozen_runtime/king-state-v3/engine/senpai.exe",
+    "sameExecutableForCandidateAndControl": true,
+    "sha256": "37b4846f6f12cd795730d6472279007a0f53d8653e2b9a0071c1d13d2eed09e0"
+  },
+  "historicalPositionRoots": [
+    "build-msvc",
+    "build-king-state-v2",
+    "validation",
+    "../match-runs",
+    "../match-runs/configs",
+    "../match-runs/output",
+    "../opening-audit",
+    "../fixtures",
+    "../omega-lab",
+    "../omega-lab/regressions",
+    "../corechess-arena/Tools/OmegaMatch/Openings"
+  ],
+  "kind": "omega-nnue-king-state-v3-match-adapter-contract",
+  "profileId": "king-state-v3-deep-hce-v4",
+  "schemaVersion": 1,
+  "seeds": {
+    "development": 2026072201,
+    "equal-node": 2026072202,
+    "equal-time": 2026072203
+  },
+  "status": "target-blind adapter contract; match suites may be created only after the canonical one-time offline gate passes"
+}

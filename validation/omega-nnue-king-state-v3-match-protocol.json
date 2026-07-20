@@ -1,0 +1,236 @@
+{
+  "amendmentChain": [
+    {
+      "bytes": 8729,
+      "path": "validation/omega-nnue-king-state-v3-amendment-001.json",
+      "sha256": "846f43487558246edec871359f9f0a5dbd0377e69a3b95baee6ab6f47f32f78b"
+    },
+    {
+      "bytes": 7192,
+      "path": "validation/omega-nnue-king-state-v3-amendment-002.json",
+      "sha256": "833886a638ebda8d062dfd195d22cfc482152730284d7da5f73a5066fb69c266"
+    },
+    {
+      "bytes": 68249,
+      "path": "validation/omega-nnue-king-state-v3-amendment-003.json",
+      "sha256": "30d4eeb080d7a8d07d20b11abe8f3b2df19dc8c5e3c4ab354c523fcdce642469"
+    }
+  ],
+  "assessmentEvidence": {
+    "advanceRequiresDecision": {
+      "equal-node": {
+        "decision": "pass",
+        "gate": "development"
+      },
+      "equal-time": {
+        "decision": "promote",
+        "gate": "equal-node"
+      },
+      "promotion": {
+        "decision": "promote",
+        "gate": "equal-time"
+      }
+    },
+    "appendOnlyLaunchIntentAndCompletionChainRequired": true,
+    "assessmentAndDecisionArtifactsExclusiveNoClobber": true,
+    "assessmentDirectoryRelativePathByGate": {
+      "development": "development/assessments",
+      "equal-node": "equal-node/assessments",
+      "equal-time": "equal-time/assessments"
+    },
+    "assessmentEventIdentityMustEqualLatestLaunchCompletion": true,
+    "assessmentProgressDeltaBoundedByLaunchPairBudget": true,
+    "assessmentRequiresExactlyOneNewCompletedLaunch": true,
+    "assessmentSequenceFilenameFormat": "%06d.json starting at 000001",
+    "authorizationRelativePathByGate": {
+      "equal-node": "equal-node/authorization.json",
+      "equal-time": "equal-time/authorization.json"
+    },
+    "authorizationRepairCommandFormat": "python tools/omega_nnue/king_state_matches_generation3.py repair-transition --gate <equal-node-or-equal-time>",
+    "authorizationRepairRequiresNoSuccessorEvidence": true,
+    "decisionRelativePathByGate": {
+      "development": "development/decision.json",
+      "equal-node": "equal-node/decision.json",
+      "equal-time": "equal-time/decision.json"
+    },
+    "directOmegaMatchRunOrResumeForbidden": true,
+    "equalNodeAuthorizationPublishedOnlyByDevelopmentPass": true,
+    "equalTimeAuthorizationRequiresPostEqualNodeIdleAttestation": true,
+    "equalTimeIdleAttestationRelativePath": "equal-time/idle-machine.attestation.json",
+    "eventLogMustBeAppendOnlyBeforeTerminalDecision": true,
+    "eventsRelativePathByGate": {
+      "development": "development/events.jsonl",
+      "equal-node": "equal-node/events.jsonl",
+      "equal-time": "equal-time/events.jsonl"
+    },
+    "existingAuthorizationRepairIsVerificationOnly": true,
+    "failedOrInconclusiveDecisionAuthorizesSuccessor": false,
+    "fixedPairBudgets": {
+      "development": {
+        "resume": 4,
+        "run": 32
+      },
+      "equal-node": {
+        "resume": 4,
+        "run": 64
+      },
+      "equal-time": {
+        "resume": 4,
+        "run": 64
+      }
+    },
+    "gateOrder": [
+      "development",
+      "equal-node",
+      "equal-time"
+    ],
+    "idleAttestationCreatedUtcMustNotPrecedeEqualNodeDecision": true,
+    "launchCommandFormat": "python tools/omega_nnue/king_state_matches_generation3.py launch --gate <gate> --action <run-or-resume>",
+    "launchCompletionFilenameFormat": "%06d.completion.json starting at 000001",
+    "launchDirectoryRelativePathByGate": {
+      "development": "development/launches",
+      "equal-node": "equal-node/launches",
+      "equal-time": "equal-time/launches"
+    },
+    "launchIntentFilenameFormat": "%06d.intent.json starting at 000001",
+    "nextGateRunCreatedUtcMustNotPrecedeAuthorization": true,
+    "nonterminalReassessmentRequiresStrictMonotonicProgress": true,
+    "pendingLaunchIntentRecoveryUsesSameLaunchCommand": true,
+    "resumeRequiresLatestNonterminalExactAssessment": true,
+    "terminalDecisionBlocksFurtherAssessment": true,
+    "terminalDecisions": {
+      "development": [
+        "fail",
+        "pass",
+        "safety-fail"
+      ],
+      "equal-node": [
+        "futility",
+        "inconclusive",
+        "promote",
+        "safety-fail"
+      ],
+      "equal-time": [
+        "futility",
+        "inconclusive",
+        "promote",
+        "safety-fail"
+      ]
+    },
+    "terminalPublicationRecoveryCreatesNoNewAssessment": true
+  },
+  "authority": "validation/omega-nnue-king-state-v3-preregistration.json",
+  "common": {
+    "absoluteMaxPlies": 400,
+    "appendOnlyLaunchIntentCompletionChainRequired": true,
+    "assessmentProgressDeltaBoundedByPairBudget": true,
+    "assessmentRequiredBetweenLaunches": true,
+    "authorizationRepairIsIdempotentBeforeEvents": true,
+    "balancedPairBlockSize": 4,
+    "executionOnlyThroughAdapterLaunch": true,
+    "freshProcessPerGame": true,
+    "inverseArrangeForSeededDotNetRandomShuffle": true,
+    "managedLauncherRehashesAppBundleBeforeAndAfter": true,
+    "managedLauncherSanitizesAmbientDotnetEnvironment": true,
+    "managedLauncherUsesPinnedDotnetSelectionNamespaces": true,
+    "maxPlies": 300,
+    "onePairFromEachPhasePerBlock": true,
+    "pairBudgetMustBeMultipleOf": 4,
+    "pairBudgetRequired": true,
+    "repeats": 1,
+    "rootSideToMoveAlternatesBetweenBlocks": true,
+    "rootSideToMoveConstantWithinBlock": true,
+    "stopGraceMs": 2000
+  },
+  "development": {
+    "gamesPerRoot": 2,
+    "initialPairBudget": 32,
+    "maximumSafetyFailures": 0,
+    "minimumCandidateScore": 0.4,
+    "mode": "nodes",
+    "nodesPerMove": 20000,
+    "resumePairBudget": 4,
+    "roots": 32,
+    "rootsPerPhase": 8,
+    "rootsPerPhaseAndSideToMove": 4
+  },
+  "engineAssignment": {
+    "candidate": {
+      "OmegaNNUEFile": "exact offline-passing winner hash",
+      "UseOmegaNNUE": true,
+      "runtimeProof": {
+        "OmegaNnueActiveVerified": true,
+        "externalAssetExactlyCandidateNetworkHash": true,
+        "finalStartupDiagnostic": "info string Omega NNUE evaluation active",
+        "startupDiagnosticsRequireLoadedRecord": true
+      }
+    },
+    "control": {
+      "OmegaNNUEFile": "<empty>",
+      "UseOmegaNNUE": false,
+      "emptyOptionTransmittedExplicitly": true,
+      "runtimeProof": {
+        "ExternalAssets": [],
+        "OmegaNnueActiveVerified": false,
+        "finalStartupDiagnostic": "info string Omega NNUE disabled; handcrafted evaluation active",
+        "startupDiagnosticsForbidLoadedOrActive": true
+      }
+    },
+    "sameExecutable": true
+  },
+  "equalNode": {
+    "alpha": 0.05,
+    "balancedBlockChecksOnly": true,
+    "beta": 0.1,
+    "futilityEValue": 10,
+    "gamesPerPair": 2,
+    "initialPairBudget": 64,
+    "maximumPairs": 128,
+    "maximumSafetyFailures": 0,
+    "minimumPairsBeforeDecision": 64,
+    "mode": "nodes",
+    "nodesPerMove": 50000,
+    "nullElo": 10,
+    "pairsPerPhase": 32,
+    "pairsPerPhaseAndSideToMove": 16,
+    "promotionEValue": 20,
+    "resumePairBudget": 4
+  },
+  "equalTime": {
+    "alpha": 0.05,
+    "balancedBlockChecksOnly": true,
+    "beta": 0.1,
+    "futilityEValue": 10,
+    "gamesPerPair": 2,
+    "idleMachineAttestationRequired": true,
+    "initialPairBudget": 64,
+    "maximumPairs": 128,
+    "maximumSafetyFailures": 0,
+    "minimumPairsBeforeDecision": 64,
+    "mode": "movetime",
+    "moveTimeMs": 1000,
+    "nullElo": 10,
+    "oneGameAtATime": true,
+    "pairsPerPhase": 32,
+    "pairsPerPhaseAndSideToMove": 16,
+    "promotionEValue": 20,
+    "resumePairBudget": 4
+  },
+  "generationId": "omega-nnue-king-state-v3",
+  "kind": "omega-nnue-king-state-v3-match-compatibility-protocol",
+  "profileId": "king-state-v3-deep-hce-v4",
+  "rulesOnlySampler": {
+    "captureSelectionPercent": 72,
+    "deterministicPrng": "SplitMix64",
+    "independentTrajectoriesPerPair": 2,
+    "maxPlies": 220,
+    "positionsPerPhaseAndSide": 2,
+    "trajectoryPairs": 4096
+  },
+  "schemaVersion": 1,
+  "seeds": {
+    "development": 2026072201,
+    "equal-node": 2026072202,
+    "equal-time": 2026072203
+  }
+}

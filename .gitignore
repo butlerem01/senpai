@@ -28,6 +28,12 @@
 *.out
 *.app
 
+# Reproducibility archive for the sealed generation-3 experiment.  These
+# binaries are intentionally versioned by exact content identity.
+!tools/omega_nnue/frozen_runtime/
+!tools/omega_nnue/frozen_runtime/**
+tools/omega_nnue/frozen_runtime/**/*.unused
+
 # Local Omega/MSVC build directories
 build-msvc/
 .build-*/

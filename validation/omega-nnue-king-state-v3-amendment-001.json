@@ -1,0 +1,184 @@
+{
+  "schemaVersion": 1,
+  "kind": "omega-nnue-king-state-v3-preregistration-amendment",
+  "amendmentId": "king-state-v3-amendment-001",
+  "profileId": "king-state-v3-deep-hce-v4",
+  "status": "target-free clarification frozen before generation-3 sampling and teacher labels",
+  "createdUtc": "2026-07-19T00:00:00Z",
+  "scope": {
+    "changesSeeds": false,
+    "changesQuotas": false,
+    "changesCandidateMatrix": false,
+    "changesThresholds": false,
+    "changesMatchSuites": false,
+    "changesHeldoutPolicy": false,
+    "purpose": "Remove implementation ambiguity in target-opaque corpus construction, initializer resolution, structural preflights, and exact QAT checkpoint ties."
+  },
+  "pinnedDeclarations": {
+    "preregistration": {
+      "path": "validation/omega-nnue-king-state-v3-preregistration.json",
+      "bytes": 33071,
+      "sha256": "7ed714f11e370bb183815bd597a58cce5090396d1b6fe1b0a07849994b48c10c"
+    },
+    "generation2OfflineIncident": {
+      "path": "validation/omega-nnue-king-state-v2-offline-incident.json",
+      "bytes": 22747,
+      "sha256": "df4b440ec625e3beb33735f3e89908c1414208f11d42a60944f8089075821678"
+    },
+    "phaseIncidenceImplementationAtAmendment": {
+      "path": "tools/omega_nnue/phase_incidence_preflight.py",
+      "bytes": 31219,
+      "sha256": "d58f1cb9150c79910c460dea7e95aefd2153e9ce3c8866cd2da3f5a953d591b9"
+    }
+  },
+  "canonicalPaths": {
+    "rulesOnlyRoots": "build-msvc/data-generation/deep-hce-v4-random-roots.jsonl",
+    "rulesOnlyManifest": "build-msvc/data-generation/deep-hce-v4-random-roots.jsonl.manifest.json",
+    "rulesOnlyFreeze": "build-msvc/data-generation/deep-hce-v4-random-roots.jsonl.freeze.json",
+    "generationDirectory": "build-msvc/data-generation/deep-hce-v4",
+    "deepFreeze": "build-msvc/data-generation/deep-hce-v4/deep-hce-v2.freeze.json",
+    "candidatePoolProjection": "build-msvc/data-generation/deep-hce-v4/phase-incidence-candidate-pool.jsonl",
+    "finalRootProjection": "build-msvc/data-generation/deep-hce-v4/phase-incidence-final-roots.jsonl",
+    "candidatePoolAudit": "build-msvc/data-generation/deep-hce-v4/phase-incidence-candidate-pool.seal.json",
+    "finalRootAudit": "build-msvc/data-generation/deep-hce-v4/phase-incidence-final-roots.seal.json",
+    "finalResidualAudit": "build-msvc/data-generation/deep-hce-v4/phase-incidence-preflight.seal.json",
+    "preclaimAudit": "build-msvc/data-generation/deep-hce-v4/phase-incidence-preclaim.seal.json",
+    "exclusionCatalog": "build-msvc/data-generation/deep-hce-v4/target-opaque-exclusion-catalog.json",
+    "featureAudit": "build-msvc/data-generation/deep-hce-v4/feature-only-prelabel-audit.json",
+    "candidatePoolUniquenessAudit": "build-msvc/data-generation/deep-hce-v4/candidate-pool-global-uniqueness-audit.json",
+    "initializerResolution": "build-msvc/data-generation/deep-hce-v4/generation3-initializer-resolution.seal.json",
+    "prelabelSeal": "build-msvc/data-generation/deep-hce-v4/king-state-v1-prelabel.seal.json",
+    "searchCorpus": "build-msvc/data-generation/deep-hce-v4/deep-hce-v2-search.jsonl",
+    "residualCorpus": "build-msvc/data-generation/deep-hce-v4/deep-hce-v2-residual.jsonl"
+  },
+  "freshTeacherClarifications": {
+    "sourcePolicy": {
+      "allowed": [
+        "the one canonical deterministic rules-only OmegaRootSampler JSONL and its pinned provenance companions"
+      ],
+      "historicalEventsAllowed": false,
+      "engineOrEvaluatorMayGenerateOrSelectRoots": false,
+      "engineOrEvaluatorMayInfluenceRootRank": false,
+      "engineOrEvaluatorMayInfluenceReplacementRank": false,
+      "abortIfAnyHistoricalOrEvaluativeSourceIsPresent": true
+    },
+    "fixedParameters": {
+      "samplerAndSelectorSeed": 2026072104,
+      "targetPairs": 8192,
+      "targetPairsPerPhase": 2048,
+      "reservePairsPerPhase": 128,
+      "teacherNodesPerRoot": 100000,
+      "preflightExtraPairsPerPhase": 64,
+      "preflightRejectedPairSanityCap": 32,
+      "maximumSelectedPairsPerTrajectory": 32,
+      "maximumSelectedPairsPerSplitGroup": 64,
+      "candidatePairsPerTrajectoryPerPhase": 64,
+      "acceptanceTimeoutSeconds": 5
+    }
+  },
+  "targetOpaqueExclusionClarification": {
+    "inventoryRule": "Before labels, recursively inventory every JSON and JSONL under every declared prior-artifact root, pin path, bytes, and SHA-256, and lexically decode only OFEN-family string values needed for conservative exact/symmetry exclusion.",
+    "decodedValueFields": [
+      "ofen",
+      "preofen",
+      "postofen",
+      "initialofen",
+      "finalofen"
+    ],
+    "allOtherValuesSkippedLexically": true,
+    "targetFieldsDecoded": 0,
+    "targetFieldsEmitted": 0,
+    "mandatoryCoverage": [
+      "every generation-1 corpus and manifest",
+      "every generation-2 corpus and manifest",
+      "every prior NNUE screen, confirmation, match, and regression position-bearing artifact",
+      "build-king-state-v2/readiness/history.positions.jsonl",
+      "every other JSON or JSONL discoverable under the declared prior roots at freeze time"
+    ],
+    "destinationDirectoryExcludedFromPriorInventory": true,
+    "freshRulesOnlySourceExcludedFromPriorInventoryAndPinnedSeparately": true,
+    "catalogMustMatchDeepFreezePinsExactly": true
+  },
+  "phaseIncidenceClarification": {
+    "implementation": "tools/omega_nnue/phase_incidence_preflight.py",
+    "splitSeed": 4989,
+    "trainPercent": 80,
+    "validationPercent": 10,
+    "heldoutPercent": 10,
+    "minimumGroupsPerObservedStratumPerSplit": 2,
+    "minimumAppliesSeparatelyTo": [
+      "train",
+      "validation",
+      "heldout"
+    ],
+    "requiredMoments": [
+      "candidate pool after protocol acceptance and before final primary/reserve partition is sealed",
+      "final primary root corpus before the pre-label seal",
+      "the same final corpus immediately before any heldout/offline access claim"
+    ],
+    "candidatePoolAndFinalChecksMayDecodeTargets": false,
+    "preclaimCheckMayDecodeTargets": false,
+    "phaseFieldDecoded": false,
+    "phaseDerivedFromOfen": true,
+    "failureAction": "Abort the whole generation. Do not change the sampler seed, split seed, quotas, reserve count, candidate list, candidate recipes, selector parameters, or thresholds and do not inspect targets to repair the failure."
+  },
+  "initializerClarification": {
+    "decisionMoment": "before any generation-3 teacher label exists",
+    "orderedRule": [
+      {
+        "priority": 1,
+        "initializer": "the exact validation-selected generation-2 K2 quantized network",
+        "requiredPublicEvidence": [
+          "the pinned generation-2 incident identifies K2 as the selected candidate",
+          "the immutable validation-selection seal pins K2",
+          "the selected K2 network and manifest match their incident-pinned identities",
+          "canonical deployment health, whole-corpus Python/C++ parity, file-format, and round-trip gates passed",
+          "generation 2 failed only after selection at the offline-strength stage",
+          "no network-attributable safety failure is recorded"
+        ]
+      },
+      {
+        "priority": 2,
+        "initializer": "the exact generation-2 K0 migrated quantized control",
+        "condition": "Any priority-1 public-evidence condition is absent, false, ambiguous, or identity-mismatched."
+      }
+    ],
+    "numericGeneration2TargetsOrMetricsMayBeRead": false,
+    "resolutionPinsNetworkAndManifestBeforeLabels": true,
+    "resolutionMayNotChangeAfterLabels": true
+  },
+  "qatCheckpointClarification": {
+    "eligibleEpochsInclusive": [
+      37,
+      48
+    ],
+    "withinCandidateRule": "Choose the eligible quantized checkpoint with the exact minimum preregistered validation loss.",
+    "exactTieRule": "If two or more eligible epochs have exactly equal validation loss, choose the earliest epoch.",
+    "relativeToleranceUsedForWithinCandidateTie": 0,
+    "candidateLevelNearTiePriorityUnchanged": [
+      "G3B",
+      "G3C",
+      "G3A"
+    ]
+  },
+  "abortSemantics": {
+    "beforeTeacherLabels": [
+      "declaration identity drift",
+      "noncanonical path or parameter",
+      "historical/evaluative root source",
+      "incomplete target-opaque exclusion inventory",
+      "initializer ambiguity or identity drift",
+      "candidate-pool phase-incidence failure",
+      "final-root phase-incidence failure",
+      "feature, king-bucket, exact-input, or conservative-orbit gate failure",
+      "pre-label seal verification failure"
+    ],
+    "afterTeacherLabels": [
+      "pinned identity drift",
+      "finalized-corpus phase-incidence or feature-gate failure",
+      "preclaim phase-incidence failure"
+    ],
+    "inProfileRepairAllowed": false,
+    "newGenerationRequiredAfterStructuralFailure": true
+  }
+}

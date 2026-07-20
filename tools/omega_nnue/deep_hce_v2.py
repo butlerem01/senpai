@@ -46,7 +46,6 @@ import re
 import shutil
 import statistics
 import subprocess
-import sys
 import tempfile
 import threading
 import time
@@ -94,6 +93,7 @@ HCE_OPTIONS = {
     "OwnBook": "false",
     "UCI_Chess960": "false",
     "UCI_Variant": "omega",
+    "OmegaNNUEFile": "<empty>",
     "UseOmegaNNUE": "false",
 }
 
@@ -932,22 +932,40 @@ def _sample(args: argparse.Namespace) -> None:
         raise FileNotFoundError(dotnet)
     if not project.is_file():
         raise FileNotFoundError(project)
-    subprocess.run(
-        [
-            str(dotnet),
-            "build",
-            str(project),
-            "-c",
-            "Release",
-            "--nologo",
-        ],
-        check=True,
+    supplied_assembly = getattr(args, "assembly", None)
+    managed_runner = getattr(args, "managed_runner", None)
+    if managed_runner is not None and not callable(managed_runner):
+        raise TypeError("managed root-sampler runner is not callable")
+    if managed_runner is not None and supplied_assembly is None:
+        raise ValueError(
+            "a pinned managed runner requires a supplied frozen assembly"
+        )
+    if supplied_assembly is None:
+        subprocess.run(
+            [
+                str(dotnet),
+                "build",
+                str(project),
+                "-c",
+                "Release",
+                "--nologo",
+            ],
+            check=True,
+        )
+        sampler = (
+            project.parent / "bin" / "Release" / "net10.0"
+            / "OmegaRootSampler.dll"
+        )
+    else:
+        sampler = _resolve(supplied_assembly)
+        if not sampler.is_file():
+            raise FileNotFoundError(sampler)
+    run_managed = (
+        managed_runner
+        if managed_runner is not None
+        else subprocess.run
     )
-    sampler = (
-        project.parent / "bin" / "Release" / "net10.0"
-        / "OmegaRootSampler.dll"
-    )
-    subprocess.run(
+    run_managed(
         [
             str(dotnet),
             str(sampler),
@@ -1440,7 +1458,20 @@ def _prepare(args: argparse.Namespace) -> Path:
     dotnet = _resolve(args.dotnet)
     if not dotnet.is_file():
         raise FileNotFoundError(dotnet)
-    validation_probe = subprocess.run(
+    managed_runner = getattr(args, "managed_runner", None)
+    if managed_runner is not None and not callable(managed_runner):
+        raise TypeError("managed OmegaMatch runner is not callable")
+    if (
+        getattr(args, "managed_runner_required", False)
+        and managed_runner is None
+    ):
+        raise ValueError("the frozen OmegaMatch runner is required")
+    run_managed = (
+        managed_runner
+        if managed_runner is not None
+        else subprocess.run
+    )
+    validation_probe = run_managed(
         [
             str(dotnet),
             str(harness),
@@ -3220,6 +3251,19 @@ def _synthetic_ofen(phase: str, flavor: str, stm: str, index: int) -> str:
 def _self_test() -> None:
     root = Path(tempfile.mkdtemp(prefix="omega-deep-hce-v2-selftest-"))
     try:
+        if HCE_OPTIONS != {
+            "Threads": "1",
+            "Hash": "128",
+            "Ponder": "false",
+            "OwnBook": "false",
+            "UCI_Chess960": "false",
+            "UCI_Variant": "omega",
+            "OmegaNNUEFile": "<empty>",
+            "UseOmegaNNUE": "false",
+        }:
+            raise AssertionError(
+                "teacher HCE option contract is not explicitly NNUE-empty"
+            )
         default_prepare = _parse_args(["prepare"])
         expected_rules_root = _default_paths()["sampled_roots"]
         if default_prepare.rules_only_root != [expected_rules_root]:
@@ -3627,6 +3671,14 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     sample.add_argument("--dotnet", type=Path, default=defaults["dotnet"])
     sample.add_argument("--project", type=Path, default=defaults["sampler_project"])
+    sample.add_argument(
+        "--assembly",
+        type=Path,
+        help=(
+            "execute an already frozen OmegaRootSampler.dll instead of "
+            "building the project"
+        ),
+    )
     sample.add_argument("--output", type=Path, default=defaults["sampled_roots"])
     sample.add_argument("--seed", type=int, default=DEFAULT_SEED)
     sample.add_argument("--trajectory-pairs", type=int, default=2048)

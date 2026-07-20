@@ -573,30 +573,51 @@ def _sample(args: argparse.Namespace) -> None:
     if not dotnet.is_file():
         raise FileNotFoundError(dotnet)
     runtime_dir = sampler_dir / "runtime"
-    sampler_assembly = runtime_dir / "OmegaRootSampler.dll"
-    if runtime_dir.exists():
-        raise FileExistsError(
-            f"refusing to replace isolated sampler runtime: {runtime_dir}"
+    supplied_assembly = getattr(args, "sampler_assembly", None)
+    managed_runner = getattr(args, "managed_runner", None)
+    if managed_runner is not None and not callable(managed_runner):
+        raise TypeError("managed root-sampler runner is not callable")
+    if managed_runner is not None and supplied_assembly is None:
+        raise ValueError(
+            "a pinned managed runner requires a supplied frozen assembly"
         )
-    build_command = [
-        str(dotnet),
-        "build",
-        str(project),
-        "-c",
-        "Release",
-        "--output",
-        str(runtime_dir),
-    ]
-    print(
-        " ".join(
-            f'"{item}"' if " " in item else item for item in build_command
+    if supplied_assembly is None:
+        sampler_assembly = runtime_dir / "OmegaRootSampler.dll"
+        if runtime_dir.exists():
+            raise FileExistsError(
+                "refusing to replace isolated sampler runtime: "
+                f"{runtime_dir}"
+            )
+        build_command = [
+            str(dotnet),
+            "build",
+            str(project),
+            "-c",
+            "Release",
+            "--output",
+            str(runtime_dir),
+        ]
+        print(
+            " ".join(
+                f'"{item}"' if " " in item else item
+                for item in build_command
+            )
         )
+        subprocess.run(build_command, check=True)
+        if not sampler_assembly.is_file():
+            raise FileNotFoundError(
+                "isolated sampler build did not produce "
+                f"{sampler_assembly}"
+            )
+    else:
+        sampler_assembly = _resolve(supplied_assembly)
+        if not sampler_assembly.is_file():
+            raise FileNotFoundError(sampler_assembly)
+    run_managed = (
+        managed_runner
+        if managed_runner is not None
+        else subprocess.run
     )
-    subprocess.run(build_command, check=True)
-    if not sampler_assembly.is_file():
-        raise FileNotFoundError(
-            f"isolated sampler build did not produce {sampler_assembly}"
-        )
     for gate, spec in GATE_SPECS.items():
         output = sampler_dir / SOURCE_NAMES[gate]
         manifest = Path(str(output) + ".manifest.json")
@@ -619,7 +640,7 @@ def _sample(args: argparse.Namespace) -> None:
             str(SAMPLER_CAPTURE_PERCENT),
         ]
         print(" ".join(f'"{item}"' if " " in item else item for item in command))
-        subprocess.run(command, check=True)
+        run_managed(command, check=True)
 
 
 def _verify_sampler_source(path: Path, gate: str) -> tuple[list[Root], dict[str, Any]]:
@@ -998,6 +1019,7 @@ def _match_config(
         {"OmegaNNUEFile": str(_resolve(Path(network["path"]))), "UseOmegaNNUE": "true"}
     )
     hce_options = dict(ENGINE_OPTIONS)
+    hce_options["OmegaNNUEFile"] = "<empty>"
     hce_options["UseOmegaNNUE"] = "false"
     match: dict[str, Any] = {
         "engineA": "nnue-candidate",
@@ -1036,7 +1058,15 @@ def _match_config(
         "kingStateMatchExecution": {
             "oneGameAtATime": True,
             "maximumConcurrentGames": 1,
+            "pairBudgetRequired": True,
             "pairBudgetMustBeMultipleOf": 4,
+            "initialPairBudget": (
+                spec["roots"]
+                if gate == "development"
+                else MINIMUM_GATE_PAIRS
+            ),
+            "resumePairBudget": 4,
+            "executionOnlyThroughAdapterLaunch": True,
             "idleMachineRequired": gate == "equal-time",
         },
         "engines": [
@@ -1596,15 +1626,43 @@ def _verify_config(
     hce_options = hce.get("options")
     if not isinstance(candidate_options, dict) or not isinstance(hce_options, dict):
         raise ValueError(f"{config_path}: malformed engine options")
+    expected_candidate_keys = set(ENGINE_OPTIONS) | {
+        "OmegaNNUEFile",
+        "UseOmegaNNUE",
+    }
+    if set(candidate_options) != expected_candidate_keys:
+        raise ValueError(
+            f"{config_path}: candidate engine option inventory changed"
+        )
+    expected_hce_options = {
+        **ENGINE_OPTIONS,
+        "OmegaNNUEFile": "<empty>",
+        "UseOmegaNNUE": "false",
+    }
+    if hce_options != expected_hce_options:
+        raise ValueError(
+            f"{config_path}: HCE control option contract changed"
+        )
     for key, wanted in ENGINE_OPTIONS.items():
-        if candidate_options.get(key) != wanted or hce_options.get(key) != wanted:
+        if candidate_options.get(key) != wanted:
             raise ValueError(f"{config_path}: engine option {key} changed")
     if candidate_options.get("UseOmegaNNUE") != "true":
         raise ValueError(f"{config_path}: candidate NNUE is not active")
-    if hce_options.get("UseOmegaNNUE") != "false":
-        raise ValueError(f"{config_path}: HCE control is not isolated")
+    candidate_file = candidate_options.get("OmegaNNUEFile")
+    if (
+        not isinstance(candidate_file, str)
+        or not candidate_file.strip()
+        or candidate_file.casefold() == "<empty>"
+    ):
+        raise ValueError(
+            f"{config_path}: candidate NNUE file is not explicit"
+        )
     if candidate.get("expectedAssetSha256", {}).get("OmegaNNUEFile") != candidate_sha:
         raise ValueError(f"{config_path}: candidate network pin mismatch")
+    if hce.get("expectedAssetSha256") not in (None, {}):
+        raise ValueError(
+            f"{config_path}: HCE control unexpectedly pins an NNUE asset"
+        )
     gate_spec = match.get("sequentialGate")
     if not isinstance(gate_spec, dict):
         raise ValueError(f"{config_path}: missing sequential gate")
@@ -1618,7 +1676,21 @@ def _verify_config(
     if gate_spec != expected_gate:
         raise ValueError(f"{config_path}: sequential gate changed")
     execution = config.get("kingStateMatchExecution")
-    if not isinstance(execution, dict) or execution.get("oneGameAtATime") is not True:
+    expected_execution = {
+        "oneGameAtATime": True,
+        "maximumConcurrentGames": 1,
+        "pairBudgetRequired": True,
+        "pairBudgetMustBeMultipleOf": 4,
+        "initialPairBudget": (
+            spec["roots"]
+            if gate == "development"
+            else MINIMUM_GATE_PAIRS
+        ),
+        "resumePairBudget": 4,
+        "executionOnlyThroughAdapterLaunch": True,
+        "idleMachineRequired": gate == "equal-time",
+    }
+    if execution != expected_execution:
         raise ValueError(f"{config_path}: serialized execution contract missing")
     return config
 
@@ -1928,7 +2000,15 @@ def _assess(args: argparse.Namespace) -> dict[str, Any]:
         for option, wanted in sealed_engine["options"].items():
             actual = _field(runtime_options, option)
             if option == "OmegaNNUEFile":
-                if _resolve(Path(str(actual))) != _resolve(Path(str(wanted))):
+                if str(wanted).casefold() == "<empty>":
+                    if str(actual).casefold() != "<empty>":
+                        raise ValueError(
+                            f"run record {engine_id} option {option} "
+                            "is not explicitly empty"
+                        )
+                elif _resolve(Path(str(actual))) != _resolve(
+                    Path(str(wanted))
+                ):
                     raise ValueError(
                         f"run record {engine_id} option {option} changed"
                     )
@@ -1937,6 +2017,34 @@ def _assess(args: argparse.Namespace) -> dict[str, Any]:
     candidate_runtime = engines_by_id["nnue-candidate"]
     if _field(candidate_runtime, "OmegaNnueActiveVerified") is not True:
         raise ValueError("run record did not verify active Omega NNUE evaluation")
+    candidate_diagnostics = _field(
+        candidate_runtime, "StartupDiagnostics"
+    )
+    if (
+        not isinstance(candidate_diagnostics, list)
+        or any(not isinstance(item, str) for item in candidate_diagnostics)
+    ):
+        raise ValueError(
+            "run record is missing candidate startup diagnostics"
+        )
+    candidate_nnue_diagnostics = [
+        item
+        for item in candidate_diagnostics
+        if item.startswith("info string Omega NNUE")
+    ]
+    if (
+        not any(
+            item.startswith("info string Omega NNUE loaded:")
+            for item in candidate_nnue_diagnostics
+        )
+        or not candidate_nnue_diagnostics
+        or candidate_nnue_diagnostics[-1]
+        != "info string Omega NNUE evaluation active"
+    ):
+        raise ValueError(
+            "run record candidate startup diagnostics do not prove "
+            "loaded and active Omega NNUE"
+        )
     assets = _field(candidate_runtime, "ExternalAssets")
     if not isinstance(assets, list):
         raise ValueError("run record is missing the candidate network identity")
@@ -1950,6 +2058,46 @@ def _assess(args: argparse.Namespace) -> dict[str, Any]:
         _field(network_assets[0], "Sha256", "")
     ).lower() != str(seal["candidateNetworkSha256"]).lower():
         raise ValueError("run record candidate network hash mismatch")
+    control_runtime = engines_by_id["hce-control"]
+    if _field(control_runtime, "OmegaNnueActiveVerified") is not False:
+        raise ValueError(
+            "run record HCE control does not explicitly prove inactive "
+            "Omega NNUE"
+        )
+    if _field(control_runtime, "ExternalAssets") != []:
+        raise ValueError(
+            "run record HCE control unexpectedly loaded an external asset"
+        )
+    control_diagnostics = _field(control_runtime, "StartupDiagnostics")
+    if (
+        not isinstance(control_diagnostics, list)
+        or any(not isinstance(item, str) for item in control_diagnostics)
+    ):
+        raise ValueError(
+            "run record is missing HCE-control startup diagnostics"
+        )
+    control_nnue_diagnostics = [
+        item
+        for item in control_diagnostics
+        if item.startswith("info string Omega NNUE")
+    ]
+    if (
+        not control_nnue_diagnostics
+        or control_nnue_diagnostics[-1]
+        != (
+            "info string Omega NNUE disabled; handcrafted "
+            "evaluation active"
+        )
+        or any(
+            item.startswith("info string Omega NNUE loaded:")
+            or item == "info string Omega NNUE evaluation active"
+            for item in control_nnue_diagnostics
+        )
+    ):
+        raise ValueError(
+            "run record HCE-control startup diagnostics do not prove "
+            "handcrafted-only evaluation"
+        )
 
     results_all = [
         record
@@ -2628,6 +2776,13 @@ def _write_synthetic_events(
                             "Sha256": seal["candidateNetworkSha256"],
                         }
                     ],
+                    "StartupDiagnostics": [
+                        (
+                            "info string Omega NNUE loaded: synthetic "
+                            "king-state network"
+                        ),
+                        "info string Omega NNUE evaluation active",
+                    ],
                     "OmegaNnueActiveVerified": True,
                 },
                 {
@@ -2635,6 +2790,13 @@ def _write_synthetic_events(
                     "Sha256": hce_spec["expectedSha256"],
                     "Options": hce_spec["options"],
                     "ExternalAssets": [],
+                    "StartupDiagnostics": [
+                        "info string Omega NNUE disabled",
+                        (
+                            "info string Omega NNUE disabled; "
+                            "handcrafted evaluation active"
+                        ),
+                    ],
                     "OmegaNnueActiveVerified": False,
                 },
             ],
@@ -2849,6 +3011,46 @@ def _self_test() -> None:
         )
         seal_path = _seal(args, default_exclusions=False)
         seal = _verify_seal(seal_path)
+        development_entry = seal["gates"]["development"]
+        development_config_path = Path(
+            str(development_entry["config"]["path"])
+        )
+        development_config = _load_object(development_config_path)
+        development_control = development_config["engines"][1]
+        if development_control["options"].get(
+            "OmegaNNUEFile"
+        ) != "<empty>":
+            raise AssertionError(
+                "sealed HCE control did not transmit an explicit empty "
+                "OmegaNNUEFile"
+            )
+        for ordinal, replacement in enumerate((None, "", "candidate.nnue")):
+            mutated = copy.deepcopy(development_config)
+            control_options = mutated["engines"][1]["options"]
+            if replacement is None:
+                control_options.pop("OmegaNNUEFile")
+            else:
+                control_options["OmegaNNUEFile"] = replacement
+            mutated_path = root / (
+                f"mutated-hce-control-{ordinal}.json"
+            )
+            _exclusive_json(mutated_path, mutated)
+            try:
+                _verify_config(
+                    "development",
+                    mutated_path,
+                    development_entry["suite"],
+                    str(seal["candidateNetworkSha256"]),
+                    str(seal["engineExecutableSha256"]),
+                    str(seal["omegaMatchAssemblySha256"]),
+                    str(seal["omegaMatchBundle"]["sha256"]),
+                )
+            except ValueError:
+                pass
+            else:
+                raise AssertionError(
+                    "non-explicit HCE NNUE-file control was accepted"
+                )
         suites = [
             Path(str(seal["gates"][gate]["suite"]["path"])) for gate in GATE_SPECS
         ]
@@ -2876,6 +3078,69 @@ def _self_test() -> None:
         )
         if development_report["developmentScreen"]["decision"] != "pass":
             raise AssertionError("synthetic development assessment did not pass")
+        for mutation_name in (
+            "control-external-asset",
+            "control-active-flag",
+            "control-active-diagnostic",
+            "candidate-missing-diagnostics",
+        ):
+            mutated_records = copy.deepcopy(
+                _event_records(development_events)
+            )
+            mutated_run = next(
+                record
+                for record in mutated_records
+                if _field(record, "RecordType") == "run"
+            )
+            mutated_engines = {
+                str(_field(engine, "Id")): engine
+                for engine in mutated_run["Engines"]
+            }
+            if mutation_name == "control-external-asset":
+                mutated_engines["hce-control"]["ExternalAssets"] = [
+                    {
+                        "OptionName": "OmegaNNUEFile",
+                        "Path": "forbidden.nnue",
+                        "Sha256": "0" * 64,
+                    }
+                ]
+            elif mutation_name == "control-active-flag":
+                mutated_engines["hce-control"][
+                    "OmegaNnueActiveVerified"
+                ] = True
+            elif mutation_name == "control-active-diagnostic":
+                mutated_engines["hce-control"]["StartupDiagnostics"] = [
+                    "info string Omega NNUE loaded: forbidden.nnue",
+                    "info string Omega NNUE evaluation active",
+                ]
+            else:
+                mutated_engines["nnue-candidate"].pop(
+                    "StartupDiagnostics"
+                )
+            mutated_events = (
+                root / f"{mutation_name}-events.jsonl"
+            )
+            _write_event_records(mutated_events, mutated_records)
+            try:
+                _assess(
+                    argparse.Namespace(
+                        seal=seal_path,
+                        gate="development",
+                        events=mutated_events,
+                        output=(
+                            root
+                            / f"{mutation_name}-assessment.json"
+                        ),
+                        idle_attestation=None,
+                    )
+                )
+            except ValueError:
+                pass
+            else:
+                raise AssertionError(
+                    f"unsafe engine runtime proof accepted: "
+                    f"{mutation_name}"
+                )
 
         time_events = root / "equal-time-events.jsonl"
         _write_synthetic_events(
@@ -3191,6 +3456,14 @@ def _parse_args() -> argparse.Namespace:
     sample.add_argument("--dotnet", required=True, type=Path)
     sample.add_argument(
         "--sampler-project", type=Path, default=_sampler_project_path()
+    )
+    sample.add_argument(
+        "--sampler-assembly",
+        type=Path,
+        help=(
+            "execute an already frozen OmegaRootSampler.dll instead of "
+            "building the project"
+        ),
     )
     sample.add_argument("--protocol", type=Path, default=_protocol_path())
 
