@@ -1,6 +1,7 @@
 # Keep identity-pinned generation-3 text byte-stable on every checkout.
 /.gitattributes text eol=lf
 /.gitignore text eol=lf
+/NNUE.md text eol=lf
 /tools/omega_nnue/** text=auto eol=lf
 /validation/omega-nnue-king-state-v3-*.json text eol=lf
 /validation/omega-nnue-king-state-v4-*.json text eol=lf

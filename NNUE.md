@@ -15,24 +15,30 @@ The v0 milestone includes:
 - deterministic C++ and UCI regression coverage; and
 - a Python-to-C++ parity gate for exported networks.
 
-The implementation intentionally recomputes both feature accumulators at each
-evaluation. That keeps the first version easy to verify. Incremental
-make/unmake updates and SIMD are performance work for a later milestone.
-This also avoids a subtle state-aliasing bug: `Pos::key()` does not include the
-halfmove clock, while architecture `3` does. A future accumulator cache must
-identify entries by network generation, position pointer, position key, and
-halfmove bin (the pointer is only a lookup aid, never sufficient identity).
-It must invalidate on null moves because they clear en passant and advance
-the clock. Parent traversal must reject self/cyclic parent links before any
-delta walk.
+The Generation 6 runtime uses an exact thread-local incremental accumulator
+cache. A position address is only a bounded-cache lookup hint: every entry
+also carries the immutable network generation and an exact position snapshot,
+including all 16 `(side, piece)` bitboards, castling and en-passant state,
+side to move, position key, and halfmove clock. A successful network reload is
+therefore a hard cache miss, and positions whose keys alias while their clocks
+differ cannot share an accumulator.
 
-The safe incremental update is to diff all 16 `(side, piece)` bitboards, which
-covers ordinary moves, captures, promotions, castling, en passant, and
-detached corners, then diff the global castling/EP/clock/phase feature sets.
-When a perspective's friendly king changes bucket, rebuild that perspective's
-piece features; the other perspective may still use deltas. These constraints
-are documented now, but incremental accumulators themselves are deliberately
-deferred until the full-refresh architecture has strength evidence.
+An update diffs all 16 bitboards, which covers ordinary moves, captures,
+promotions, castling, en passant, and detached corners. Castling, EP, clock,
+phase, and all architecture-4 categorical rows are independently recomputed
+and diffed without relying on the move type. When a perspective's friendly
+king changes bucket, that perspective's piece rows are rebuilt; the other
+perspective still uses bitboard deltas. Null moves consequently update EP and
+clock rows even though no piece changed. Only one cached parent snapshot is
+considered, raw parent pointers are never dereferenced, and visible self/two-
+node cycles fall back to a full refresh.
+
+The full-refresh implementation remains the oracle and production fallback.
+Targeted tests request both paths, compare every accumulator lane before dense
+inference, and use the full accumulator if a diagnostic mismatch is ever
+observed. The `OMNNUE1` file format, architecture-4 feature map, quantized
+inference, and predictions are unchanged; SIMD remains future performance
+work.
 
 ## Network
 

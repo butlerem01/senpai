@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <climits>
 #include <cstddef>
 #include <cstdint>
@@ -26,6 +27,7 @@ const unsigned char Magic[8] {
 
 const std::uint64_t FNV_Offset { 14695981039346656037ULL };
 const std::uint64_t FNV_Prime  { 1099511628211ULL };
+std::atomic<std::uint64_t> Next_Network_Generation { 1ULL };
 
 class Byte_Reader {
 public:
@@ -220,6 +222,7 @@ const Empty_Board_Leaper_Distances & empty_board_leaper_distances() {
 
 struct Runtime_Network::Network_Data {
    std::string path;
+   std::uint64_t generation;
    std::uint32_t architecture;
    std::uint32_t feature_count;
    bool residual_correction;
@@ -232,6 +235,7 @@ struct Runtime_Network::Network_Data {
 
    Network_Data()
       : path(),
+        generation(0),
         architecture(format::Architecture_Absolute),
         feature_count(format::Feature_Count),
         residual_correction(false),
@@ -526,65 +530,17 @@ int castling_feature(bool own, bool right_of_king) {
    return int(Occupancy_Features) + relation * 2 + flank;
 }
 
-void active_features(
+namespace {
+
+void append_non_piece_features(
    const Pos & pos,
    Side perspective,
    std::vector<int> & output,
    std::uint32_t architecture
 ) {
-   output.clear();
-   output.reserve(68);
-
-   assert(perspective == White || perspective == Black);
-   if (perspective != White && perspective != Black) return;
-   assert(architecture == Architecture_Absolute
-       || architecture == Architecture_Residual
-       || architecture == Architecture_King_State_Residual
-       || architecture == Architecture_Omega_Interaction_Residual);
-   if (architecture != Architecture_Absolute
-    && architecture != Architecture_Residual
-    && architecture != Architecture_King_State_Residual
-    && architecture != Architecture_Omega_Interaction_Residual) return;
-
    const bool king_state =
       architecture == Architecture_King_State_Residual
       || architecture == Architecture_Omega_Interaction_Residual;
-
-   int bucket = -1;
-   if (king_state) {
-      const Bit kings = pos.pieces(King, perspective);
-      assert(bit::count(kings) == 1);
-      if (bit::count(kings) != 1) return;
-      bucket = king_bucket(bit::first(kings), perspective);
-      assert(bucket >= 0 && bucket < int(King_Bucket_Count));
-   }
-
-   for (int s = 0; s < Side_Size; ++s) {
-      const Side piece_side = side_make(s);
-
-      for (int p = 0; p < Piece_Size; ++p) {
-         const Piece pc = piece_make(p);
-
-         for (Bit pieces = pos.pieces(pc, piece_side);
-              pieces != 0;
-              pieces = bit::rest(pieces)) {
-            const int feature =
-               king_state
-               ? king_state_piece_feature(
-                    pc, piece_side, bit::first(pieces), perspective, bucket
-                 )
-               : piece_feature(
-                    pc, piece_side, bit::first(pieces), perspective
-                 );
-            const int occupancy_limit =
-               king_state
-               ? int(King_State_Occupancy_Features)
-               : int(Occupancy_Features);
-            assert(feature >= 0 && feature < occupancy_limit);
-            if (feature >= 0) output.push_back(feature);
-         }
-      }
-   }
 
    for (int s = 0; s < Side_Size; ++s) {
       const Side castling_side = side_make(s);
@@ -645,7 +601,449 @@ void active_features(
    }
 }
 
+void active_non_piece_features(
+   const Pos & pos,
+   Side perspective,
+   std::vector<int> & output,
+   std::uint32_t architecture
+) {
+   output.clear();
+   output.reserve(24U);
+   append_non_piece_features(pos, perspective, output, architecture);
+}
+
+} // namespace
+
+void active_features(
+   const Pos & pos,
+   Side perspective,
+   std::vector<int> & output,
+   std::uint32_t architecture
+) {
+   output.clear();
+   output.reserve(68);
+
+   assert(perspective == White || perspective == Black);
+   if (perspective != White && perspective != Black) return;
+   assert(architecture == Architecture_Absolute
+       || architecture == Architecture_Residual
+       || architecture == Architecture_King_State_Residual
+       || architecture == Architecture_Omega_Interaction_Residual);
+   if (architecture != Architecture_Absolute
+    && architecture != Architecture_Residual
+    && architecture != Architecture_King_State_Residual
+    && architecture != Architecture_Omega_Interaction_Residual) return;
+
+   const bool king_state =
+      architecture == Architecture_King_State_Residual
+      || architecture == Architecture_Omega_Interaction_Residual;
+
+   int bucket = -1;
+   if (king_state) {
+      const Bit kings = pos.pieces(King, perspective);
+      assert(bit::count(kings) == 1);
+      if (bit::count(kings) != 1) return;
+      bucket = king_bucket(bit::first(kings), perspective);
+      assert(bucket >= 0 && bucket < int(King_Bucket_Count));
+   }
+
+   for (int s = 0; s < Side_Size; ++s) {
+      const Side piece_side = side_make(s);
+
+      for (int p = 0; p < Piece_Size; ++p) {
+         const Piece pc = piece_make(p);
+
+         for (Bit pieces = pos.pieces(pc, piece_side);
+              pieces != 0;
+              pieces = bit::rest(pieces)) {
+            const int feature =
+               king_state
+               ? king_state_piece_feature(
+                    pc, piece_side, bit::first(pieces), perspective, bucket
+                 )
+               : piece_feature(
+                    pc, piece_side, bit::first(pieces), perspective
+                 );
+            const int occupancy_limit =
+               king_state
+               ? int(King_State_Occupancy_Features)
+               : int(Occupancy_Features);
+            assert(feature >= 0 && feature < occupancy_limit);
+            if (feature >= 0) output.push_back(feature);
+         }
+      }
+   }
+
+   append_non_piece_features(pos, perspective, output, architecture);
+}
+
 } // namespace format
+
+Evaluation_Trace::Evaluation_Trace()
+   : cache_hit(false),
+     incremental_parent(false),
+     full_refresh(false),
+     oracle_checked(false),
+     oracle_match(false),
+     perspective_rebuilt { false, false },
+     piece_rows_removed { 0U, 0U },
+     piece_rows_added { 0U, 0U },
+     categorical_rows_removed { 0U, 0U },
+     categorical_rows_added { 0U, 0U } {
+}
+
+namespace {
+
+using Accumulator = std::array<
+   std::array<std::int32_t, format::Accumulator_Size>, Side_Size
+>;
+
+// Architecture 4 has at most four castling rows, two en-passant rows, one
+// clock row, one phase row, and sixteen Omega interaction rows.  A little
+// spare room makes a contract violation a cache miss rather than an overrun.
+const std::size_t Cached_Categorical_Capacity { 32U };
+
+struct Cached_Features {
+   std::array<int, Cached_Categorical_Capacity> rows;
+   std::size_t size;
+
+   Cached_Features() : rows(), size(0U) {
+   }
+
+   bool assign(const std::vector<int> & source) {
+      if (source.size() > rows.size()) {
+         size = 0U;
+         return false;
+      }
+      size = source.size();
+      std::copy(source.begin(), source.end(), rows.begin());
+      return true;
+   }
+
+   bool has(int feature) const {
+      return std::find(rows.begin(), rows.begin() + size, feature)
+          != rows.begin() + size;
+   }
+};
+
+struct Accumulator_Cache_Entry {
+   bool valid;
+   const Pos * identity;
+   std::uint64_t network_generation;
+   Pos snapshot;
+   Accumulator accumulator;
+   Cached_Features categorical[Side_Size];
+   int king_bucket[Side_Size];
+
+   Accumulator_Cache_Entry()
+      : valid(false),
+        identity(nullptr),
+        network_generation(0ULL),
+        snapshot(),
+        accumulator(),
+        categorical(),
+        king_bucket { -1, -1 } {
+   }
+};
+
+const std::size_t Accumulator_Cache_Size { 128U };
+
+struct Accumulator_Cache {
+   std::array<Accumulator_Cache_Entry, Accumulator_Cache_Size> entry;
+};
+
+Accumulator_Cache & accumulator_cache() {
+   static thread_local Accumulator_Cache cache;
+   return cache;
+}
+
+std::size_t accumulator_cache_index(
+   const Pos * identity,
+   std::uint64_t generation
+) {
+   const std::uintptr_t address =
+      reinterpret_cast<std::uintptr_t>(identity);
+   const std::uint64_t mixed =
+      std::uint64_t(address >> 4)
+      ^ (generation * 0x9E3779B97F4A7C15ULL);
+   return std::size_t(mixed & (Accumulator_Cache_Size - 1U));
+}
+
+Accumulator_Cache_Entry * find_cache_entry(
+   const Pos * identity,
+   std::uint64_t generation
+) {
+   Accumulator_Cache_Entry & entry = accumulator_cache().entry[
+      accumulator_cache_index(identity, generation)
+   ];
+   if (!entry.valid
+    || entry.identity != identity
+    || entry.network_generation != generation) {
+      return nullptr;
+   }
+   return &entry;
+}
+
+bool same_nnue_state(const Pos & left, const Pos & right) {
+   if (left.key() != right.key()
+    || left.turn() != right.turn()
+    || left.halfmove_clock() != right.halfmove_clock()
+    || left.ep_squares() != right.ep_squares()) {
+      return false;
+   }
+   for (int s = 0; s < Side_Size; ++s) {
+      const Side side = side_make(s);
+      if (left.castling_rooks(side) != right.castling_rooks(side)) {
+         return false;
+      }
+      for (int p = 0; p < Piece_Size; ++p) {
+         const Piece piece = piece_make(p);
+         if (left.pieces(piece, side) != right.pieces(piece, side)) {
+            return false;
+         }
+      }
+   }
+   return true;
+}
+
+bool is_king_state_architecture(std::uint32_t architecture) {
+   return architecture == format::Architecture_King_State_Residual
+       || architecture == format::Architecture_Omega_Interaction_Residual;
+}
+
+int perspective_king_bucket(
+   const Pos & pos,
+   Side perspective,
+   std::uint32_t architecture
+) {
+   if (!is_king_state_architecture(architecture)) return -1;
+   const Bit kings = pos.pieces(King, perspective);
+   assert(bit::count(kings) == 1);
+   if (bit::count(kings) != 1) return -1;
+   return format::king_bucket(bit::first(kings), perspective);
+}
+
+int occupancy_feature(
+   Piece piece,
+   Side piece_side,
+   Square square,
+   Side perspective,
+   std::uint32_t architecture,
+   int bucket
+) {
+   return is_king_state_architecture(architecture)
+      ? format::king_state_piece_feature(
+           piece, piece_side, square, perspective, bucket
+        )
+      : format::piece_feature(piece, piece_side, square, perspective);
+}
+
+void apply_feature_row(
+   std::array<std::int32_t, format::Accumulator_Size> & accumulator,
+   const std::vector<std::int16_t> & weights,
+   std::uint32_t feature_count,
+   int feature,
+   int sign
+) {
+   assert(feature >= 0 && feature < int(feature_count));
+   assert(sign == -1 || sign == +1);
+   if (feature < 0 || feature >= int(feature_count)) return;
+   const std::size_t offset =
+      std::size_t(feature) * format::Accumulator_Size;
+   for (std::size_t lane = 0; lane < format::Accumulator_Size; ++lane) {
+      accumulator[lane] +=
+         std::int32_t(sign) * std::int32_t(weights[offset + lane]);
+   }
+}
+
+bool build_full_accumulator(
+   const Pos & pos,
+   std::uint32_t architecture,
+   std::uint32_t feature_count,
+   const std::array<std::int16_t, format::Accumulator_Size> & bias,
+   const std::vector<std::int16_t> & weights,
+   Accumulator & result,
+   Cached_Features categorical[Side_Size],
+   int king_bucket[Side_Size]
+) {
+   static thread_local std::vector<int> features;
+   if (features.capacity() < Cached_Categorical_Capacity) {
+      features.reserve(Cached_Categorical_Capacity);
+   }
+
+   for (int view = 0; view < Side_Size; ++view) {
+      const Side perspective = side_make(view);
+      for (std::size_t lane = 0;
+           lane < format::Accumulator_Size;
+           ++lane) {
+         result[view][lane] = bias[lane];
+      }
+      king_bucket[view] = perspective_king_bucket(
+         pos, perspective, architecture
+      );
+      if (is_king_state_architecture(architecture)
+       && king_bucket[view] < 0) {
+         return false;
+      }
+
+      for (int s = 0; s < Side_Size; ++s) {
+         const Side piece_side = side_make(s);
+         for (int p = 0; p < Piece_Size; ++p) {
+            const Piece piece = piece_make(p);
+            for (Bit pieces = pos.pieces(piece, piece_side);
+                 pieces != 0;
+                 pieces = bit::rest(pieces)) {
+               apply_feature_row(
+                  result[view], weights, feature_count,
+                  occupancy_feature(
+                     piece, piece_side, bit::first(pieces), perspective,
+                     architecture, king_bucket[view]
+                  ),
+                  +1
+               );
+            }
+         }
+      }
+
+      format::active_non_piece_features(
+         pos, perspective, features, architecture
+      );
+      if (!categorical[view].assign(features)) return false;
+      for (int feature : features) {
+         apply_feature_row(
+            result[view], weights, feature_count, feature, +1
+         );
+      }
+   }
+   return true;
+}
+
+bool build_incremental_accumulator(
+   const Accumulator_Cache_Entry & source,
+   const Pos & pos,
+   std::uint32_t architecture,
+   std::uint32_t feature_count,
+   const std::vector<std::int16_t> & weights,
+   Accumulator & result,
+   Cached_Features categorical[Side_Size],
+   int king_bucket[Side_Size],
+   Evaluation_Trace * trace
+) {
+   static thread_local std::vector<int> features;
+   if (features.capacity() < Cached_Categorical_Capacity) {
+      features.reserve(Cached_Categorical_Capacity);
+   }
+   result = source.accumulator;
+
+   for (int view = 0; view < Side_Size; ++view) {
+      const Side perspective = side_make(view);
+      king_bucket[view] = perspective_king_bucket(
+         pos, perspective, architecture
+      );
+      if (is_king_state_architecture(architecture)
+       && king_bucket[view] < 0) {
+         return false;
+      }
+
+      const bool rebuild = is_king_state_architecture(architecture)
+                        && source.king_bucket[view]
+                           != king_bucket[view];
+      if (trace != nullptr) trace->perspective_rebuilt[view] = rebuild;
+
+      for (int s = 0; s < Side_Size; ++s) {
+         const Side piece_side = side_make(s);
+         for (int p = 0; p < Piece_Size; ++p) {
+            const Piece piece = piece_make(p);
+            const Bit previous = source.snapshot.pieces(piece, piece_side);
+            const Bit current = pos.pieces(piece, piece_side);
+            const Bit removed = rebuild ? previous : previous & ~current;
+            const Bit added = rebuild ? current : current & ~previous;
+
+            for (Bit rows = removed; rows != 0; rows = bit::rest(rows)) {
+               apply_feature_row(
+                  result[view], weights, feature_count,
+                  occupancy_feature(
+                     piece, piece_side, bit::first(rows), perspective,
+                     architecture, source.king_bucket[view]
+                  ),
+                  -1
+               );
+               if (trace != nullptr) ++trace->piece_rows_removed[view];
+            }
+            for (Bit rows = added; rows != 0; rows = bit::rest(rows)) {
+               apply_feature_row(
+                  result[view], weights, feature_count,
+                  occupancy_feature(
+                     piece, piece_side, bit::first(rows), perspective,
+                     architecture, king_bucket[view]
+                  ),
+                  +1
+               );
+               if (trace != nullptr) ++trace->piece_rows_added[view];
+            }
+         }
+      }
+
+      // Castling, en-passant, clock, phase, and all sixteen architecture-4
+      // interaction categories are independently recomputed.  Only changed
+      // rows touch the accumulator, but no move-type assumptions are made.
+      format::active_non_piece_features(
+         pos, perspective, features, architecture
+      );
+      if (!categorical[view].assign(features)) return false;
+      for (std::size_t i = 0; i < source.categorical[view].size; ++i) {
+         const int feature = source.categorical[view].rows[i];
+         if (!categorical[view].has(feature)) {
+            apply_feature_row(
+               result[view], weights, feature_count, feature, -1
+            );
+            if (trace != nullptr) {
+               ++trace->categorical_rows_removed[view];
+            }
+         }
+      }
+      for (std::size_t i = 0; i < categorical[view].size; ++i) {
+         const int feature = categorical[view].rows[i];
+         if (!source.categorical[view].has(feature)) {
+            apply_feature_row(
+               result[view], weights, feature_count, feature, +1
+            );
+            if (trace != nullptr) {
+               ++trace->categorical_rows_added[view];
+            }
+         }
+      }
+   }
+   return true;
+}
+
+bool same_accumulator(const Accumulator & left, const Accumulator & right) {
+   return left == right;
+}
+
+void store_cache_entry(
+   const Pos & pos,
+   std::uint64_t generation,
+   const Accumulator & accumulator,
+   const Cached_Features categorical[Side_Size],
+   const int king_bucket[Side_Size]
+) {
+   Accumulator_Cache_Entry & entry = accumulator_cache().entry[
+      accumulator_cache_index(&pos, generation)
+   ];
+   entry.valid = false;
+   entry.identity = &pos;
+   entry.network_generation = generation;
+   entry.snapshot = pos;
+   entry.accumulator = accumulator;
+   for (int view = 0; view < Side_Size; ++view) {
+      entry.categorical[view] = categorical[view];
+      entry.king_bucket[view] = king_bucket[view];
+   }
+   entry.valid = true;
+}
+
+} // namespace
 
 Runtime_Network::Runtime_Network() : p_network() {
 }
@@ -883,6 +1281,15 @@ Configure_Result Runtime_Network::configure(
                      previous != nullptr);
    }
 
+   // Every successfully published immutable network gets a process-unique
+   // identity.  Thread-local accumulator entries from an earlier load can
+   // therefore never be reused after replacement, even when the allocator
+   // recycles the same Network_Data address.
+   next->generation = Next_Network_Generation.fetch_add(
+      1ULL, std::memory_order_relaxed
+   );
+   assert(next->generation != 0ULL);
+
    std::atomic_store(
       &p_network, std::shared_ptr<const Network_Data>(next)
    );
@@ -920,48 +1327,137 @@ bool Runtime_Network::evaluate(
    int & side_to_move_cp,
    bool & residual_correction
 ) const {
+   return evaluate_impl(
+      pos, side_to_move_cp, residual_correction, false, nullptr
+   );
+}
+
+bool Runtime_Network::evaluate_full_refresh(
+   const Pos & pos,
+   int & side_to_move_cp,
+   bool & residual_correction
+) const {
+   return evaluate_impl(
+      pos, side_to_move_cp, residual_correction, true, nullptr
+   );
+}
+
+bool Runtime_Network::evaluate_with_oracle(
+   const Pos & pos,
+   int & side_to_move_cp,
+   bool & residual_correction,
+   Evaluation_Trace & trace
+) const {
+   return evaluate_impl(
+      pos, side_to_move_cp, residual_correction, false, &trace
+   );
+}
+
+bool Runtime_Network::evaluate_impl(
+   const Pos & pos,
+   int & side_to_move_cp,
+   bool & residual_correction,
+   bool force_full_refresh,
+   Evaluation_Trace * trace
+) const {
+   if (trace != nullptr) *trace = Evaluation_Trace();
    residual_correction = false;
    const std::shared_ptr<const Network_Data> network =
       std::atomic_load(&p_network);
    if (network == nullptr || !variant_is_omega()) return false;
    residual_correction = network->residual_correction;
 
-   std::array<
-      std::array<std::int32_t, format::Accumulator_Size>,
-      Side_Size
-   > accumulator;
-   // Search evaluates serially within each worker.  Reusing a thread-local
-   // sparse list avoids a heap allocation at every leaf while remaining safe
-   // for Senpai's independent search threads.
-   static thread_local std::vector<int> features;
-   const std::size_t sparse_capacity =
-      format::Square_Count + format::Castling_Features + 32U;
-   if (features.capacity() < sparse_capacity) {
-      features.reserve(sparse_capacity);
+   Accumulator accumulator;
+   Cached_Features categorical[Side_Size];
+   int king_bucket[Side_Size] { -1, -1 };
+   bool accumulated = false;
+
+   if (!force_full_refresh) {
+      Accumulator_Cache_Entry * current = find_cache_entry(
+         &pos, network->generation
+      );
+      if (current != nullptr && same_nnue_state(current->snapshot, pos)) {
+         accumulator = current->accumulator;
+         for (int view = 0; view < Side_Size; ++view) {
+            categorical[view] = current->categorical[view];
+            king_bucket[view] = current->king_bucket[view];
+         }
+         accumulated = true;
+         if (trace != nullptr) trace->cache_hit = true;
+      }
    }
 
-   for (int s = 0; s < Side_Size; ++s) {
-      for (std::size_t i = 0; i < format::Accumulator_Size; ++i) {
-         accumulator[s][i] = network->ft_bias[i];
-      }
+   if (!force_full_refresh && !accumulated) {
+      const Pos * parent = pos.known_parent();
 
-      format::active_features(
-         pos, side_make(s), features, network->architecture
-      );
-      for (std::size_t feature_pos = 0;
-           feature_pos < features.size();
-           ++feature_pos) {
-         const int feature = features[feature_pos];
-         assert(feature >= 0 && feature < int(network->feature_count));
-         if (feature < 0 || feature >= int(network->feature_count)) continue;
-
-         const std::size_t offset =
-            std::size_t(feature) * format::Accumulator_Size;
-         for (std::size_t i = 0; i < format::Accumulator_Size; ++i) {
-            accumulator[s][i] += network->ft_weights[offset + i];
+      // The updater consumes exactly one cached source snapshot and never
+      // dereferences the raw parent pointer.  Self-links and the two-node
+      // cycle visible from that snapshot are rejected before any delta work.
+      // A source-state/address mismatch is harmless but not useful: all 16
+      // bitboards and every categorical group would still be diffed exactly.
+      if (parent != nullptr && parent != &pos) {
+         Accumulator_Cache_Entry * source = find_cache_entry(
+            parent, network->generation
+         );
+         const bool cycle = source != nullptr
+            && (source->snapshot.known_parent() == source->identity
+             || source->snapshot.known_parent() == &pos);
+         if (source != nullptr && !cycle) {
+            Evaluation_Trace attempted;
+            Evaluation_Trace * attempted_trace =
+               trace == nullptr ? nullptr : &attempted;
+            accumulated = build_incremental_accumulator(
+               *source, pos, network->architecture,
+               network->feature_count, network->ft_weights,
+               accumulator, categorical, king_bucket, attempted_trace
+            );
+            if (accumulated && trace != nullptr) {
+               *trace = attempted;
+               trace->incremental_parent = true;
+            }
          }
       }
    }
+
+   if (!accumulated) {
+      if (!build_full_accumulator(
+             pos, network->architecture, network->feature_count,
+             network->ft_bias, network->ft_weights, accumulator,
+             categorical, king_bucket
+          )) {
+         return false;
+      }
+      accumulated = true;
+      if (trace != nullptr) trace->full_refresh = true;
+   }
+
+   if (trace != nullptr
+    && (trace->cache_hit || trace->incremental_parent)) {
+      Accumulator oracle;
+      Cached_Features oracle_categorical[Side_Size];
+      int oracle_king_bucket[Side_Size] { -1, -1 };
+      if (!build_full_accumulator(
+             pos, network->architecture, network->feature_count,
+             network->ft_bias, network->ft_weights, oracle,
+             oracle_categorical, oracle_king_bucket
+          )) {
+         return false;
+      }
+      trace->oracle_checked = true;
+      trace->oracle_match = same_accumulator(accumulator, oracle);
+      if (!trace->oracle_match) {
+         accumulator = oracle;
+         for (int view = 0; view < Side_Size; ++view) {
+            categorical[view] = oracle_categorical[view];
+            king_bucket[view] = oracle_king_bucket[view];
+         }
+         trace->full_refresh = true;
+      }
+   }
+
+   store_cache_entry(
+      pos, network->generation, accumulator, categorical, king_bucket
+   );
 
    std::array<std::uint8_t, format::Dense_Input_Size> input;
    const Side turn = pos.turn();

@@ -130,7 +130,7 @@ int orient_square(Square sq, Side perspective);
 int piece_feature(Piece pc, Side piece_side, Square sq, Side perspective);
 
 // Architecture-3 helpers are public to pin the sparse input contract in
-// tests and to support a future incremental accumulator implementation.
+// tests and are shared by the full and incremental accumulator paths.
 int king_bucket(Square king, Side perspective);
 int king_state_piece_feature(
    Piece pc,
@@ -171,6 +171,25 @@ struct Configure_Result {
    std::string message;
 };
 
+// Diagnostic surface for the exact incremental-accumulator path.  Normal
+// search uses the same cache and delta updater without paying for the oracle;
+// tests can request an independent full refresh and inspect which path was
+// taken.  Row counts are reported per king perspective, not per piece side.
+struct Evaluation_Trace {
+   bool cache_hit;
+   bool incremental_parent;
+   bool full_refresh;
+   bool oracle_checked;
+   bool oracle_match;
+   bool perspective_rebuilt[Side_Size];
+   std::uint32_t piece_rows_removed[Side_Size];
+   std::uint32_t piece_rows_added[Side_Size];
+   std::uint32_t categorical_rows_removed[Side_Size];
+   std::uint32_t categorical_rows_added[Side_Size];
+
+   Evaluation_Trace();
+};
+
 class Runtime_Network {
 public:
    Runtime_Network();
@@ -193,11 +212,37 @@ public:
       bool & residual_correction
    ) const;
 
+   // Always rebuilds both accumulators from the sparse feature contract.  It
+   // is the production fallback when a safe cached source is unavailable and
+   // the independent oracle used by the incremental parity tests.
+   bool evaluate_full_refresh(
+      const Pos & pos,
+      int & side_to_move_cp,
+      bool & residual_correction
+   ) const;
+
+   // Uses the normal incremental path, then independently rebuilds both
+   // accumulators.  A mismatch is reported and the full-refresh accumulator
+   // is used for inference, making the diagnostic path fail safe.
+   bool evaluate_with_oracle(
+      const Pos & pos,
+      int & side_to_move_cp,
+      bool & residual_correction,
+      Evaluation_Trace & trace
+   ) const;
+
    bool loaded() const;
    std::string path() const;
 
 private:
    struct Network_Data;
+   bool evaluate_impl(
+      const Pos & pos,
+      int & side_to_move_cp,
+      bool & residual_correction,
+      bool force_full_refresh,
+      Evaluation_Trace * trace
+   ) const;
    std::shared_ptr<const Network_Data> p_network;
 };
 

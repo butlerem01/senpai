@@ -1,6 +1,7 @@
 #define DEBUG
 
 #include <algorithm>
+#include <atomic>
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
@@ -10,6 +11,7 @@
 #include <limits>
 #include <set>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -359,6 +361,69 @@ std::vector<unsigned char> make_omega_interaction_fixture(
    return bytes;
 }
 
+std::vector<unsigned char> make_incremental_omega_interaction_fixture(
+   int salt
+) {
+   std::vector<unsigned char> bytes = make_omega_interaction_fixture(0);
+
+   // Every sparse row affects one of eight accumulator lanes.  The dense
+   // layers observe all eight lanes from both perspectives, so an incorrect
+   // piece/category delta cannot hide behind an all-zero fixture.
+   for (std::size_t lane = 0; lane < 8U; ++lane) {
+      put_i16(
+         bytes, Ft_Bias_Offset + lane * 2U,
+         static_cast<std::int16_t>((salt + int(lane)) % 5)
+      );
+   }
+   for (std::uint32_t feature = 0;
+        feature < fmt::Omega_Interaction_Feature_Count;
+        ++feature) {
+      const std::size_t lane = std::size_t(feature % 8U);
+      const std::int16_t weight = static_cast<std::int16_t>(
+         1 + int((feature + std::uint32_t(salt)) % 5U)
+      );
+      put_i16(
+         bytes,
+         Ft_Weight_Offset
+         + (std::size_t(feature) * fmt::Accumulator_Size + lane) * 2U,
+         weight
+      );
+   }
+
+   const std::size_t hidden_bias =
+        Ft_Weight_Offset
+      + std::size_t(fmt::Omega_Interaction_Feature_Count)
+        * fmt::Accumulator_Size * 2U;
+   const std::size_t hidden_weights =
+      hidden_bias + fmt::Hidden_Size * 4U;
+   const std::size_t output_bias =
+      hidden_weights
+      + std::size_t(fmt::Hidden_Size) * fmt::Dense_Input_Size;
+   const std::size_t output_weights = output_bias + 4U;
+
+   for (std::size_t lane = 0; lane < 8U; ++lane) {
+      put_i8(
+         bytes,
+         hidden_weights + 0U * fmt::Dense_Input_Size + lane,
+         64
+      );
+      put_i8(
+         bytes,
+         hidden_weights + 1U * fmt::Dense_Input_Size
+         + fmt::Accumulator_Size + lane,
+         64
+      );
+   }
+   put_i32(
+      bytes, output_bias,
+      std::int32_t(salt * int(fmt::Output_Divisor))
+   );
+   put_i8(bytes, output_weights + 0U, 64);
+   put_i8(bytes, output_weights + 1U, -64);
+   put_u64(bytes, 64, fnv1a(bytes, fmt::Header_Bytes));
+   return bytes;
+}
+
 void write_bytes(
    const std::string & path,
    const std::vector<unsigned char> & bytes
@@ -480,6 +545,18 @@ void initialize_omega_runtime() {
    pos::init();
    var::init();
    select_variant(Omega);
+}
+
+Move require_legal_move(const Pos & pos, const std::string & uci) {
+   List moves;
+   gen_legals(moves, pos);
+   for (int index = 0; index < moves.size(); ++index) {
+      if (move::to_uci(moves[index], pos) == uci) return moves[index];
+   }
+   std::cerr << "missing legal move " << uci << " in "
+             << ofen_serialize(pos) << std::endl;
+   assert(false);
+   return move::None;
 }
 
 const std::size_t Max_Stream_OFEN_Bytes { 4096U };
@@ -1326,6 +1403,361 @@ void test_omega_interaction_loading_and_clamp() {
    write_bytes(Good_King_State, make_king_state_fixture(1));
 }
 
+nn::Evaluation_Trace require_incremental_transition(
+   nn::Runtime_Network & network,
+   const Pos & parent,
+   Move move,
+   Pos & child
+) {
+   int parent_cp = 0;
+   bool parent_residual = false;
+   nn::Evaluation_Trace parent_trace;
+   assert(network.evaluate_with_oracle(
+      parent, parent_cp, parent_residual, parent_trace
+   ));
+   assert(parent_residual);
+   assert(parent_trace.full_refresh
+       || parent_trace.cache_hit
+       || parent_trace.incremental_parent);
+   if (parent_trace.oracle_checked) assert(parent_trace.oracle_match);
+
+   child = parent.succ(move);
+   int incremental_cp = 0;
+   bool incremental_residual = false;
+   nn::Evaluation_Trace trace;
+   assert(network.evaluate_with_oracle(
+      child, incremental_cp, incremental_residual, trace
+   ));
+   assert(incremental_residual);
+   assert(trace.incremental_parent);
+   assert(!trace.cache_hit);
+   assert(trace.oracle_checked);
+   assert(trace.oracle_match);
+
+   int full_cp = 0;
+   bool full_residual = false;
+   assert(network.evaluate_full_refresh(
+      child, full_cp, full_residual
+   ));
+   assert(full_residual == incremental_residual);
+   assert(full_cp == incremental_cp);
+   return trace;
+}
+
+void test_incremental_accumulator_parity() {
+   write_bytes(
+      Good_Omega_Interaction,
+      make_incremental_omega_interaction_fixture(3)
+   );
+   nn::Runtime_Network network;
+   assert(network.configure(Good_Omega_Interaction).ok);
+
+   // A home-square Champion move changes a piece row, development category,
+   // pair geometry, and king-distance categories without changing a bucket.
+   const Pos development = pos_from_fen(Omega_Start_OFEN, Omega);
+   Pos developed;
+   nn::Evaluation_Trace trace = require_incremental_transition(
+      network, development, require_legal_move(development, "a0c2"),
+      developed
+   );
+   for (int view = 0; view < Side_Size; ++view) {
+      assert(!trace.perspective_rebuilt[view]);
+      assert(trace.piece_rows_removed[view] == 1U);
+      assert(trace.piece_rows_added[view] == 1U);
+      assert(trace.categorical_rows_removed[view] != 0U);
+      assert(trace.categorical_rows_added[view] != 0U);
+   }
+
+   // Re-evaluating the exact object exercises the direct cache path and its
+   // full-refresh oracle, independent of the parent-delta path above.
+   int cached_cp = 0;
+   bool cached_residual = false;
+   nn::Evaluation_Trace cached_trace;
+   assert(network.evaluate_with_oracle(
+      developed, cached_cp, cached_residual, cached_trace
+   ));
+   assert(cached_trace.cache_hit);
+   assert(cached_trace.oracle_checked);
+   assert(cached_trace.oracle_match);
+
+   // Detached-corner movement is represented only in the high 64-bit half of
+   // the 104-square bitboard on some transitions.
+   const Pos corner = pos_from_fen(Omega_Start_OFEN, Omega);
+   Pos corner_child;
+   trace = require_incremental_transition(
+      network, corner, require_legal_move(corner, "w1a2"), corner_child
+   );
+   for (int view = 0; view < Side_Size; ++view) {
+      assert(trace.piece_rows_removed[view] == 1U);
+      assert(trace.piece_rows_added[view] == 1U);
+   }
+
+   // Crossing b0-c0 changes only White's friendly-king bucket.  Every White
+   // perspective piece row must be rebuilt; Black can retain bitboard deltas.
+   const Pos king_crossing = pos_from_fen(
+      "5k4/10/10/10/10/10/10/10/10/1K8[-/-/-/-] w - - 7 1",
+      Omega
+   );
+   Pos king_child;
+   trace = require_incremental_transition(
+      network, king_crossing,
+      require_legal_move(king_crossing, "b0c0"), king_child
+   );
+   assert(trace.perspective_rebuilt[White]);
+   assert(!trace.perspective_rebuilt[Black]);
+   assert(trace.piece_rows_removed[White] == 2U);
+   assert(trace.piece_rows_added[White] == 2U);
+   assert(trace.piece_rows_removed[Black] == 1U);
+   assert(trace.piece_rows_added[Black] == 1U);
+
+   // Capturing the queen crosses the 8-force phase boundary, so this covers
+   // both capture bitboard diffs and a global phase-row replacement.
+   const Pos capture = pos_from_fen(
+      "5k4/10/10/10/10/10/10/q9/10/R4K3R[-/-/-/-] w - - 12 1",
+      Omega
+   );
+   Pos capture_child;
+   trace = require_incremental_transition(
+      network, capture, require_legal_move(capture, "a0a2"), capture_child
+   );
+   for (int view = 0; view < Side_Size; ++view) {
+      assert(trace.piece_rows_removed[view] == 2U);
+      assert(trace.piece_rows_added[view] == 1U);
+      assert(trace.categorical_rows_removed[view] != 0U);
+      assert(trace.categorical_rows_added[view] != 0U);
+   }
+
+   const Pos promotion = pos_from_fen(
+      "5k4/P9/10/10/10/10/10/10/10/5K4[-/-/-/-] w - - 0 1",
+      Omega
+   );
+   Pos promotion_child;
+   trace = require_incremental_transition(
+      network, promotion,
+      require_legal_move(promotion, "a8a9q"), promotion_child
+   );
+   for (int view = 0; view < Side_Size; ++view) {
+      assert(trace.piece_rows_removed[view] == 1U);
+      assert(trace.piece_rows_added[view] == 1U);
+   }
+
+   const Pos castling = pos_from_fen(
+      "5k4/10/10/10/10/10/10/10/10/1R3K2R1[-/-/-/-] w KQ - 0 1",
+      Omega
+   );
+   Pos castling_child;
+   const Move castle = require_legal_move(castling, "f0h0");
+   assert(move::is_castling(castle));
+   trace = require_incremental_transition(
+      network, castling, castle, castling_child
+   );
+   assert(trace.perspective_rebuilt[White]);
+   assert(trace.categorical_rows_removed[White] != 0U);
+   assert(trace.categorical_rows_removed[Black] != 0U);
+
+   const Pos en_passant = pos_from_fen(
+      "5k4/10/10/10/10/r2P3K2/2p7/10/10/10[-/-/-/-] b - d2 0 1",
+      Omega
+   );
+   Pos en_passant_child;
+   const Move ep = require_legal_move(en_passant, "c3d2");
+   assert(move::is_en_passant(ep));
+   trace = require_incremental_transition(
+      network, en_passant, ep, en_passant_child
+   );
+   for (int view = 0; view < Side_Size; ++view) {
+      assert(trace.piece_rows_removed[view] == 2U);
+      assert(trace.piece_rows_added[view] == 1U);
+      assert(trace.categorical_rows_removed[view] != 0U);
+   }
+
+   // Null moves have no piece delta, but clear EP and advance the halfmove
+   // clock.  They must still replace state rows rather than hit a key-only
+   // cache alias (the position key does not contain the clock).
+   int null_parent_cp = 0;
+   bool null_parent_residual = false;
+   assert(network.evaluate(
+      en_passant, null_parent_cp, null_parent_residual
+   ));
+   const Pos null_child = en_passant.null();
+   int null_cp = 0;
+   bool null_residual = false;
+   nn::Evaluation_Trace null_trace;
+   assert(network.evaluate_with_oracle(
+      null_child, null_cp, null_residual, null_trace
+   ));
+   assert(null_trace.incremental_parent);
+   assert(null_trace.oracle_checked && null_trace.oracle_match);
+   for (int view = 0; view < Side_Size; ++view) {
+      assert(null_trace.piece_rows_removed[view] == 0U);
+      assert(null_trace.piece_rows_added[view] == 0U);
+      assert(null_trace.categorical_rows_removed[view] >= 2U);
+      assert(null_trace.categorical_rows_added[view] >= 1U);
+   }
+
+   // A successful network replacement must invalidate every accumulator from
+   // the previous generation.  After one new-generation parent refresh, the
+   // incremental path is available again.
+   const Pos reload_parent = pos_from_fen(Omega_Start_OFEN, Omega);
+   int reload_cp = 0;
+   bool reload_residual = false;
+   assert(network.evaluate(
+      reload_parent, reload_cp, reload_residual
+   ));
+   write_bytes(
+      Good_Omega_Interaction,
+      make_incremental_omega_interaction_fixture(11)
+   );
+   assert(network.configure(Good_Omega_Interaction).ok);
+   Pos old_generation_child = reload_parent.succ(
+      require_legal_move(reload_parent, "f1f2")
+   );
+   nn::Evaluation_Trace reload_trace;
+   assert(network.evaluate_with_oracle(
+      old_generation_child, reload_cp, reload_residual, reload_trace
+   ));
+   assert(reload_trace.full_refresh);
+   assert(!reload_trace.cache_hit);
+   assert(!reload_trace.incremental_parent);
+
+   assert(network.evaluate(
+      reload_parent, reload_cp, reload_residual
+   ));
+   Pos new_generation_child;
+   reload_trace = require_incremental_transition(
+      network, reload_parent,
+      require_legal_move(reload_parent, "g1g2"), new_generation_child
+   );
+   assert(reload_trace.incremental_parent);
+   assert(reload_trace.oracle_match);
+
+   // Pos self-assignment can leave a self parent pointer.  The accumulator
+   // path must reject that cycle and rebuild instead of following it.
+   Pos self_link = pos_from_fen(Omega_Start_OFEN, Omega);
+   assert(network.evaluate(self_link, reload_cp, reload_residual));
+   self_link = self_link.succ(require_legal_move(self_link, "a0c2"));
+   nn::Evaluation_Trace self_trace;
+   assert(network.evaluate_with_oracle(
+      self_link, reload_cp, reload_residual, self_trace
+   ));
+   assert(self_link.known_parent() == &self_link);
+   assert(self_trace.full_refresh);
+   assert(!self_trace.incremental_parent);
+
+   // Mutating the first object from a child of the second constructs the
+   // public-API two-object cycle A -> B -> A.  Seed B's exact cache entry,
+   // then prove A rejects that source before delta work and agrees with an
+   // explicit full refresh.
+   Pos cycle_a = pos_from_fen(Omega_Start_OFEN, Omega);
+   Pos cycle_b = cycle_a.succ(require_legal_move(cycle_a, "a0c2"));
+   cycle_a = cycle_b.succ(require_legal_move(cycle_b, "a9c7"));
+   assert(cycle_a.known_parent() == &cycle_b);
+   assert(cycle_b.known_parent() == &cycle_a);
+
+   int cycle_cp = 0;
+   bool cycle_residual = false;
+   assert(network.evaluate(cycle_b, cycle_cp, cycle_residual));
+   nn::Evaluation_Trace cycle_trace;
+   assert(network.evaluate_with_oracle(
+      cycle_a, cycle_cp, cycle_residual, cycle_trace
+   ));
+   assert(cycle_trace.full_refresh);
+   assert(!cycle_trace.cache_hit);
+   assert(!cycle_trace.incremental_parent);
+
+   int cycle_full_cp = 0;
+   bool cycle_full_residual = false;
+   assert(network.evaluate_full_refresh(
+      cycle_a, cycle_full_cp, cycle_full_residual
+   ));
+   assert(cycle_full_residual == cycle_residual);
+   assert(cycle_full_cp == cycle_cp);
+}
+
+void test_concurrent_network_reload() {
+   write_bytes(Good_A, make_fixture(0));
+   write_bytes(Good_B, make_fixture(5));
+
+   const Pos position = pos_from_ofen(diagnostic_source());
+   nn::Runtime_Network expected_a_network;
+   nn::Runtime_Network expected_b_network;
+   assert(expected_a_network.configure(Good_A).ok);
+   assert(expected_b_network.configure(Good_B).ok);
+
+   int expected_a = 0;
+   int expected_b = 0;
+   bool expected_a_residual = true;
+   bool expected_b_residual = true;
+   assert(expected_a_network.evaluate_full_refresh(
+      position, expected_a, expected_a_residual
+   ));
+   assert(expected_b_network.evaluate_full_refresh(
+      position, expected_b, expected_b_residual
+   ));
+   assert(!expected_a_residual);
+   assert(!expected_b_residual);
+   assert(expected_a != expected_b);
+
+   nn::Runtime_Network network;
+   assert(network.configure(Good_A).ok);
+
+   std::atomic<bool> start { false };
+   std::atomic<bool> done { false };
+   std::atomic<bool> failed { false };
+   std::atomic<bool> saw_a { false };
+   std::atomic<bool> saw_b { false };
+   std::atomic<std::uint64_t> evaluations { 0ULL };
+
+   const auto evaluator = [&]() {
+      while (!start.load()) std::this_thread::yield();
+      std::uint64_t local = 0ULL;
+      while (!done.load() || local < 1000ULL) {
+         int score = 0;
+         bool residual = true;
+         if (!network.evaluate(position, score, residual) || residual) {
+            failed.store(true);
+         } else if (score == expected_a) {
+            saw_a.store(true);
+         } else if (score == expected_b) {
+            saw_b.store(true);
+         } else {
+            failed.store(true);
+         }
+         ++local;
+      }
+      evaluations.fetch_add(local);
+   };
+
+   std::thread evaluator_one(evaluator);
+   std::thread evaluator_two(evaluator);
+   std::thread reloader([&]() {
+      while (!start.load()) std::this_thread::yield();
+      while (!saw_a.load() && !failed.load()) std::this_thread::yield();
+
+      if (!failed.load() && !network.configure(Good_B).ok) {
+         failed.store(true);
+      }
+      while (!saw_b.load() && !failed.load()) std::this_thread::yield();
+
+      for (int iteration = 0; iteration < 64 && !failed.load(); ++iteration) {
+         const std::string & path =
+            (iteration & 1) == 0 ? Good_A : Good_B;
+         if (!network.configure(path).ok) failed.store(true);
+      }
+      done.store(true);
+   });
+
+   start.store(true);
+   evaluator_one.join();
+   evaluator_two.join();
+   reloader.join();
+
+   assert(!failed.load());
+   assert(saw_a.load());
+   assert(saw_b.load());
+   assert(evaluations.load() >= 2000ULL);
+}
+
 void test_network_stream_helpers() {
    std::string valid = ofen_serialize(pos_from_ofen(diagnostic_source()));
    assert(normalize_stream_ofen(valid));
@@ -1449,6 +1881,8 @@ int main(int argc, char * argv[]) {
    test_residual_evaluation();
    test_king_state_loading();
    test_omega_interaction_loading_and_clamp();
+   test_incremental_accumulator_parity();
+   test_concurrent_network_reload();
    test_network_stream_helpers();
 
    return 0;
