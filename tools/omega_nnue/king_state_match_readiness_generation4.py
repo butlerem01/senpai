@@ -25,7 +25,7 @@ import re
 import subprocess
 import sys
 import tempfile
-from typing import Any, Mapping, Sequence
+from typing import Any, Iterable, Iterator, Mapping, Sequence
 
 import king_state_match_protocol_generation4 as contract
 import king_state_dotnet_runtime_generation4 as dotnet_runtime
@@ -72,8 +72,6 @@ _PREREGISTRATION_BINDINGS = {
 _PREREGISTRATION_TOP_LEVEL = frozenset(
     preregistration_validator.EXPECTED_TOP_LEVEL
 )
-_LAZY_DECISION_TEACHER: Any = None
-_LAZY_DECISION_TEACHER_BINDINGS: dict[str, Any] | None = None
 _LAZY_TRAINER: Any = None
 _LAZY_TRAINER_BINDINGS: dict[str, Any] | None = None
 
@@ -83,6 +81,7 @@ PROFILE_ID = contract.PROFILE_ID
 SUITE_SEAL_KIND = "omega-nnue-king-state-v4-suite-seal"
 AUTHORIZATION_KIND = "omega-nnue-king-state-v4-match-authorization"
 AUDIT_KIND = "omega-nnue-king-state-v4-match-audit"
+FORBIDDEN_WORKER_KIND = "omega-nnue-g4-forbidden-catalog-worker-result"
 GATES = contract.GATES
 PHASES = contract.PHASES
 SAMPLER_RECORD_FIELDS = {
@@ -107,6 +106,157 @@ SAMPLER_RECORD_FIELDS = {
 }
 SAMPLER_PAIR_ID = re.compile(r"^random-pair-([0-9]{6})$")
 UINT64_MASK = (1 << 64) - 1
+CURRENT_ROOT_FIELDS = frozenset(
+    {
+        "schemaVersion",
+        "kind",
+        "rootId",
+        "groupId",
+        "sourceOpeningId",
+        "sourcePairId",
+        "sourceProvenanceTag",
+        "sourceGameId",
+        "sourceRunId",
+        "sourceAttempt",
+        "sourcePly",
+        "sourceLine",
+        "sourceEngineId",
+        "sourceEngineSha256",
+        "phase",
+        "sideToMove",
+        "ofen",
+        "rootPvMove",
+        "selectionRank",
+        "candidateRole",
+    }
+)
+CURRENT_CHILD_FIELDS = frozenset(
+    {
+        "schemaVersion",
+        "kind",
+        "rootId",
+        "groupId",
+        "sourceGameId",
+        "phase",
+        "rootPvMove",
+        "candidateRole",
+        "selectionRank",
+        "parentOfen",
+        "parentSideToMove",
+        "childId",
+        "move",
+        "moveOrdinal",
+        "childOfen",
+        "childSideToMove",
+        "isPromotion",
+    }
+)
+CURRENT_CORPUS_PATHS = {
+    "roots": "build-msvc/data-generation/omega-decision-v1/roots.jsonl",
+    "rootsManifest": (
+        "build-msvc/data-generation/omega-decision-v1/roots.jsonl.manifest.json"
+    ),
+    "children": "build-msvc/data-generation/omega-decision-v1/children.jsonl",
+    "childrenManifest": (
+        "build-msvc/data-generation/omega-decision-v1/children.jsonl.manifest.json"
+    ),
+    "sourceRootPool": (
+        "build-msvc/data-generation/omega-decision-v1/source/"
+        "rules-only-pool.jsonl"
+    ),
+    "sourceRootPoolManifest": (
+        "build-msvc/data-generation/omega-decision-v1/source/"
+        "rules-only-pool.jsonl.manifest.json"
+    ),
+    "sourceRootPoolSeal": (
+        "build-msvc/data-generation/omega-decision-v1/source/"
+        "rules-only-pool.jsonl.complete.seal.json"
+    ),
+}
+CURRENT_RUNTIME_PATHS = {
+    "rootSamplerAssembly": (
+        "tools/omega_nnue/frozen_runtime/king-state-v4/root-sampler/"
+        "OmegaRootSampler.dll"
+    ),
+    "decisionSamplerAssembly": (
+        "tools/omega_nnue/frozen_runtime/king-state-v4/decision-sampler/"
+        "OmegaDecisionSampler.dll"
+    ),
+    "chessLibAssembly": (
+        "tools/omega_nnue/frozen_runtime/king-state-v4/decision-sampler/"
+        "ChessLib.dll"
+    ),
+}
+CURRENT_REPLAY_PATHS = {
+    "sourceEvents": "build-msvc/data-generation/omega-decision-v1/source/events.jsonl",
+    "sourceOpeningSuite": (
+        "build-msvc/data-generation/omega-decision-v1/source/openings.json"
+    ),
+    "sourceMatchConfig": (
+        "build-msvc/data-generation/omega-decision-v1/source/source-match.json"
+    ),
+    "sourceMatchHarnessAssembly": (
+        "tools/omega_nnue/frozen_runtime/king-state-v4/omegamatch/OmegaMatch.dll"
+    ),
+    "decisionTeacherSource": "tools/omega_nnue/omega_decision_teacher.py",
+    "teacherEngineExecutable": (
+        "tools/omega_nnue/frozen_runtime/king-state-v4/engine/senpai.exe"
+    ),
+    "pythonRuntimeManifest": (
+        "validation/omega-nnue-king-state-v4-python-runtime.json"
+    ),
+    "dotnetRuntimeHostExecutable": (
+        "tools/omega_nnue/frozen_runtime/king-state-v4/dotnet-runtime/dotnet.exe"
+    ),
+}
+CURRENT_SOURCE_PAIR_TAG = re.compile(r"^rules-only-pair:(random-pair-[0-9]{6})$")
+CURRENT_SOURCE_TRAJECTORY = re.compile(
+    r"^(random-pair-[0-9]{6})-(ab|ba)$"
+)
+CURRENT_TARGET_LIKE_KEY = re.compile(
+    r"(?:^|[_-])(?:scores?|targets?|labels?|evaluations?|evals?|outcomes?|results?|winners?|mates?)(?:$|[_-])",
+    re.IGNORECASE,
+)
+CANONICAL_UTC = re.compile(
+    r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+    r"(?:\.[0-9]{1,7})?Z$"
+)
+ROOT_HCE_OPTIONS = {
+    "Threads": "1",
+    "Hash": "128",
+    "Ponder": "false",
+    "OwnBook": "false",
+    "UCI_Chess960": "false",
+    "UCI_Variant": "omega",
+    "OmegaNNUEFile": "<empty>",
+    "UseOmegaNNUE": "false",
+}
+SOURCE_POOL_PHASE_WINDOWS = {
+    "opening": [6, 48],
+    "middlegame": [20, 140],
+    "late": [40, 260],
+    "endgame": [60, 400],
+}
+CHILD_POLICY = {
+    "variant": "omega",
+    "legalMoveAuthority": "ChessLib.Game.GetAvailableSquares",
+    "childApplication": (
+        "fresh Game initialized from parent OFEN; DoMove(checkEndGame=false)"
+    ),
+    "promotionSuffixOrder": "qrbncw",
+    "moveOrder": "coordinate ordinal",
+    "stableIdDomain": "omega-decision-child-v1",
+    "fields": {
+        "rootId": "rootId",
+        "groupId": "groupId",
+        "ofen": "ofen",
+        "phase": "phase",
+        "sourceGameId": "sourceGameId",
+        "rootPvMove": "rootPvMove",
+        "candidateRole": "candidateRole",
+        "selectionRank": "selectionRank",
+    },
+}
 
 
 def _verify_import_bindings(
@@ -175,8 +325,11 @@ def _verify_lazy_frozen_module(
     binding_names: Sequence[str],
     allow_template: bool = False,
 ) -> None:
-    global _LAZY_DECISION_TEACHER, _LAZY_DECISION_TEACHER_BINDINGS
     global _LAZY_TRAINER, _LAZY_TRAINER_BINDINGS
+    if identity_name != "trainerSource":
+        raise ValueError(
+            "only the post-held-out trainer may use in-process lazy binding"
+        )
     profile_path = _IMPORTED_CONTRACT.FINAL_PROFILE
     if not profile_path.is_file() and allow_template:
         profile_path = (
@@ -218,42 +371,22 @@ def _verify_lazy_frozen_module(
             captured[binding_name] = binding
         return captured
 
-    if identity_name == "decisionTeacherSource":
-        if (_LAZY_DECISION_TEACHER is None) != (
-            _LAZY_DECISION_TEACHER_BINDINGS is None
-        ):
-            raise ValueError("decision-teacher lazy binding cache is inconsistent")
-        if _LAZY_DECISION_TEACHER is None:
-            captured = capture_local_bindings()
-            _CONTRACT_BINDINGS["verify_module_binding"](
-                module,
-                module,
-                expected_path,
-                label,
-                identity_record=identity_record,
-                callable_bindings=captured,
-            )
-            _LAZY_DECISION_TEACHER = module
-            _LAZY_DECISION_TEACHER_BINDINGS = captured
-        imported = _LAZY_DECISION_TEACHER
-        bindings = _LAZY_DECISION_TEACHER_BINDINGS
-    else:
-        if (_LAZY_TRAINER is None) != (_LAZY_TRAINER_BINDINGS is None):
-            raise ValueError("trainer lazy binding cache is inconsistent")
-        if _LAZY_TRAINER is None:
-            captured = capture_local_bindings()
-            _CONTRACT_BINDINGS["verify_module_binding"](
-                module,
-                module,
-                expected_path,
-                label,
-                identity_record=identity_record,
-                callable_bindings=captured,
-            )
-            _LAZY_TRAINER = module
-            _LAZY_TRAINER_BINDINGS = captured
-        imported = _LAZY_TRAINER
-        bindings = _LAZY_TRAINER_BINDINGS
+    if (_LAZY_TRAINER is None) != (_LAZY_TRAINER_BINDINGS is None):
+        raise ValueError("trainer lazy binding cache is inconsistent")
+    if _LAZY_TRAINER is None:
+        captured = capture_local_bindings()
+        _CONTRACT_BINDINGS["verify_module_binding"](
+            module,
+            module,
+            expected_path,
+            label,
+            identity_record=identity_record,
+            callable_bindings=captured,
+        )
+        _LAZY_TRAINER = module
+        _LAZY_TRAINER_BINDINGS = captured
+    imported = _LAZY_TRAINER
+    bindings = _LAZY_TRAINER_BINDINGS
     _CONTRACT_BINDINGS["verify_module_binding"](
         module,
         imported,
@@ -606,10 +739,245 @@ def _target_access_counters(value: Any, prefix: str = "") -> list[tuple[str, int
     return result
 
 
+def _sanitized_python_environment() -> dict[str, str]:
+    """Return an environment which cannot inject parent-process Python code."""
+
+    blocked_prefixes = (
+        "COVERAGE_",
+        "DD_",
+        "PYDEVD_",
+    )
+    blocked_names = {
+        "PYTHONBREAKPOINT",
+        "PYTHONCASEOK",
+        "PYTHONDEBUG",
+        "PYTHONDUMPREFS",
+        "PYTHONEXECUTABLE",
+        "PYTHONFAULTHANDLER",
+        "PYTHONHOME",
+        "PYTHONINSPECT",
+        "PYTHONMALLOC",
+        "PYTHONPATH",
+        "PYTHONPLATLIBDIR",
+        "PYTHONPROFILEIMPORTTIME",
+        "PYTHONSTARTUP",
+        "PYTHONTRACEMALLOC",
+        "PYTHONUSERBASE",
+        "VIRTUAL_ENV",
+        "VIRTUAL_ENV_PROMPT",
+    }
+    environment = {
+        name: value
+        for name, value in os.environ.items()
+        if name.upper() not in blocked_names
+        and not name.upper().startswith(blocked_prefixes)
+    }
+    environment.update(
+        {
+            "BLIS_NUM_THREADS": "1",
+            "MKL_NUM_THREADS": "1",
+            "NUMEXPR_NUM_THREADS": "1",
+            "OMP_NUM_THREADS": "1",
+            "OPENBLAS_NUM_THREADS": "1",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONHASHSEED": "0",
+            "PYTHONNOUSERSITE": "1",
+            "VECLIB_MAXIMUM_THREADS": "1",
+        }
+    )
+    return environment
+
+
+def _forbidden_worker_authority(
+    profile: Mapping[str, Any] | None,
+    *,
+    allow_template: bool,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Bind the worker source, teacher source, and Python executable."""
+
+    if allow_template:
+        return (
+            contract.identity(Path(__file__)),
+            contract.identity(
+                contract.REPO / "tools/omega_nnue/omega_decision_teacher.py"
+            ),
+            contract.identity(Path(sys.executable)),
+        )
+    if profile is None:
+        raise ValueError("a frozen profile is required for forbidden-catalog parsing")
+    identities = contract.mapping(
+        profile.get("finalFreezeIdentities"), "forbidden-worker final identities"
+    )
+    worker = _profile_identity(
+        identities.get("matchReadinessTool"),
+        path=Path(__file__),
+        label="forbidden-worker readiness source",
+    )
+    teacher = _profile_identity(
+        identities.get("decisionTeacherSource"),
+        path=contract.REPO / "tools/omega_nnue/omega_decision_teacher.py",
+        label="forbidden-worker decision-teacher source",
+    )
+    runtime_manifest_pin = _profile_identity(
+        identities.get("pythonRuntimeManifest"),
+        path=contract.REPO
+        / "validation/omega-nnue-king-state-v4-python-runtime.json",
+        label="forbidden-worker Python runtime manifest",
+    )
+    runtime_manifest = _load_pinned_top_level_allowlist(
+        Path(runtime_manifest_pin["path"]),
+        runtime_manifest_pin,
+        "forbidden-worker Python runtime manifest",
+        field_inventory={
+            "schemaVersion",
+            "kind",
+            "profileId",
+            "status",
+            "createdUtc",
+            "runtime",
+            "informationBoundary",
+            "finalStageSeal",
+        },
+        decode_fields={
+            "schemaVersion",
+            "kind",
+            "profileId",
+            "status",
+            "createdUtc",
+            "runtime",
+            "finalStageSeal",
+        },
+    )
+    if (
+        set(runtime_manifest)
+        != {
+            "schemaVersion",
+            "kind",
+            "profileId",
+            "status",
+            "createdUtc",
+            "runtime",
+            "finalStageSeal",
+        }
+        or runtime_manifest.get("schemaVersion") != SCHEMA_VERSION
+        or runtime_manifest.get("kind") != "omega-nnue-king-state-v4-python-runtime"
+        or runtime_manifest.get("profileId") != PROFILE_ID
+        or runtime_manifest.get("finalStageSeal") is not True
+    ):
+        raise ValueError("forbidden-worker Python runtime manifest changed")
+    _require_canonical_utc(
+        runtime_manifest.get("createdUtc"), "forbidden-worker runtime createdUtc"
+    )
+    runtime = contract.mapping(
+        runtime_manifest.get("runtime"), "forbidden-worker runtime"
+    )
+    python = contract.mapping(runtime.get("python"), "forbidden-worker Python")
+    executable = _identity_shape(
+        python.get("executable"), "forbidden-worker Python executable"
+    )
+    contract.verify_identity(executable, "forbidden-worker Python executable")
+    return worker, teacher, executable
+
+
+def _forbidden_worker_command(
+    python: Mapping[str, Any],
+    worker: Mapping[str, Any],
+    teacher: Mapping[str, Any],
+    manifests: Sequence[Path],
+    output: Path,
+) -> list[str]:
+    source_path = contract.resolve(Path(str(worker["path"])))
+    pycache_prefix = contract.resolve(output.parent / "isolated-python-cache")
+    if pycache_prefix.exists():
+        raise FileExistsError("forbidden-worker bytecode namespace already exists")
+    bootstrap = (
+        "import runpy,sys;"
+        f"sys.path.insert(0,{str(source_path.parent)!r});"
+        f"runpy.run_path({str(source_path)!r},run_name='__main__')"
+    )
+    command = [
+        str(python["path"]),
+        "-I",
+        "-B",
+        "-X",
+        f"pycache_prefix={pycache_prefix}",
+        "-c",
+        bootstrap,
+        "forbidden-catalog-worker",
+        "--teacher-source",
+        str(teacher["path"]),
+        "--teacher-bytes",
+        str(teacher["bytes"]),
+        "--teacher-sha256",
+        str(teacher["sha256"]),
+        "--output",
+        str(output),
+    ]
+    for manifest in manifests:
+        command.extend(("--manifest", str(manifest)))
+    return command
+
+
+def _forbidden_catalog_worker(args: argparse.Namespace) -> None:
+    """Internal clean-process entry point; never consumes parent module state."""
+
+    teacher = {
+        "path": str(contract.resolve(args.teacher_source)),
+        "bytes": args.teacher_bytes,
+        "sha256": args.teacher_sha256,
+    }
+    _identity_shape(teacher, "forbidden worker teacher source")
+    teacher_path = contract.verify_identity(
+        teacher, "forbidden worker teacher source"
+    )
+    canonical_teacher = contract.resolve(
+        contract.REPO / "tools/omega_nnue/omega_decision_teacher.py"
+    )
+    if teacher_path != canonical_teacher:
+        raise ValueError("forbidden worker teacher source is noncanonical")
+    import omega_decision_teacher as decision_teacher
+
+    if (
+        contract.resolve(Path(decision_teacher.__file__)) != teacher_path
+        or contract.identity(teacher_path) != teacher
+    ):
+        raise ValueError("forbidden worker imported a different teacher module")
+    loader = getattr(decision_teacher, "_load_forbidden_catalogs", None)
+    if (
+        not callable(loader)
+        or getattr(loader, "__module__", None) != decision_teacher.__name__
+        or contract.resolve(Path(loader.__code__.co_filename)) != teacher_path
+    ):
+        raise ValueError("forbidden worker teacher loader binding changed")
+    manifests = sorted(
+        (contract.resolve(item) for item in args.manifest),
+        key=lambda item: str(item).casefold(),
+    )
+    forbidden, pins = loader(manifests)
+    result = {
+        "schemaVersion": SCHEMA_VERSION,
+        "kind": FORBIDDEN_WORKER_KIND,
+        "teacher": teacher,
+        "manifests": [dict(item["manifest"]) for item in pins],
+        "catalogs": sorted(
+            (dict(item["catalog"]) for item in pins),
+            key=lambda item: str(item["path"]).casefold(),
+        ),
+        "positionCounts": [int(item["positionCount"]) for item in pins],
+        "exact": sorted(forbidden["exact"]),
+        "signatures": sorted(forbidden["signatures"]),
+        "sourceGameIds": sorted(forbidden["sourceGameIds"]),
+        "sourceRunIds": sorted(forbidden["sourceRunIds"]),
+        "sourceInputSha256": sorted(forbidden["sourceInputSha256"]),
+    }
+    contract.atomic_json(contract.resolve(args.output), result, exclusive=True)
+
+
 def _validate_forbidden_inputs(
     manifests: Sequence[Path],
     position_files: Sequence[Path],
     *,
+    profile: Mapping[str, Any] | None = None,
     _allow_template_module_for_self_test: bool = False,
 ) -> tuple[
     list[dict[str, Any]],
@@ -626,26 +994,85 @@ def _validate_forbidden_inputs(
     if len(set(resolved_positions)) != len(resolved_positions):
         raise ValueError("forbidden catalog input is duplicated")
 
-    # This is the canonical target-blind catalog parser used by data sealing.
-    # It recognizes exact/orbit keys even when a row deliberately omits OFEN,
-    # rejects target/score-like fields, and verifies every catalog/source pin.
-    import omega_decision_teacher as decision_teacher
-
-    _verify_lazy_frozen_module(
-        decision_teacher,
-        identity_name="decisionTeacherSource",
-        label="Generation-4 decision-teacher module",
-        binding_names=("_load_forbidden_catalogs",),
-        allow_template=_allow_template_module_for_self_test,
-    )
-
     ordered_manifests = sorted(resolved_manifests, key=lambda item: str(item).casefold())
-    forbidden, pins = decision_teacher._load_forbidden_catalogs(ordered_manifests)
-    manifest_records = [dict(item["manifest"]) for item in pins]
-    expected_catalogs = sorted(
-        (dict(item["catalog"]) for item in pins),
-        key=lambda item: str(item["path"]).casefold(),
+    worker, teacher, python = _forbidden_worker_authority(
+        profile, allow_template=_allow_template_module_for_self_test
     )
+    with tempfile.TemporaryDirectory(prefix="omega-g4-forbidden-worker-") as directory:
+        output = Path(directory) / "result.json"
+        command = _forbidden_worker_command(
+            python, worker, teacher, ordered_manifests, output
+        )
+        completed = subprocess.run(
+            command,
+            cwd=Path(directory),
+            env=_sanitized_python_environment(),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="strict",
+            check=False,
+        )
+        if completed.returncode != 0:
+            raise ValueError(
+                "clean forbidden-catalog worker failed: "
+                + (completed.stderr.strip() or completed.stdout.strip())
+            )
+        if completed.stdout.strip() or completed.stderr.strip():
+            raise ValueError("clean forbidden-catalog worker emitted unexpected output")
+        result_pin = contract.identity(output)
+        result = _load_pinned_json(
+            output, result_pin, "clean forbidden-catalog worker result"
+        )
+    expected_result_fields = {
+        "schemaVersion",
+        "kind",
+        "teacher",
+        "manifests",
+        "catalogs",
+        "positionCounts",
+        "exact",
+        "signatures",
+        "sourceGameIds",
+        "sourceRunIds",
+        "sourceInputSha256",
+    }
+    if (
+        set(result) != expected_result_fields
+        or result.get("schemaVersion") != SCHEMA_VERSION
+        or result.get("kind") != FORBIDDEN_WORKER_KIND
+        or not contract.exact_json_equal(result.get("teacher"), teacher)
+    ):
+        raise ValueError("clean forbidden-catalog worker result changed")
+    manifest_records = contract.strict_identity_list(
+        result.get("manifests"), "forbidden worker manifest"
+    )
+    expected_catalogs = contract.strict_identity_list(
+        result.get("catalogs"), "forbidden worker catalog"
+    )
+    counts = result.get("positionCounts")
+    if (
+        type(counts) is not list
+        or len(counts) != len(manifest_records)
+        or any(type(item) is not int or item < 0 for item in counts)
+    ):
+        raise ValueError("clean forbidden-catalog worker counts changed")
+    set_fields: dict[str, set[str]] = {}
+    for name in (
+        "exact",
+        "signatures",
+        "sourceGameIds",
+        "sourceRunIds",
+        "sourceInputSha256",
+    ):
+        values = result.get(name)
+        if (
+            type(values) is not list
+            or any(type(item) is not str or not item for item in values)
+            or values != sorted(set(values))
+        ):
+            raise ValueError(f"clean forbidden-catalog worker {name} changed")
+        set_fields[name] = set(values)
     positions = sorted(
         (contract.identity(item) for item in resolved_positions),
         key=lambda item: str(item["path"]).casefold(),
@@ -654,15 +1081,15 @@ def _validate_forbidden_inputs(
         raise ValueError(
             "supplied forbidden position files are not exactly the canonical catalogs"
         )
-    signatures = set(forbidden["exact"]) | set(forbidden["signatures"])
+    signatures = set_fields["exact"] | set_fields["signatures"]
     audit = {
-        "catalogs": len(pins),
-        "positions": sum(int(item["positionCount"]) for item in pins),
-        "exactPositionKeys": len(forbidden["exact"]),
+        "catalogs": len(manifest_records),
+        "positions": sum(counts),
+        "exactPositionKeys": len(set_fields["exact"]),
         "orbitSignatures": len(signatures),
-        "sourceGameIds": len(forbidden["sourceGameIds"]),
-        "sourceRunIds": len(forbidden["sourceRunIds"]),
-        "sourceInputSha256": len(forbidden["sourceInputSha256"]),
+        "sourceGameIds": len(set_fields["sourceGameIds"]),
+        "sourceRunIds": len(set_fields["sourceRunIds"]),
+        "sourceInputSha256": len(set_fields["sourceInputSha256"]),
     }
     return manifest_records, positions, signatures, audit
 
@@ -693,6 +1120,1973 @@ def _assert_profile_forbidden_manifests(
         return sorted(normalized)
     if normalize(declared) != normalize(supplied):
         raise ValueError("supplied forbidden manifests differ from final profile")
+
+
+class _TargetBlindJsonParser:
+    """Grammar-complete JSON scanner which can quarantine sensitive subtrees.
+
+    Values are never materialized here.  Object keys are the sole decoded
+    lexemes, because recognizing a forbidden key before visiting its value is
+    the information-boundary guarantee this module needs.
+    """
+
+    _NUMBER = re.compile(
+        r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?"
+    )
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+        self.length = len(text)
+        self.index = 0
+
+    def _whitespace(self) -> None:
+        while self.index < self.length and self.text[self.index] in " \t\r\n":
+            self.index += 1
+
+    def _string(self, *, decode: bool) -> str | None:
+        start = self.index
+        if self.index >= self.length or self.text[self.index] != '"':
+            raise ValueError("expected JSON string")
+        self.index += 1
+        while self.index < self.length:
+            character = self.text[self.index]
+            if character == '"':
+                self.index += 1
+                if not decode:
+                    return None
+                try:
+                    value = json.loads(self.text[start:self.index])
+                except json.JSONDecodeError as error:
+                    raise ValueError("invalid JSON string") from error
+                if type(value) is not str:
+                    raise ValueError("JSON object key is not a string")
+                return value
+            if ord(character) < 0x20:
+                raise ValueError("control character in JSON string")
+            if character != "\\":
+                self.index += 1
+                continue
+            self.index += 1
+            if self.index >= self.length:
+                raise ValueError("unterminated JSON escape")
+            escape = self.text[self.index]
+            if escape in '"\\/bfnrt':
+                self.index += 1
+                continue
+            if escape != "u" or self.index + 4 >= self.length:
+                raise ValueError("invalid JSON escape")
+            digits = self.text[self.index + 1:self.index + 5]
+            if len(digits) != 4 or any(item not in "0123456789abcdefABCDEF" for item in digits):
+                raise ValueError("invalid JSON unicode escape")
+            self.index += 5
+        raise ValueError("unterminated JSON string")
+
+    def _value(self, *, reject_sensitive: bool) -> None:
+        self._whitespace()
+        if self.index >= self.length:
+            raise ValueError("missing JSON value")
+        character = self.text[self.index]
+        if character == '"':
+            self._string(decode=False)
+            return
+        if character == "{":
+            self._object(reject_sensitive=reject_sensitive, collect=False)
+            return
+        if character == "[":
+            self.index += 1
+            self._whitespace()
+            if self.index < self.length and self.text[self.index] == "]":
+                self.index += 1
+                return
+            while True:
+                self._value(reject_sensitive=reject_sensitive)
+                self._whitespace()
+                if self.index < self.length and self.text[self.index] == ",":
+                    self.index += 1
+                    continue
+                if self.index < self.length and self.text[self.index] == "]":
+                    self.index += 1
+                    return
+                raise ValueError("missing comma/end in JSON array")
+        for literal in ("true", "false", "null"):
+            if self.text.startswith(literal, self.index):
+                self.index += len(literal)
+                return
+        match = self._NUMBER.match(self.text, self.index)
+        if match is None:
+            raise ValueError("invalid JSON primitive")
+        self.index = match.end()
+
+    def _object(
+        self, *, reject_sensitive: bool, collect: bool
+    ) -> dict[str, tuple[str, str]]:
+        if self.index >= self.length or self.text[self.index] != "{":
+            raise ValueError("JSON value is not an object")
+        self.index += 1
+        fields: dict[str, tuple[str, str]] = {}
+        self._whitespace()
+        if self.index < self.length and self.text[self.index] == "}":
+            self.index += 1
+            return fields
+        while True:
+            key = self._string(decode=True)
+            assert type(key) is str
+            lowered = key.casefold()
+            if lowered in fields:
+                raise ValueError("case-colliding or duplicate JSON field")
+            if reject_sensitive and _target_like_current_field(key):
+                # Deliberately fail before even grammar-scanning the value.
+                raise ValueError("target-like JSON field was quarantined")
+            self._whitespace()
+            if self.index >= self.length or self.text[self.index] != ":":
+                raise ValueError("missing colon after JSON field")
+            self.index += 1
+            self._whitespace()
+            value_start = self.index
+            self._value(reject_sensitive=reject_sensitive)
+            if collect:
+                fields[lowered] = (key, self.text[value_start:self.index])
+            else:
+                # The inventory is still needed to reject duplicate keys.
+                fields[lowered] = (key, "")
+            self._whitespace()
+            if self.index < self.length and self.text[self.index] == ",":
+                self.index += 1
+                self._whitespace()
+                continue
+            if self.index < self.length and self.text[self.index] == "}":
+                self.index += 1
+                return fields
+            raise ValueError("missing comma/end in JSON object")
+
+    def parse_value(self, *, reject_sensitive: bool) -> None:
+        self._value(reject_sensitive=reject_sensitive)
+        self._whitespace()
+        if self.index != self.length:
+            raise ValueError("trailing text after JSON value")
+
+    def parse_top_object(
+        self, *, reject_sensitive: bool
+    ) -> dict[str, tuple[str, str]]:
+        self._whitespace()
+        fields = self._object(reject_sensitive=reject_sensitive, collect=True)
+        self._whitespace()
+        if self.index != self.length:
+            raise ValueError("trailing text after target-blind corpus row")
+        return fields
+
+
+def _validate_target_blind_json_lexeme(
+    text: str, *, reject_sensitive: bool
+) -> None:
+    _TargetBlindJsonParser(text).parse_value(reject_sensitive=reject_sensitive)
+
+
+def _target_blind_top_level_fields(
+    text: str, *, reject_sensitive: bool = False
+) -> dict[str, tuple[str, str]]:
+    """Return top-level spans after recursively validating complete JSON."""
+
+    return _TargetBlindJsonParser(text).parse_top_object(
+        reject_sensitive=reject_sensitive
+    )
+
+
+def _target_like_current_field(name: str) -> bool:
+    # Preserve uppercase runs as words (``TARGETS`` -> ``targets``) while
+    # still splitting ordinary camel case and acronym-to-word boundaries
+    # (``heldOutTARGETSDecoded`` -> ``held_out_targets_decoded``).  Inserting
+    # an underscore before every capital would turn an all-caps sensitive key
+    # into ``t_a_r_g_e_t_s`` and let it evade the word-boundary quarantine.
+    normalized = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", name)
+    normalized = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", normalized).lower()
+    return CURRENT_TARGET_LIKE_KEY.search(normalized) is not None
+
+
+def _iter_target_blind_jsonl(
+    path: Path, expected_fields: frozenset[str], label: str
+) -> Iterator[tuple[int, dict[str, Any]]]:
+    """Decode a row only after its lexical key inventory is allowlisted."""
+
+    try:
+        with contract.resolve(path).open(
+            "r", encoding="utf-8", errors="strict", newline=""
+        ) as stream:
+            for line_number, raw_line in enumerate(stream, 1):
+                if not raw_line.endswith("\n"):
+                    raise ValueError(f"{label}:{line_number}: row is not line-complete")
+                text = raw_line[:-1]
+                if text.endswith("\r"):
+                    text = text[:-1]
+                if not text or text != text.strip():
+                    raise ValueError(f"{label}:{line_number}: row is blank or padded")
+                fields = _target_blind_top_level_fields(
+                    text, reject_sensitive=True
+                )
+                originals = {item[0] for item in fields.values()}
+                sensitive = sorted(
+                    field for field in originals if _target_like_current_field(field)
+                )
+                if sensitive:
+                    raise ValueError(
+                        f"{label}:{line_number}: target-like fields were rejected "
+                        "without decoding their values"
+                    )
+                if originals != set(expected_fields):
+                    raise ValueError(
+                        f"{label}:{line_number}: field inventory changed"
+                    )
+                try:
+                    value = json.loads(
+                        text,
+                        object_pairs_hook=contract._unique_object,
+                        parse_constant=lambda token: (_ for _ in ()).throw(
+                            ValueError(f"non-finite JSON token {token}")
+                        ),
+                    )
+                except (json.JSONDecodeError, ValueError) as error:
+                    raise ValueError(
+                        f"{label}:{line_number}: invalid strict JSON"
+                    ) from error
+                if type(value) is not dict:
+                    raise ValueError(f"{label}:{line_number}: row is not an object")
+                yield line_number, value
+    except UnicodeError as error:
+        raise ValueError(f"{label} is not strict UTF-8") from error
+
+
+def _digest_string_set(domain: str, values: Iterable[str]) -> str:
+    digest = hashlib.sha256()
+    digest.update(domain.encode("utf-8"))
+    digest.update(b"\0")
+    for value in sorted(set(values)):
+        payload = value.encode("utf-8")
+        digest.update(len(payload).to_bytes(8, "big"))
+        digest.update(payload)
+    return digest.hexdigest()
+
+
+def _canonical_ofen(value: Any, label: str) -> str:
+    if type(value) is not str or not value or value != value.strip():
+        raise ValueError(f"{label} is not a canonical OFEN string")
+    normalized = " ".join(value.split())
+    if normalized != value:
+        raise ValueError(f"{label} has noncanonical whitespace")
+    return value
+
+
+def _sampler_pair_identity(seed: int, pair_id: str) -> str:
+    return f"omega-root-sampler-pair-v1\0{seed}\0{pair_id}"
+
+
+def _sampler_trajectory_identity(seed: int, trajectory_id: str) -> str:
+    return f"omega-root-sampler-trajectory-v1\0{seed}\0{trajectory_id}"
+
+
+def _identity_snapshot(
+    path: Path, expected: Mapping[str, Any], label: str
+) -> dict[str, Any]:
+    _identity_shape(expected, label)
+    before = contract.identity(path)
+    if not contract.exact_json_equal(before, expected):
+        raise ValueError(f"{label} differs from its final-profile pin")
+    return before
+
+
+def _load_pinned_json(
+    path: Path, expected: Mapping[str, Any], label: str
+) -> dict[str, Any]:
+    before = _identity_snapshot(path, expected, label)
+    try:
+        text = contract.resolve(path).read_text(encoding="utf-8", errors="strict")
+    except UnicodeError as error:
+        raise ValueError(f"{label} is not strict UTF-8") from error
+    _validate_target_blind_json_lexeme(text, reject_sensitive=True)
+    try:
+        value = json.loads(
+            text,
+            object_pairs_hook=contract._unique_object,
+            parse_constant=lambda token: (_ for _ in ()).throw(
+                ValueError(f"non-finite JSON token {token}")
+            ),
+        )
+    except (json.JSONDecodeError, ValueError) as error:
+        raise ValueError(f"{label} is invalid strict JSON") from error
+    if type(value) is not dict:
+        raise ValueError(f"{label} is not a JSON object")
+    after = contract.identity(path)
+    if not contract.exact_json_equal(before, after):
+        raise ValueError(f"{label} changed while being read")
+    return value
+
+
+def _load_pinned_top_level_allowlist(
+    path: Path,
+    expected: Mapping[str, Any],
+    label: str,
+    *,
+    field_inventory: set[str],
+    decode_fields: set[str],
+) -> dict[str, Any]:
+    """Decode only named top-level structural fields from a pinned object."""
+
+    if not decode_fields.issubset(field_inventory):
+        raise AssertionError("top-level decode allowlist escapes its field inventory")
+    before = _identity_snapshot(path, expected, label)
+    try:
+        text = contract.resolve(path).read_text(encoding="utf-8", errors="strict")
+    except UnicodeError as error:
+        raise ValueError(f"{label} is not strict UTF-8") from error
+    # Opaque fields are fully grammar-checked recursively, but never decoded.
+    # Decoded fields receive an additional recursive sensitive-key quarantine.
+    spans = _target_blind_top_level_fields(text, reject_sensitive=False)
+    originals = {item[0] for item in spans.values()}
+    if originals != field_inventory:
+        raise ValueError(f"{label} field inventory changed")
+    result: dict[str, Any] = {}
+    for name in decode_fields:
+        entry = spans.get(name.casefold())
+        if entry is None or entry[0] != name:
+            raise ValueError(f"{label} field spelling changed: {name}")
+        _validate_target_blind_json_lexeme(
+            entry[1], reject_sensitive=True
+        )
+        try:
+            result[name] = json.loads(
+                entry[1],
+                object_pairs_hook=contract._unique_object,
+                parse_constant=lambda token: (_ for _ in ()).throw(
+                    ValueError(f"non-finite JSON token {token}")
+                ),
+            )
+        except (json.JSONDecodeError, ValueError) as error:
+            raise ValueError(f"{label}.{name} is invalid strict JSON") from error
+    after = contract.identity(path)
+    if not contract.exact_json_equal(before, after):
+        raise ValueError(f"{label} changed while being read")
+    return result
+
+
+def _current_corpus_pins(profile: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    identities = contract.mapping(
+        profile.get("finalFreezeIdentities"), "current-corpus final identities"
+    )
+    pins: dict[str, dict[str, Any]] = {}
+    for name, relative in {
+        **CURRENT_CORPUS_PATHS,
+        **CURRENT_RUNTIME_PATHS,
+        **CURRENT_REPLAY_PATHS,
+    }.items():
+        pins[name] = _profile_identity(
+            identities.get(name),
+            path=contract.REPO / relative,
+            label=f"current-corpus {name}",
+        )
+    return pins
+
+
+def _same_content_identity(left: Any, right: Any) -> bool:
+    return (
+        type(left) is dict
+        and type(right) is dict
+        and type(left.get("bytes")) is int
+        and left.get("bytes") == right.get("bytes")
+        and type(left.get("sha256")) is str
+        and left.get("sha256") == right.get("sha256")
+    )
+
+
+def _assert_exact_file_reproduction(
+    original: Path,
+    expected: Mapping[str, Any],
+    replay: Path,
+    label: str,
+) -> dict[str, Any]:
+    original_before = _identity_snapshot(original, expected, f"{label} original")
+    replay_identity = contract.identity(replay)
+    if not _same_content_identity(original_before, replay_identity):
+        raise ValueError(f"{label} replay bytes/SHA-256 differ")
+    with contract.resolve(original).open("rb") as left, contract.resolve(replay).open(
+        "rb"
+    ) as right:
+        while True:
+            left_block = left.read(1024 * 1024)
+            right_block = right.read(1024 * 1024)
+            if left_block != right_block:
+                raise ValueError(f"{label} replay is not byte-for-byte identical")
+            if not left_block:
+                break
+    if not contract.exact_json_equal(
+        contract.identity(original), original_before
+    ):
+        raise ValueError(f"{label} original changed during replay comparison")
+    if not contract.exact_json_equal(
+        contract.identity(replay), replay_identity
+    ):
+        raise ValueError(f"{label} replay changed during comparison")
+    return {
+        "bytes": original_before["bytes"],
+        "sha256": original_before["sha256"],
+    }
+
+
+def _root_manifest_semantics(
+    path: Path, expected: Mapping[str, Any], label: str
+) -> tuple[dict[str, str], str]:
+    before = _identity_snapshot(path, expected, label)
+    try:
+        text = contract.resolve(path).read_text(encoding="utf-8", errors="strict")
+    except UnicodeError as error:
+        raise ValueError(f"{label} is not strict UTF-8") from error
+    spans = _target_blind_top_level_fields(text, reject_sensitive=False)
+    values = {entry[0]: entry[1].strip() for entry in spans.values()}
+    if "createdUtc" not in values or "output" not in values:
+        raise ValueError(f"{label} lacks replay-normalized fields")
+    _validate_target_blind_json_lexeme(values["createdUtc"], reject_sensitive=True)
+    created = json.loads(values["createdUtc"])
+    _require_canonical_utc(created, f"{label}.createdUtc")
+    values["createdUtc"] = json.dumps("<REPLAY-UTC>")
+    _validate_target_blind_json_lexeme(values["output"], reject_sensitive=True)
+    output = json.loads(
+        values["output"], object_pairs_hook=contract._unique_object
+    )
+    output_identity = _identity_shape(output, f"{label}.output")
+    output_identity["path"] = "<REPLAY-OUTPUT>"
+    values["output"] = json.dumps(
+        output_identity, sort_keys=True, separators=(",", ":")
+    )
+    if not contract.exact_json_equal(contract.identity(path), before):
+        raise ValueError(f"{label} changed while its semantics were read")
+    digest = hashlib.sha256(
+        json.dumps(values, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return values, digest
+
+
+def _safe_manifest_semantics(
+    path: Path,
+    expected: Mapping[str, Any],
+    label: str,
+    *,
+    normalize_output: bool,
+    normalize_manifest: bool = False,
+) -> tuple[dict[str, Any], str]:
+    value = copy.deepcopy(_load_pinned_json(path, expected, label))
+    _require_canonical_utc(value.get("createdUtc"), f"{label}.createdUtc")
+    value["createdUtc"] = "<REPLAY-UTC>"
+    for field, enabled in (
+        ("output", normalize_output),
+        ("manifest", normalize_manifest),
+    ):
+        if not enabled:
+            continue
+        identity = _identity_shape(value.get(field), f"{label}.{field}")
+        identity["path"] = f"<REPLAY-{field.upper()}>"
+        if field == "manifest":
+            # The manifest's raw identity necessarily changes when its
+            # createdUtc/output path changes.  Its independently compared
+            # semantic digest above is the authority for those bytes.
+            identity["bytes"] = 0
+            identity["sha256"] = "0" * 64
+        value[field] = identity
+    digest = hashlib.sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return value, digest
+
+
+def _python_script_command(
+    python: Mapping[str, Any],
+    source: Mapping[str, Any],
+    arguments: Sequence[str],
+    *,
+    pycache_prefix: Path,
+) -> list[str]:
+    source_path = contract.resolve(Path(str(source["path"])))
+    cache_path = contract.resolve(pycache_prefix)
+    if cache_path.exists():
+        raise FileExistsError("replay bytecode namespace already exists")
+    bootstrap = (
+        "import runpy,sys;"
+        f"sys.path.insert(0,{str(source_path.parent)!r});"
+        f"runpy.run_path({str(source_path)!r},run_name='__main__')"
+    )
+    return [
+        str(python["path"]),
+        "-I",
+        "-B",
+        "-X",
+        f"pycache_prefix={cache_path}",
+        "-c",
+        bootstrap,
+        *arguments,
+    ]
+
+
+def _prepare_roots_replay_command(
+    profile: Mapping[str, Any],
+    pins: Mapping[str, Mapping[str, Any]],
+    python: Mapping[str, Any],
+    output: Path,
+) -> tuple[list[str], dict[str, Any]]:
+    fresh = contract.mapping(profile.get("freshDecisionCorpus"), "replay fresh corpus")
+    source = contract.mapping(fresh.get("source"), "replay source policy")
+    quota = contract.mapping(fresh.get("rootQuota"), "replay root quota")
+    source_seed = source.get("requiredRunSeed")
+    root_seed = source.get("rootSelectionUsesSeed")
+    data_profile = source.get("requiredDataProfile")
+    roots_per_phase = quota.get("completeRootsPerPhase")
+    reserve_per_phase = quota.get("reserveRootsPerPhase")
+    if (
+        type(source_seed) is not int
+        or type(root_seed) is not int
+        or type(data_profile) is not str
+        or not data_profile
+        or type(roots_per_phase) is not int
+        or type(reserve_per_phase) is not int
+    ):
+        raise ValueError("frozen prepare-roots CLI policy changed")
+    teacher = _identity_shape(
+        pins["decisionTeacherSource"], "prepare-roots teacher source"
+    )
+    root_sampler_chesslib_path = contract.resolve(
+        Path(str(pins["rootSamplerAssembly"]["path"])).parent / "ChessLib.dll"
+    )
+    root_sampler_chesslib = contract.identity(root_sampler_chesslib_path)
+    if not _same_content_identity(root_sampler_chesslib, pins["chessLibAssembly"]):
+        raise ValueError("root-sampler ChessLib differs from frozen decision ChessLib")
+    engine_sha = pins["teacherEngineExecutable"]["sha256"]
+    manifest = Path(str(output) + ".manifest.json")
+    arguments = [
+        "prepare-roots",
+        "--events", str(pins["sourceEvents"]["path"]),
+        "--opening-suite", str(pins["sourceOpeningSuite"]["path"]),
+        "--source-match-config", str(pins["sourceMatchConfig"]["path"]),
+        "--source-match-harness", str(pins["sourceMatchHarnessAssembly"]["path"]),
+        "--root-sampler", str(pins["rootSamplerAssembly"]["path"]),
+        "--root-sampler-chesslib", str(root_sampler_chesslib["path"]),
+        "--source-root-pool", str(pins["sourceRootPool"]["path"]),
+        "--source-root-pool-manifest", str(pins["sourceRootPoolManifest"]["path"]),
+        "--source-root-pool-seal", str(pins["sourceRootPoolSeal"]["path"]),
+        "--output", str(output),
+        "--manifest", str(manifest),
+        "--seed", str(root_seed),
+        "--source-seed", str(source_seed),
+        "--profile-id", PROFILE_ID,
+        "--data-profile-id", data_profile,
+        "--freshness-marker", f"g4-source-{source_seed}",
+        "--roots-per-phase", str(roots_per_phase),
+        "--reserve-per-phase", str(reserve_per_phase),
+        "--required-engine-sha256", str(engine_sha),
+    ]
+    return (
+        _python_script_command(
+            python,
+            teacher,
+            arguments,
+            pycache_prefix=output.parent / "isolated-python-cache",
+        ),
+        root_sampler_chesslib,
+    )
+
+
+def _reproduce_current_corpus(
+    profile: Mapping[str, Any], pins: Mapping[str, Mapping[str, Any]]
+) -> dict[str, Any]:
+    _, teacher, python = _forbidden_worker_authority(profile, allow_template=False)
+    if not contract.exact_json_equal(teacher, pins["decisionTeacherSource"]):
+        raise ValueError("prepare-roots teacher authority differs from corpus pin")
+    with tempfile.TemporaryDirectory(prefix="omega-g4-corpus-replay-") as directory:
+        temporary = Path(directory)
+        replay_roots = temporary / "roots.jsonl"
+        root_command, root_sampler_chesslib = _prepare_roots_replay_command(
+            profile, pins, python, replay_roots
+        )
+        completed = subprocess.run(
+            root_command,
+            cwd=temporary,
+            env=_sanitized_python_environment(),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="strict",
+            check=False,
+        )
+        if completed.returncode != 0 or completed.stderr.strip():
+            raise ValueError(
+                "deterministic prepare-roots replay failed: "
+                + (completed.stderr.strip() or completed.stdout.strip())
+            )
+        root_exact = _assert_exact_file_reproduction(
+            Path(str(pins["roots"]["path"])),
+            pins["roots"],
+            replay_roots,
+            "current roots",
+        )
+        original_root_semantics, root_manifest_digest = _root_manifest_semantics(
+            Path(str(pins["rootsManifest"]["path"])),
+            pins["rootsManifest"],
+            "current root manifest",
+        )
+        replay_root_manifest = Path(str(replay_roots) + ".manifest.json")
+        replay_root_pin = contract.identity(replay_root_manifest)
+        replay_root_semantics, _ = _root_manifest_semantics(
+            replay_root_manifest,
+            replay_root_pin,
+            "replayed root manifest",
+        )
+        if not contract.exact_json_equal(
+            original_root_semantics, replay_root_semantics
+        ):
+            raise ValueError("deterministic root manifest semantics changed")
+
+        replay_children = temporary / "children.jsonl"
+        child_command = [
+            str(pins["dotnetRuntimeHostExecutable"]["path"]),
+            str(pins["decisionSamplerAssembly"]["path"]),
+            "--input",
+            str(pins["roots"]["path"]),
+            "--output",
+            str(replay_children),
+        ]
+        child_completed = subprocess.run(
+            child_command,
+            cwd=temporary,
+            env=_sanitized_environment(),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="strict",
+            check=False,
+        )
+        if child_completed.returncode != 0 or child_completed.stderr.strip():
+            raise ValueError(
+                "deterministic decision-sampler replay failed: "
+                + (child_completed.stderr.strip() or child_completed.stdout.strip())
+            )
+        child_exact = _assert_exact_file_reproduction(
+            Path(str(pins["children"]["path"])),
+            pins["children"],
+            replay_children,
+            "current legal children",
+        )
+        original_child_semantics, child_manifest_digest = _safe_manifest_semantics(
+            Path(str(pins["childrenManifest"]["path"])),
+            pins["childrenManifest"],
+            "current child manifest",
+            normalize_output=True,
+        )
+        replay_child_manifest = Path(str(replay_children) + ".manifest.json")
+        replay_child_pin = contract.identity(replay_child_manifest)
+        replay_child_semantics, _ = _safe_manifest_semantics(
+            replay_child_manifest,
+            replay_child_pin,
+            "replayed child manifest",
+            normalize_output=True,
+        )
+        if not contract.exact_json_equal(
+            original_child_semantics, replay_child_semantics
+        ):
+            raise ValueError("deterministic child manifest semantics changed")
+
+        original_completion = Path(
+            str(pins["children"]["path"]) + ".complete.seal.json"
+        )
+        original_completion_pin = contract.identity(original_completion)
+        original_completion_semantics, completion_digest = _safe_manifest_semantics(
+            original_completion,
+            original_completion_pin,
+            "current child completion seal",
+            normalize_output=True,
+            normalize_manifest=True,
+        )
+        replay_completion = Path(str(replay_children) + ".complete.seal.json")
+        replay_completion_pin = contract.identity(replay_completion)
+        replay_completion_semantics, _ = _safe_manifest_semantics(
+            replay_completion,
+            replay_completion_pin,
+            "replayed child completion seal",
+            normalize_output=True,
+            normalize_manifest=True,
+        )
+        if not contract.exact_json_equal(
+            original_completion_semantics, replay_completion_semantics
+        ):
+            raise ValueError("deterministic child completion semantics changed")
+    return {
+        "roots": {
+            **root_exact,
+            "manifestSemanticSha256": root_manifest_digest,
+        },
+        "children": {
+            **child_exact,
+            "manifestSemanticSha256": child_manifest_digest,
+            "completionSemanticSha256": completion_digest,
+        },
+        "python": dict(python),
+        "decisionTeacher": dict(teacher),
+        "rootSamplerChessLib": root_sampler_chesslib,
+        "dotnetHost": dict(pins["dotnetRuntimeHostExecutable"]),
+    }
+
+
+def _synthetic_current_corpus_replay_evidence(
+    pins: Mapping[str, Mapping[str, Any]]
+) -> dict[str, Any]:
+    """Shape-compatible evidence for the local fixture; not production trust."""
+
+    _, root_digest = _root_manifest_semantics(
+        Path(str(pins["rootsManifest"]["path"])),
+        pins["rootsManifest"],
+        "synthetic root manifest",
+    )
+    _, child_digest = _safe_manifest_semantics(
+        Path(str(pins["childrenManifest"]["path"])),
+        pins["childrenManifest"],
+        "synthetic child manifest",
+        normalize_output=True,
+    )
+    completion_path = Path(
+        str(pins["children"]["path"]) + ".complete.seal.json"
+    )
+    completion_pin = contract.identity(completion_path)
+    _, completion_digest = _safe_manifest_semantics(
+        completion_path,
+        completion_pin,
+        "synthetic child completion",
+        normalize_output=True,
+        normalize_manifest=True,
+    )
+    return {
+        "roots": {
+            "bytes": pins["roots"]["bytes"],
+            "sha256": pins["roots"]["sha256"],
+            "manifestSemanticSha256": root_digest,
+        },
+        "children": {
+            "bytes": pins["children"]["bytes"],
+            "sha256": pins["children"]["sha256"],
+            "manifestSemanticSha256": child_digest,
+            "completionSemanticSha256": completion_digest,
+        },
+        "python": contract.identity(Path(sys.executable)),
+        "decisionTeacher": contract.identity(
+            contract.REPO / "tools/omega_nnue/omega_decision_teacher.py"
+        ),
+        "rootSamplerChessLib": dict(pins["rootSamplerChessLibAssembly"]),
+        "dotnetHost": dict(pins["decisionSamplerAssembly"]),
+    }
+
+
+def _scan_pinned_jsonl(
+    path: Path,
+    expected_identity: Mapping[str, Any],
+    expected_fields: frozenset[str],
+    label: str,
+) -> Iterator[tuple[int, dict[str, Any]]]:
+    before = _identity_snapshot(path, expected_identity, label)
+    yield from _iter_target_blind_jsonl(path, expected_fields, label)
+    after = contract.identity(path)
+    if not contract.exact_json_equal(before, after):
+        raise ValueError(f"{label} changed while being scanned")
+
+
+def _require_nonempty_string(value: Any, label: str) -> str:
+    if type(value) is not str or not value or value != value.strip():
+        raise ValueError(f"{label} must be a nonempty canonical string")
+    return value
+
+
+def _require_sha256_string(value: Any, label: str) -> str:
+    if type(value) is not str or contract.HEX_256.fullmatch(value) is None:
+        raise ValueError(f"{label} must be an exact lowercase SHA-256 string")
+    return value
+
+
+def _require_canonical_utc(value: Any, label: str) -> str:
+    if type(value) is not str or CANONICAL_UTC.fullmatch(value) is None:
+        raise ValueError(f"{label} must use canonical UTC JSON syntax")
+    contract.parse_utc(value, label)
+    return value
+
+
+def _current_source_pool(
+    pins: Mapping[str, Mapping[str, Any]],
+    *,
+    source_seed: int,
+    exact_keys: set[str],
+    exclusion_signatures: set[str],
+    pool_exact_keys: set[str],
+    pool_signatures: set[str],
+) -> dict[str, Any]:
+    manifest = _load_pinned_json(
+        Path(pins["sourceRootPoolManifest"]["path"]),
+        pins["sourceRootPoolManifest"],
+        "current-corpus source-root-pool manifest",
+    )
+    if set(manifest) != {
+        "schemaVersion",
+        "kind",
+        "createdUtc",
+        "policy",
+        "coverage",
+        "runtime",
+        "output",
+        "finalStageSeal",
+    }:
+        raise ValueError("current-corpus source-pool manifest fields changed")
+    policy = contract.mapping(manifest.get("policy"), "source-pool policy")
+    expected_policy = {
+        "deterministicPrng": "SplitMix64",
+        "seed": str(source_seed),
+        "trajectoryPairs": 8192,
+        "independentTrajectoriesPerPair": 2,
+        "workers": 4,
+        "maxPlies": 220,
+        "positionsPerPhaseAndSide": 2,
+        "captureSelectionPercent": 72,
+        "terminalRootsEmitted": 0,
+        "maximumHalfmoveClock": 89,
+        "minimumPieces": 7,
+        "minimumPiecesPerSide": 2,
+        "phasePlyWindows": SOURCE_POOL_PHASE_WINDOWS,
+    }
+    if (
+        type(manifest.get("schemaVersion")) is not int
+        or manifest.get("schemaVersion") != SCHEMA_VERSION
+        or manifest.get("kind") != "omega-rules-only-random-root-manifest"
+        or manifest.get("finalStageSeal") is not False
+        or not contract.exact_json_equal(policy, expected_policy)
+        or not contract.exact_json_equal(manifest.get("output"), pins["sourceRootPool"])
+    ):
+        raise ValueError("current-corpus source-pool manifest contract changed")
+    _require_canonical_utc(
+        manifest.get("createdUtc"), "source-root-pool manifest createdUtc"
+    )
+    runtime = contract.mapping(manifest.get("runtime"), "source-pool runtime")
+    if set(runtime) != {"framework", "samplerAssembly", "chessLibAssembly"}:
+        raise ValueError("current-corpus source-pool runtime fields changed")
+    if (
+        type(runtime.get("framework")) is not str
+        or not runtime["framework"]
+        or not contract.exact_json_equal(
+            runtime.get("samplerAssembly"), pins["rootSamplerAssembly"]
+        )
+        or not _same_content_identity(
+            runtime.get("chessLibAssembly"), pins["chessLibAssembly"]
+        )
+    ):
+        raise ValueError("current-corpus source-pool runtime identity changed")
+
+    seal = _load_pinned_json(
+        Path(pins["sourceRootPoolSeal"]["path"]),
+        pins["sourceRootPoolSeal"],
+        "current-corpus source-root-pool completion seal",
+    )
+    if set(seal) != {
+        "schemaVersion",
+        "kind",
+        "createdUtc",
+        "output",
+        "manifest",
+        "producer",
+        "finalStageSeal",
+    }:
+        raise ValueError("current-corpus source-pool seal fields changed")
+    producer = contract.mapping(seal.get("producer"), "source-pool producer")
+    if (
+        type(seal.get("schemaVersion")) is not int
+        or seal.get("schemaVersion") != SCHEMA_VERSION
+        or seal.get("kind")
+        != "omega-rules-only-random-root-completion-seal"
+        or seal.get("finalStageSeal") is not True
+        or not contract.exact_json_equal(seal.get("output"), pins["sourceRootPool"])
+        or not contract.exact_json_equal(
+            seal.get("manifest"), pins["sourceRootPoolManifest"]
+        )
+        or set(producer) != {"samplerAssembly", "chessLibAssembly", "framework"}
+        or type(producer.get("framework")) is not str
+        or not producer["framework"]
+        or not contract.exact_json_equal(
+            producer.get("samplerAssembly"), pins["rootSamplerAssembly"]
+        )
+        or not _same_content_identity(
+            producer.get("chessLibAssembly"), pins["chessLibAssembly"]
+        )
+    ):
+        raise ValueError("current-corpus source-pool completion contract changed")
+    _require_canonical_utc(
+        seal.get("createdUtc"), "source-root-pool seal createdUtc"
+    )
+
+    pairs: set[str] = set()
+    trajectories: set[str] = set()
+    raw_pairs: set[str] = set()
+    raw_trajectories: set[str] = set()
+    rows = 0
+    phase_counts: Counter[str] = Counter()
+    side_counts: Counter[str] = Counter()
+    maximum_ply = 0
+    path = Path(pins["sourceRootPool"]["path"])
+    for line_number, record in _scan_pinned_jsonl(
+        path,
+        pins["sourceRootPool"],
+        frozenset(SAMPLER_RECORD_FIELDS),
+        "current-corpus source-root pool",
+    ):
+        if (
+            type(record.get("schemaVersion")) is not int
+            or record.get("schemaVersion") != SCHEMA_VERSION
+            or record.get("kind") != "omega-rules-only-random-root"
+            or record.get("generatorSeed") != str(source_seed)
+        ):
+            raise ValueError(
+                f"{path}:{line_number}: source-pool row envelope changed"
+            )
+        if (
+            type(record.get("generatorSeed")) is not str
+            or record.get("generatorSeed") != str(source_seed)
+            or type(record.get("trajectorySeed")) is not str
+            or not record["trajectorySeed"].isdigit()
+            or not 0 <= int(record["trajectorySeed"]) <= UINT64_MASK
+            or type(record.get("ply")) is not int
+            or not 0 <= record["ply"] <= 220
+            or type(record.get("halfmoveClock")) is not int
+            or not 0 <= record["halfmoveClock"] <= 89
+            or type(record.get("selectionRank")) is not str
+            or contract.HEX_256.fullmatch(record["selectionRank"]) is None
+        ):
+            raise ValueError(
+                f"{path}:{line_number}: source-pool scalar metadata changed"
+            )
+        pair_id = _require_nonempty_string(
+            record.get("trajectoryPairId"), "source-pool trajectoryPairId"
+        )
+        trajectory_id = _require_nonempty_string(
+            record.get("trajectoryId"), "source-pool trajectoryId"
+        )
+        flavor = record.get("flavor")
+        match = CURRENT_SOURCE_TRAJECTORY.fullmatch(trajectory_id)
+        if (
+            SAMPLER_PAIR_ID.fullmatch(pair_id) is None
+            or match is None
+            or match.group(1) != pair_id
+            or flavor not in {"ab", "ba"}
+            or match.group(2) != flavor
+        ):
+            raise ValueError(
+                f"{path}:{line_number}: source-pool trajectory identity changed"
+            )
+        pair_number = int(pair_id.rsplit("-", 1)[1])
+        if not 1 <= pair_number <= 8192:
+            raise ValueError(
+                f"{path}:{line_number}: source-pool pair is outside frozen range"
+            )
+        ofen = _canonical_ofen(record.get("ofen"), "source-pool OFEN")
+        phase, side, exact, _, signatures = core._position_meta(ofen)
+        phase_minimum, phase_maximum = SOURCE_POOL_PHASE_WINDOWS[phase]
+        if record.get("phase") != phase or record.get("sideToMove") != side:
+            raise ValueError(
+                f"{path}:{line_number}: source-pool OFEN metadata changed"
+            )
+        if (
+            not phase_minimum <= record["ply"] <= min(phase_maximum, 220)
+            or record["halfmoveClock"] != int(ofen.split()[4])
+        ):
+            raise ValueError(
+                f"{path}:{line_number}: source-pool ply/clock metadata changed"
+            )
+        pieces, _, _ = core.parse_ofen(ofen)
+        expected_piece_counts = {
+            "pieceCount": len(pieces),
+            "whitePieces": sum(piece_side == 0 for _, piece_side, _ in pieces),
+            "blackPieces": sum(piece_side != 0 for _, piece_side, _ in pieces),
+            "champions": sum(piece == 6 for piece, _, _ in pieces),
+            "wizards": sum(piece == 7 for piece, _, _ in pieces),
+        }
+        if any(
+            type(record.get(name)) is not int or record.get(name) != expected
+            for name, expected in expected_piece_counts.items()
+        ):
+            raise ValueError(
+                f"{path}:{line_number}: source-pool piece metadata changed"
+            )
+        exact_keys.add(exact)
+        exclusion_signatures.update(signatures)
+        exclusion_signatures.add(exact)
+        pool_exact_keys.add(exact)
+        pool_signatures.update(signatures)
+        pool_signatures.add(exact)
+        raw_pairs.add(pair_id)
+        raw_trajectories.add(trajectory_id)
+        pairs.add(_sampler_pair_identity(source_seed, pair_id))
+        trajectories.add(_sampler_trajectory_identity(source_seed, trajectory_id))
+        rows += 1
+        phase_counts[phase] += 1
+        side_counts[side] += 1
+        maximum_ply = max(maximum_ply, record["ply"])
+    if rows == 0:
+        raise ValueError("current-corpus source-root pool is empty")
+    coverage = contract.mapping(manifest.get("coverage"), "source-pool coverage")
+    if set(coverage) != {
+        "records",
+        "phaseCounts",
+        "sideToMoveCounts",
+        "terminalTrajectories",
+        "maxPlyReached",
+        "promotionSelections",
+        "enPassantClassification",
+    }:
+        raise ValueError("current-corpus source-pool coverage fields changed")
+    promotions = contract.mapping(
+        coverage.get("promotionSelections"), "source-pool promotion selections"
+    )
+    if (
+        type(coverage.get("records")) is not int
+        or coverage.get("records") != rows
+        or not contract.exact_json_equal(
+            coverage.get("phaseCounts"),
+            {phase: phase_counts[phase] for phase in PHASES},
+        )
+        or not contract.exact_json_equal(
+            coverage.get("sideToMoveCounts"),
+            {side: side_counts[side] for side in ("w", "b")},
+        )
+        or type(coverage.get("terminalTrajectories")) is not int
+        or not 0 <= coverage["terminalTrajectories"] <= 16384
+        or type(coverage.get("maxPlyReached")) is not int
+        or not maximum_ply <= coverage["maxPlyReached"] <= 220
+        or set(promotions) != set("qrbncw")
+        or any(type(value) is not int or value < 0 for value in promotions.values())
+        or coverage.get("enPassantClassification")
+        != (
+            "An en-passant move lands on an empty target and remains in the "
+            "ordinary move pool; legality still comes from ChessLib."
+        )
+    ):
+        raise ValueError("current-corpus source-pool coverage changed")
+    return {
+        "rows": rows,
+        "pairs": pairs,
+        "trajectories": trajectories,
+        "rawPairs": raw_pairs,
+        "rawTrajectories": raw_trajectories,
+    }
+
+
+def _current_corpus_exclusion(
+    profile: Mapping[str, Any], historical: set[str]
+) -> tuple[set[str], dict[str, set[str]], dict[str, Any]]:
+    """Recompute the complete final-profile-pinned G4 position boundary."""
+
+    pins = _current_corpus_pins(profile)
+    return _current_corpus_exclusion_from_pins(profile, historical, pins)
+
+
+def _current_corpus_exclusion_from_pins(
+    profile: Mapping[str, Any],
+    historical: set[str],
+    pins: Mapping[str, Mapping[str, Any]],
+) -> tuple[set[str], dict[str, set[str]], dict[str, Any]]:
+    fresh = contract.mapping(
+        profile.get("freshDecisionCorpus"), "fresh decision corpus"
+    )
+    source_contract = contract.mapping(fresh.get("source"), "fresh corpus source")
+    quota = contract.mapping(fresh.get("rootQuota"), "fresh corpus root quota")
+    source_seed = source_contract.get("requiredRunSeed")
+    expected_roots = quota.get("maximumCandidateRoots")
+    if type(source_seed) is not int or type(expected_roots) is not int:
+        raise ValueError("fresh-corpus source seed/root quota has the wrong JSON type")
+    identities_value = profile.get("finalFreezeIdentities")
+    if type(identities_value) is dict:
+        identities = contract.mapping(
+            identities_value, "current-corpus final identities"
+        )
+        teacher_engine = _profile_identity(
+            identities.get("teacherEngineExecutable"),
+            path=contract.REPO
+            / "tools/omega_nnue/frozen_runtime/king-state-v4/engine/senpai.exe",
+            label="current-corpus teacher engine",
+        )
+        expected_engine_sha = teacher_engine["sha256"]
+        deterministic_replay = _reproduce_current_corpus(profile, pins)
+    else:
+        expected_engine_sha = profile.get("_selfTestTeacherEngineSha256")
+        if (
+            type(expected_engine_sha) is not str
+            or contract.HEX_256.fullmatch(expected_engine_sha) is None
+        ):
+            raise ValueError("current-corpus teacher engine identity is absent")
+        deterministic_replay = _synthetic_current_corpus_replay_evidence(pins)
+
+    root_manifest_fields = {
+        "schemaVersion",
+        "kind",
+        "createdUtc",
+        "profileId",
+        "freshnessMarker",
+        "policy",
+        "coverage",
+        "sources",
+        "producer",
+        "finalStageSeal",
+        "output",
+    }
+    root_manifest = _load_pinned_top_level_allowlist(
+        Path(pins["rootsManifest"]["path"]),
+        pins["rootsManifest"],
+        "current-corpus root manifest",
+        field_inventory=root_manifest_fields,
+        decode_fields={
+            "schemaVersion",
+            "kind",
+            "createdUtc",
+            "profileId",
+            "freshnessMarker",
+            "policy",
+            "coverage",
+            "finalStageSeal",
+            "output",
+        },
+    )
+    root_policy = contract.mapping(root_manifest.get("policy"), "root policy")
+    root_seed = source_contract.get("rootSelectionUsesSeed")
+    complete_per_phase = quota.get("completeRootsPerPhase")
+    reserve_per_phase = quota.get("reserveRootsPerPhase")
+    if any(
+        type(item) is not int
+        for item in (root_seed, complete_per_phase, reserve_per_phase)
+    ):
+        raise ValueError("root-selection policy is absent from the profile")
+    expected_root_policy = {
+        "sourceSeed": source_seed,
+        "seed": root_seed,
+        "rootsPerPhase": complete_per_phase,
+        "reservePerPhase": reserve_per_phase,
+        "maximumRootsPerSourceGroup": 1,
+        "primaryPerPhaseAndSide": complete_per_phase // 2,
+        "reservePerPhaseAndSide": reserve_per_phase // 2,
+        "selection": "target-blind SHA-256 rank",
+        "source": "latest complete HCE-only OmegaMatch attempt",
+        "sourceGrouping": (
+            "one root maximum per pinned opening Source provenance tag; "
+            "the complete AB/BA pair stays indivisible"
+        ),
+        "equivalentAbBaPolicy": (
+            "same-group exact inputs with the same move are deterministically "
+            "collapsed; conflicts abort"
+        ),
+        "requiredHceOptions": ROOT_HCE_OPTIONS,
+        "requiredEngineSha256": expected_engine_sha,
+    }
+    if (
+        type(root_manifest.get("schemaVersion")) is not int
+        or root_manifest.get("schemaVersion") != SCHEMA_VERSION
+        or root_manifest.get("kind") != "omega-decision-root-manifest"
+        or root_manifest.get("profileId") != PROFILE_ID
+        or root_manifest.get("freshnessMarker") != f"g4-source-{source_seed}"
+        or root_manifest.get("finalStageSeal") is not True
+        or not contract.exact_json_equal(root_policy, expected_root_policy)
+        or not contract.exact_json_equal(root_manifest.get("output"), pins["roots"])
+    ):
+        raise ValueError("current-corpus root manifest contract changed")
+    _require_canonical_utc(
+        root_manifest.get("createdUtc"), "current root manifest createdUtc"
+    )
+
+    roots: dict[str, dict[str, Any]] = {}
+    root_exact: dict[str, str] = {}
+    exact_keys: set[str] = set()
+    exclusion_signatures: set[str] = set()
+    root_signatures: set[str] = set()
+    child_signatures: set[str] = set()
+    pool_exact_keys: set[str] = set()
+    pool_signatures: set[str] = set()
+    group_ids: set[str] = set()
+    source_game_ids: set[str] = set()
+    source_pair_ids: set[str] = set()
+    source_run_ids: set[str] = set()
+    provenance_pairs: set[str] = set()
+    role_phase_counts: Counter[tuple[str, str]] = Counter()
+    role_phase_side_counts: Counter[tuple[str, str, str]] = Counter()
+    exact_owner: dict[str, str] = {}
+    root_path = Path(pins["roots"]["path"])
+    for line_number, root in _scan_pinned_jsonl(
+        root_path,
+        pins["roots"],
+        CURRENT_ROOT_FIELDS,
+        "current-corpus roots",
+    ):
+        if (
+            type(root.get("schemaVersion")) is not int
+            or root.get("schemaVersion") != SCHEMA_VERSION
+            or root.get("kind") != "omega-hce-on-policy-root"
+        ):
+            raise ValueError(f"{root_path}:{line_number}: root envelope changed")
+        root_id = _require_nonempty_string(root.get("rootId"), "rootId")
+        group_id = _require_nonempty_string(root.get("groupId"), "groupId")
+        source_game = _require_nonempty_string(
+            root.get("sourceGameId"), "sourceGameId"
+        )
+        source_pair = _require_nonempty_string(
+            root.get("sourcePairId"), "sourcePairId"
+        )
+        source_run = _require_nonempty_string(root.get("sourceRunId"), "sourceRunId")
+        provenance = _require_nonempty_string(
+            root.get("sourceProvenanceTag"), "sourceProvenanceTag"
+        )
+        provenance_match = CURRENT_SOURCE_PAIR_TAG.fullmatch(provenance)
+        if provenance_match is None:
+            raise ValueError(
+                f"{root_path}:{line_number}: source provenance tag changed"
+            )
+        if root_id in roots:
+            raise ValueError(f"{root_path}:{line_number}: duplicate rootId")
+        if any(
+            type(root.get(name)) is not int or root[name] < 0
+            for name in ("sourceAttempt", "sourcePly", "sourceLine")
+        ):
+            raise ValueError(f"{root_path}:{line_number}: root integer metadata changed")
+        for name in (
+            "sourceOpeningId",
+            "sourceEngineId",
+            "rootPvMove",
+            "selectionRank",
+        ):
+            _require_nonempty_string(root.get(name), f"root {name}")
+        if (
+            _require_sha256_string(
+                root.get("sourceEngineSha256"), "root sourceEngineSha256"
+            ) != expected_engine_sha
+            or type(root.get("selectionRank")) is not str
+            or contract.HEX_256.fullmatch(root["selectionRank"]) is None
+            or root.get("candidateRole") not in {"primary", "reserve"}
+        ):
+            raise ValueError(f"{root_path}:{line_number}: root rank/role changed")
+        ofen = _canonical_ofen(root.get("ofen"), "current root OFEN")
+        phase, side, exact, _, signatures = core._position_meta(ofen)
+        if root.get("phase") != phase or root.get("sideToMove") != side:
+            raise ValueError(f"{root_path}:{line_number}: root OFEN metadata changed")
+        prior_owner = exact_owner.setdefault(exact, group_id)
+        if prior_owner != group_id:
+            raise ValueError("current exact root position crosses source groups")
+        roots[root_id] = dict(root)
+        root_exact[root_id] = exact
+        exact_keys.add(exact)
+        exclusion_signatures.add(exact)
+        exclusion_signatures.update(signatures)
+        root_signatures.add(exact)
+        root_signatures.update(signatures)
+        group_ids.add(group_id)
+        source_game_ids.add(source_game)
+        source_pair_ids.add(source_pair)
+        source_run_ids.add(source_run)
+        provenance_pairs.add(
+            _sampler_pair_identity(source_seed, provenance_match.group(1))
+        )
+        role_phase_counts[(phase, str(root["candidateRole"]))] += 1
+        role_phase_side_counts[(
+            phase, side, str(root["candidateRole"])
+        )] += 1
+    if len(roots) != expected_roots:
+        raise ValueError(
+            f"current root count changed: {len(roots)} != {expected_roots}"
+        )
+    if len(group_ids) != len(roots) or len(provenance_pairs) != len(roots):
+        raise ValueError("current roots are not one-per-source-group/trajectory-pair")
+    expected_primary = quota.get("completeRootsPerPhase")
+    expected_reserve = quota.get("reserveRootsPerPhase")
+    if type(expected_primary) is not int or type(expected_reserve) is not int:
+        raise ValueError("current root role quotas have the wrong JSON type")
+    for phase in PHASES:
+        if (
+            role_phase_counts[(phase, "primary")] != expected_primary
+            or role_phase_counts[(phase, "reserve")] != expected_reserve
+        ):
+            raise ValueError(f"current {phase} root role quota changed")
+        for side in ("w", "b"):
+            if (
+                role_phase_side_counts[(phase, side, "primary")]
+                != expected_primary // 2
+                or role_phase_side_counts[(phase, side, "reserve")]
+                != expected_reserve // 2
+            ):
+                raise ValueError(
+                    f"current {phase}/{side} root role quota changed"
+                )
+    root_coverage = contract.mapping(root_manifest.get("coverage"), "root coverage")
+    if set(root_coverage) != {
+        "records",
+        "phaseCounts",
+        "phaseSideCounts",
+        "primaryPhaseSideCounts",
+        "primary",
+        "reserve",
+        "uniqueRootIds",
+        "sourceGroups",
+        "oneRootPerSourceGroup",
+        "collapsedEquivalentAbBaRecords",
+    }:
+        raise ValueError("current root manifest coverage fields changed")
+    if (
+        type(root_coverage.get("records")) is not int
+        or root_coverage.get("records") != len(roots)
+        or type(root_coverage.get("uniqueRootIds")) is not int
+        or root_coverage.get("uniqueRootIds") != len(roots)
+        or type(root_coverage.get("sourceGroups")) is not int
+        or root_coverage.get("sourceGroups") != len(group_ids)
+        or root_coverage.get("oneRootPerSourceGroup") is not True
+        or not contract.exact_json_equal(
+            root_coverage.get("phaseCounts"),
+            {
+                phase: complete_per_phase + reserve_per_phase
+                for phase in PHASES
+            },
+        )
+        or not contract.exact_json_equal(
+            root_coverage.get("phaseSideCounts"),
+            {
+                f"{phase}/{side}": (
+                    complete_per_phase + reserve_per_phase
+                ) // 2
+                for phase in PHASES
+                for side in ("w", "b")
+            },
+        )
+        or not contract.exact_json_equal(
+            root_coverage.get("primaryPhaseSideCounts"),
+            {
+                f"{phase}/{side}": role_phase_side_counts[
+                    (phase, side, "primary")
+                ]
+                for phase in PHASES
+                for side in ("w", "b")
+            },
+        )
+        or type(root_coverage.get("primary")) is not int
+        or root_coverage.get("primary") != complete_per_phase * len(PHASES)
+        or type(root_coverage.get("reserve")) is not int
+        or root_coverage.get("reserve") != reserve_per_phase * len(PHASES)
+        or type(root_coverage.get("collapsedEquivalentAbBaRecords")) is not int
+        or root_coverage["collapsedEquivalentAbBaRecords"] < 0
+    ):
+        raise ValueError("current root manifest coverage changed")
+
+    child_manifest = _load_pinned_json(
+        Path(pins["childrenManifest"]["path"]),
+        pins["childrenManifest"],
+        "current-corpus child manifest",
+    )
+    if set(child_manifest) != {
+        "schemaVersion",
+        "kind",
+        "createdUtc",
+        "policy",
+        "coverage",
+        "input",
+        "output",
+        "runtime",
+        "finalStageSeal",
+    }:
+        raise ValueError("current-corpus child manifest fields changed")
+    child_runtime = contract.mapping(child_manifest.get("runtime"), "child runtime")
+    if (
+        type(child_manifest.get("schemaVersion")) is not int
+        or child_manifest.get("schemaVersion") != SCHEMA_VERSION
+        or child_manifest.get("kind") != "omega-decision-sampler-manifest"
+        or child_manifest.get("finalStageSeal") is not False
+        or not contract.exact_json_equal(
+            child_manifest.get("policy"), CHILD_POLICY
+        )
+        or not contract.exact_json_equal(child_manifest.get("input"), pins["roots"])
+        or not contract.exact_json_equal(
+            child_manifest.get("output"), pins["children"]
+        )
+        or set(child_runtime) != {"framework", "samplerAssembly", "chessLibAssembly"}
+        or type(child_runtime.get("framework")) is not str
+        or not child_runtime["framework"]
+        or not contract.exact_json_equal(
+            child_runtime.get("samplerAssembly"), pins["decisionSamplerAssembly"]
+        )
+        or not contract.exact_json_equal(
+            child_runtime.get("chessLibAssembly"), pins["chessLibAssembly"]
+        )
+    ):
+        raise ValueError("current-corpus child manifest contract changed")
+    _require_canonical_utc(
+        child_manifest.get("createdUtc"), "current child manifest createdUtc"
+    )
+
+    child_ids: set[str] = set()
+    child_counts: Counter[str] = Counter()
+    child_ordinals: dict[str, set[int]] = {}
+    child_moves: dict[str, list[tuple[int, str]]] = {}
+    child_path = Path(pins["children"]["path"])
+    for line_number, child in _scan_pinned_jsonl(
+        child_path,
+        pins["children"],
+        CURRENT_CHILD_FIELDS,
+        "current-corpus children",
+    ):
+        if (
+            type(child.get("schemaVersion")) is not int
+            or child.get("schemaVersion") != SCHEMA_VERSION
+            or child.get("kind") != "omega-legal-child"
+        ):
+            raise ValueError(f"{child_path}:{line_number}: child envelope changed")
+        child_id = _require_nonempty_string(child.get("childId"), "childId")
+        root_id = _require_nonempty_string(child.get("rootId"), "child rootId")
+        root = roots.get(root_id)
+        if root is None or child_id in child_ids:
+            raise ValueError(f"{child_path}:{line_number}: unknown root/duplicate child")
+        if any(
+            child.get(field) != root.get(root_field)
+            for field, root_field in (
+                ("groupId", "groupId"),
+                ("sourceGameId", "sourceGameId"),
+                ("phase", "phase"),
+                ("rootPvMove", "rootPvMove"),
+                ("candidateRole", "candidateRole"),
+                ("selectionRank", "selectionRank"),
+                ("parentOfen", "ofen"),
+            )
+        ):
+            raise ValueError(f"{child_path}:{line_number}: child/root binding changed")
+        parent = _canonical_ofen(child.get("parentOfen"), "child parent OFEN")
+        parent_phase, parent_side, parent_exact, _, _ = core._position_meta(parent)
+        if (
+            parent_exact != root_exact[root_id]
+            or parent_phase != root["phase"]
+            or child.get("parentSideToMove") != parent_side
+        ):
+            raise ValueError(f"{child_path}:{line_number}: child parent metadata changed")
+        child_ofen = _canonical_ofen(child.get("childOfen"), "child OFEN")
+        _, child_side, exact, _, signatures = core._position_meta(child_ofen)
+        ordinal = child.get("moveOrdinal")
+        move = _require_nonempty_string(child.get("move"), "child move")
+        if (
+            child.get("childSideToMove") != child_side
+            or type(ordinal) is not int
+            or ordinal < 0
+            or type(child.get("isPromotion")) is not bool
+            or child.get("isPromotion") != (len(move) == 5)
+        ):
+            raise ValueError(f"{child_path}:{line_number}: child metadata changed")
+        expected_child_id = hashlib.sha256(
+            (
+                "omega-decision-child-v1\0"
+                f"{root_id}\0{root['groupId']}\0{move}\0{child_ofen}"
+            ).encode("utf-8")
+        ).hexdigest()
+        if child_id != expected_child_id:
+            raise ValueError(
+                f"{child_path}:{line_number}: stable childId changed"
+            )
+        child_ids.add(child_id)
+        child_counts[root_id] += 1
+        child_ordinals.setdefault(root_id, set()).add(ordinal)
+        child_moves.setdefault(root_id, []).append((ordinal, move))
+        exact_keys.add(exact)
+        exclusion_signatures.add(exact)
+        exclusion_signatures.update(signatures)
+        child_signatures.add(exact)
+        child_signatures.update(signatures)
+    if set(child_counts) != set(roots) or any(count <= 0 for count in child_counts.values()):
+        raise ValueError("current legal-child expansion omitted a root")
+    if any(
+        child_ordinals[root_id] != set(range(child_counts[root_id]))
+        for root_id in roots
+    ):
+        raise ValueError("current legal-child ordinals are not complete")
+    if any(
+        [move for _, move in sorted(child_moves[root_id])]
+        != sorted(move for _, move in child_moves[root_id])
+        for root_id in roots
+    ):
+        raise ValueError("current legal-child move order changed")
+    child_coverage = contract.mapping(child_manifest.get("coverage"), "child coverage")
+    if set(child_coverage) != {
+        "roots",
+        "children",
+        "zeroChildRoots",
+        "minimumChildrenPerRoot",
+        "maximumChildrenPerRoot",
+        "phaseCounts",
+        "sideToMoveCounts",
+        "uniqueRootIds",
+        "uniqueChildIds",
+    }:
+        raise ValueError("current child manifest coverage fields changed")
+    minimum_children = min(child_counts.values())
+    maximum_children = max(child_counts.values())
+    root_phase_counts = Counter(str(root["phase"]) for root in roots.values())
+    root_side_counts = Counter(str(root["sideToMove"]) for root in roots.values())
+    if (
+        type(child_coverage.get("roots")) is not int
+        or child_coverage.get("roots") != len(roots)
+        or type(child_coverage.get("uniqueRootIds")) is not int
+        or child_coverage.get("uniqueRootIds") != len(roots)
+        or type(child_coverage.get("children")) is not int
+        or child_coverage.get("children") != len(child_ids)
+        or type(child_coverage.get("uniqueChildIds")) is not int
+        or child_coverage.get("uniqueChildIds") != len(child_ids)
+        or type(child_coverage.get("zeroChildRoots")) is not int
+        or child_coverage.get("zeroChildRoots") != 0
+        or type(child_coverage.get("minimumChildrenPerRoot")) is not int
+        or child_coverage.get("minimumChildrenPerRoot") != minimum_children
+        or type(child_coverage.get("maximumChildrenPerRoot")) is not int
+        or child_coverage.get("maximumChildrenPerRoot") != maximum_children
+        or not contract.exact_json_equal(
+            child_coverage.get("phaseCounts"),
+            {phase: root_phase_counts[phase] for phase in PHASES},
+        )
+        or not contract.exact_json_equal(
+            child_coverage.get("sideToMoveCounts"),
+            {side: root_side_counts[side] for side in ("w", "b")},
+        )
+    ):
+        raise ValueError("current child manifest coverage changed")
+
+    completion_path = Path(str(child_path) + ".complete.seal.json")
+    completion_before = contract.identity(completion_path)
+    completion = _load_pinned_json(
+        completion_path,
+        completion_before,
+        "current-corpus sampler completion seal",
+    )
+    completion_after = contract.identity(completion_path)
+    completion_producer = contract.mapping(
+        completion.get("producer"), "current sampler completion producer"
+    )
+    if (
+        not contract.exact_json_equal(completion_before, completion_after)
+        or set(completion)
+        != {
+            "schemaVersion",
+            "kind",
+            "createdUtc",
+            "input",
+            "output",
+            "manifest",
+            "producer",
+            "finalStageSeal",
+        }
+        or type(completion.get("schemaVersion")) is not int
+        or completion.get("schemaVersion") != SCHEMA_VERSION
+        or completion.get("kind") != "omega-decision-sampler-completion-seal"
+        or completion.get("finalStageSeal") is not True
+        or not contract.exact_json_equal(completion.get("input"), pins["roots"])
+        or not contract.exact_json_equal(completion.get("output"), pins["children"])
+        or not contract.exact_json_equal(
+            completion.get("manifest"), pins["childrenManifest"]
+        )
+        or set(completion_producer)
+        != {"samplerAssembly", "chessLibAssembly", "framework"}
+        or type(completion_producer.get("framework")) is not str
+        or not completion_producer["framework"]
+        or not contract.exact_json_equal(
+            completion_producer.get("samplerAssembly"),
+            pins["decisionSamplerAssembly"],
+        )
+        or not contract.exact_json_equal(
+            completion_producer.get("chessLibAssembly"), pins["chessLibAssembly"]
+        )
+    ):
+        raise ValueError("current sampler completion seal changed")
+    _require_canonical_utc(
+        completion.get("createdUtc"), "current sampler completion createdUtc"
+    )
+
+    pool = _current_source_pool(
+        pins,
+        source_seed=source_seed,
+        exact_keys=exact_keys,
+        exclusion_signatures=exclusion_signatures,
+        pool_exact_keys=pool_exact_keys,
+        pool_signatures=pool_signatures,
+    )
+    if not provenance_pairs.issubset(pool["pairs"]):
+        raise ValueError("current roots do not map into the pinned source-root pool")
+    historical_intersection = historical.intersection(exclusion_signatures)
+    union = historical | exclusion_signatures
+    identity_audit = {
+        name: dict(pins[name]) for name in CURRENT_CORPUS_PATHS
+    }
+    identity_audit["samplerCompletionSeal"] = completion_after
+    public = {
+        "identities": identity_audit,
+        "deterministicReplay": deterministic_replay,
+        "records": {
+            "sourcePoolStates": pool["rows"],
+            "roots": len(roots),
+            "children": len(child_ids),
+            "sourceGroups": len(group_ids),
+            "sourceGameIds": len(source_game_ids),
+            "sourcePairIds": len(source_pair_ids),
+            "sourceRunIds": len(source_run_ids),
+            "sourceTrajectoryPairs": len(pool["pairs"]),
+            "sourceTrajectories": len(pool["trajectories"]),
+        },
+        "positions": {
+            "sourcePoolExactPositionKeys": len(pool_exact_keys),
+            "sourcePoolExclusionSignatures": len(pool_signatures),
+            "rootExclusionSignatures": len(root_signatures),
+            "childExclusionSignatures": len(child_signatures),
+            "uniqueExactPositionKeys": len(exact_keys),
+            "exactPositionKeysSha256": _digest_string_set(
+                "g4-current-exact-position-v1", exact_keys
+            ),
+            "uniqueExclusionSignatures": len(exclusion_signatures),
+            "exclusionSignaturesSha256": _digest_string_set(
+                "g4-current-exclusion-signature-v1", exclusion_signatures
+            ),
+        },
+        "sourceProvenance": {
+            "generatorSeed": source_seed,
+            "groupIdsSha256": _digest_string_set("g4-current-group-id-v1", group_ids),
+            "sourceGameIdsSha256": _digest_string_set(
+                "g4-current-source-game-id-v1", source_game_ids
+            ),
+            "sourcePairIdsSha256": _digest_string_set(
+                "g4-current-source-pair-id-v1", source_pair_ids
+            ),
+            "sourceRunIdsSha256": _digest_string_set(
+                "g4-current-source-run-id-v1", source_run_ids
+            ),
+            "trajectoryPairIdsSha256": _digest_string_set(
+                "g4-current-trajectory-pair-v1", pool["pairs"]
+            ),
+            "trajectoryIdsSha256": _digest_string_set(
+                "g4-current-trajectory-v1", pool["trajectories"]
+            ),
+        },
+        "historicalComparison": {
+            "historicalSignatures": len(historical),
+            "historicalSignaturesSha256": _digest_string_set(
+                "g4-historical-forbidden-v1", historical
+            ),
+            "currentSignatures": len(exclusion_signatures),
+            "currentSignaturesSha256": _digest_string_set(
+                "g4-current-exclusion-signature-v1", exclusion_signatures
+            ),
+            "intersectionSignatures": len(historical_intersection),
+            "intersectionSignaturesSha256": _digest_string_set(
+                "g4-historical-current-intersection-v1", historical_intersection
+            ),
+            "selectionForbiddenSignatures": len(union),
+            "selectionForbiddenSignaturesSha256": _digest_string_set(
+                "g4-selection-forbidden-v1", union
+            ),
+        },
+        "informationBoundary": {
+            "sourcePoolRootsAndChildrenOnly": True,
+            "targetFieldsDecoded": 0,
+            "scoreFieldsDecoded": 0,
+            "resultFieldsDecoded": 0,
+        },
+    }
+    private = {
+        "signatures": exclusion_signatures,
+        "selectionForbidden": union,
+        "sourcePairs": set(pool["pairs"]),
+        "sourceTrajectories": set(pool["trajectories"]),
+        "rawTrajectoryPairs": set(pool["rawPairs"]),
+        "rawTrajectories": set(pool["rawTrajectories"]),
+        "groupIds": group_ids,
+        "sourceGameIds": source_game_ids,
+        "sourcePairIds": source_pair_ids,
+        "sourceRunIds": source_run_ids,
+    }
+    # Public digests/counts are sealed above; these category-only working sets
+    # are not consumers of root selection and can be released immediately.
+    exact_keys.clear()
+    pool_exact_keys.clear()
+    pool_signatures.clear()
+    root_signatures.clear()
+    child_signatures.clear()
+    return union, private, public
+
+
+def _gate_current_corpus_evidence(
+    roots: Sequence[core.Root],
+    selected: Sequence[core.Root],
+    current: Mapping[str, set[str]],
+) -> dict[str, Any]:
+    candidate_pairs = {
+        _sampler_pair_identity(root.generator_seed, root.trajectory_pair_id)
+        for root in roots
+    }
+    candidate_trajectories = {
+        _sampler_trajectory_identity(root.generator_seed, root.trajectory_id)
+        for root in roots
+    }
+    candidate_source_groups = {root.source_group for root in roots}
+    candidate_pair_aliases = {root.trajectory_pair_id for root in roots}
+    candidate_trajectory_aliases = {root.trajectory_id for root in roots}
+    formal_pair_intersection = candidate_pairs & current["sourcePairs"]
+    formal_trajectory_intersection = (
+        candidate_trajectories & current["sourceTrajectories"]
+    )
+    current_root_identifiers = (
+        current["groupIds"]
+        | current["sourceGameIds"]
+        | current["sourcePairIds"]
+        | current["sourceRunIds"]
+    )
+    root_identifier_intersection = candidate_source_groups & current_root_identifiers
+    if (
+        formal_pair_intersection
+        or formal_trajectory_intersection
+        or root_identifier_intersection
+    ):
+        raise ValueError(
+            "match sampler reuses a current-corpus source group or trajectory"
+        )
+    candidate_signatures: set[str] = set()
+    for root in roots:
+        candidate_signatures.update(root.orbit_signatures)
+        candidate_signatures.add(root.identity)
+    selected_signatures: set[str] = set()
+    for root in selected:
+        selected_signatures.update(root.orbit_signatures)
+        selected_signatures.add(root.identity)
+    candidate_position_intersection = candidate_signatures & current["signatures"]
+    selected_position_intersection = selected_signatures & current["signatures"]
+    selected_forbidden_intersection = (
+        selected_signatures & current["selectionForbidden"]
+    )
+    selected_pairs = {
+        _sampler_pair_identity(root.generator_seed, root.trajectory_pair_id)
+        for root in selected
+    }
+    selected_trajectories = {
+        _sampler_trajectory_identity(root.generator_seed, root.trajectory_id)
+        for root in selected
+    }
+    if (
+        selected_forbidden_intersection
+        or selected_pairs & current["sourcePairs"]
+        or selected_trajectories & current["sourceTrajectories"]
+    ):
+        raise ValueError("selected match roots intersect the current Generation-4 corpus")
+    return {
+        "candidateRoots": len(roots),
+        "candidateSourceGroups": len(candidate_source_groups),
+        "candidateSourceGroupsSha256": _digest_string_set(
+            "g4-match-candidate-source-group-v1", candidate_source_groups
+        ),
+        "candidateTrajectoryPairs": len(candidate_pairs),
+        "candidateTrajectoryPairsSha256": _digest_string_set(
+            "g4-match-candidate-trajectory-pair-v1", candidate_pairs
+        ),
+        "candidateTrajectories": len(candidate_trajectories),
+        "candidateTrajectoriesSha256": _digest_string_set(
+            "g4-match-candidate-trajectory-v1", candidate_trajectories
+        ),
+        "formalSourcePairIntersections": 0,
+        "formalTrajectoryIntersections": 0,
+        "rootIdentifierIntersections": 0,
+        "rawTrajectoryPairAliases": len(
+            candidate_pair_aliases & current["rawTrajectoryPairs"]
+        ),
+        "rawTrajectoryAliases": len(
+            candidate_trajectory_aliases & current["rawTrajectories"]
+        ),
+        "candidatePositionIntersectionSignatures": len(
+            candidate_position_intersection
+        ),
+        "candidatePositionIntersectionSha256": _digest_string_set(
+            "g4-match-candidate-current-position-intersection-v1",
+            candidate_position_intersection,
+        ),
+        "selectedRoots": len(selected),
+        "selectedPositionIntersectionSignatures": 0,
+        "selectedPositionIntersectionSha256": _digest_string_set(
+            "g4-match-selected-current-position-intersection-v1",
+            selected_position_intersection,
+        ),
+        "selectedForbiddenIntersectionSignatures": 0,
+        "selectedForbiddenIntersectionSha256": _digest_string_set(
+            "g4-match-selected-forbidden-intersection-v1",
+            selected_forbidden_intersection,
+        ),
+        "selectedSourcePairIntersections": 0,
+        "selectedTrajectoryIntersections": 0,
+    }
+
+
+def _validate_current_corpus_audit(value: Any) -> dict[str, Any]:
+    audit = contract.mapping(value, "suite current-corpus audit")
+    if set(audit) != {
+        "identities",
+        "deterministicReplay",
+        "records",
+        "positions",
+        "sourceProvenance",
+        "historicalComparison",
+        "informationBoundary",
+    }:
+        raise ValueError("suite current-corpus audit fields changed")
+    identities = contract.mapping(audit.get("identities"), "current identities")
+    if set(identities) != {*CURRENT_CORPUS_PATHS, "samplerCompletionSeal"}:
+        raise ValueError("suite current-corpus identity inventory changed")
+    for name, identity in identities.items():
+        _identity_shape(identity, f"current-corpus {name}")
+    replay = contract.mapping(
+        audit.get("deterministicReplay"), "current deterministic replay"
+    )
+    if set(replay) != {
+        "roots",
+        "children",
+        "python",
+        "decisionTeacher",
+        "rootSamplerChessLib",
+        "dotnetHost",
+    }:
+        raise ValueError("suite deterministic-replay fields changed")
+    for name in ("python", "decisionTeacher", "rootSamplerChessLib", "dotnetHost"):
+        _identity_shape(replay.get(name), f"current replay {name}")
+    replay_roots = contract.mapping(replay.get("roots"), "current replay roots")
+    replay_children = contract.mapping(
+        replay.get("children"), "current replay children"
+    )
+    if set(replay_roots) != {"bytes", "sha256", "manifestSemanticSha256"}:
+        raise ValueError("current roots replay fields changed")
+    if set(replay_children) != {
+        "bytes",
+        "sha256",
+        "manifestSemanticSha256",
+        "completionSemanticSha256",
+    }:
+        raise ValueError("current children replay fields changed")
+    for name, item in (("roots", replay_roots), ("children", replay_children)):
+        contract.exact_int(item.get("bytes"), f"current replay {name} bytes")
+        for key, value in item.items():
+            if key == "bytes":
+                continue
+            if type(value) is not str or contract.HEX_256.fullmatch(value) is None:
+                raise ValueError(f"current replay {name} digest {key} changed")
+    records = contract.mapping(audit.get("records"), "current records")
+    if set(records) != {
+        "sourcePoolStates",
+        "roots",
+        "children",
+        "sourceGroups",
+        "sourceGameIds",
+        "sourcePairIds",
+        "sourceRunIds",
+        "sourceTrajectoryPairs",
+        "sourceTrajectories",
+    }:
+        raise ValueError("suite current-corpus record fields changed")
+    positions = contract.mapping(audit.get("positions"), "current positions")
+    if set(positions) != {
+        "sourcePoolExactPositionKeys",
+        "sourcePoolExclusionSignatures",
+        "rootExclusionSignatures",
+        "childExclusionSignatures",
+        "uniqueExactPositionKeys",
+        "exactPositionKeysSha256",
+        "uniqueExclusionSignatures",
+        "exclusionSignaturesSha256",
+    }:
+        raise ValueError("suite current-corpus position fields changed")
+    source = contract.mapping(audit.get("sourceProvenance"), "current source")
+    if set(source) != {
+        "generatorSeed",
+        "groupIdsSha256",
+        "sourceGameIdsSha256",
+        "sourcePairIdsSha256",
+        "sourceRunIdsSha256",
+        "trajectoryPairIdsSha256",
+        "trajectoryIdsSha256",
+    }:
+        raise ValueError("suite current-corpus source fields changed")
+    comparison = contract.mapping(
+        audit.get("historicalComparison"), "current historical comparison"
+    )
+    if set(comparison) != {
+        "historicalSignatures",
+        "historicalSignaturesSha256",
+        "currentSignatures",
+        "currentSignaturesSha256",
+        "intersectionSignatures",
+        "intersectionSignaturesSha256",
+        "selectionForbiddenSignatures",
+        "selectionForbiddenSignaturesSha256",
+    }:
+        raise ValueError("suite historical/current comparison fields changed")
+    for mapping_value in (records, positions, comparison):
+        for key, item in mapping_value.items():
+            if key.endswith("Sha256"):
+                if type(item) is not str or contract.HEX_256.fullmatch(item) is None:
+                    raise ValueError(f"suite current-corpus digest {key} changed")
+            else:
+                contract.exact_int(item, f"suite current-corpus count {key}")
+    contract.exact_int(source.get("generatorSeed"), "current source generator seed")
+    for key, item in source.items():
+        if key == "generatorSeed":
+            continue
+        if type(item) is not str or contract.HEX_256.fullmatch(item) is None:
+            raise ValueError(f"suite current source digest {key} changed")
+    if not contract.exact_json_equal(
+        audit.get("informationBoundary"),
+        {
+            "sourcePoolRootsAndChildrenOnly": True,
+            "targetFieldsDecoded": 0,
+            "scoreFieldsDecoded": 0,
+            "resultFieldsDecoded": 0,
+        },
+    ):
+        raise ValueError("suite current-corpus information boundary changed")
+    return audit
+
+
+def _validate_gate_current_evidence(value: Any, gate: str) -> dict[str, Any]:
+    evidence = contract.mapping(value, f"{gate} current-corpus disjointness")
+    expected = {
+        "candidateRoots",
+        "candidateSourceGroups",
+        "candidateSourceGroupsSha256",
+        "candidateTrajectoryPairs",
+        "candidateTrajectoryPairsSha256",
+        "candidateTrajectories",
+        "candidateTrajectoriesSha256",
+        "formalSourcePairIntersections",
+        "formalTrajectoryIntersections",
+        "rootIdentifierIntersections",
+        "rawTrajectoryPairAliases",
+        "rawTrajectoryAliases",
+        "candidatePositionIntersectionSignatures",
+        "candidatePositionIntersectionSha256",
+        "selectedRoots",
+        "selectedPositionIntersectionSignatures",
+        "selectedPositionIntersectionSha256",
+        "selectedForbiddenIntersectionSignatures",
+        "selectedForbiddenIntersectionSha256",
+        "selectedSourcePairIntersections",
+        "selectedTrajectoryIntersections",
+    }
+    if set(evidence) != expected:
+        raise ValueError(f"{gate} current-corpus evidence fields changed")
+    for key, item in evidence.items():
+        if key.endswith("Sha256"):
+            if type(item) is not str or contract.HEX_256.fullmatch(item) is None:
+                raise ValueError(f"{gate} current-corpus digest {key} changed")
+        else:
+            contract.exact_int(item, f"{gate} current-corpus count {key}")
+    for key in (
+        "formalSourcePairIntersections",
+        "formalTrajectoryIntersections",
+        "rootIdentifierIntersections",
+        "selectedPositionIntersectionSignatures",
+        "selectedForbiddenIntersectionSignatures",
+        "selectedSourcePairIntersections",
+        "selectedTrajectoryIntersections",
+    ):
+        if evidence.get(key) != 0:
+            raise ValueError(f"{gate} has a sealed current-corpus intersection")
+    return evidence
 
 
 def _runtime_identity(protocol: Mapping[str, Any], key: str) -> dict[str, Any]:
@@ -1420,6 +3814,7 @@ def _seal_suites(args: argparse.Namespace) -> dict[str, Any]:
     manifests, positions, forbidden, exclusion_stats = _validate_forbidden_inputs(
         args.forbidden_catalog_manifest,
         args.forbidden_position_file,
+        profile=profile,
     )
     _assert_profile_forbidden_manifests(profile, manifests)
 
@@ -1437,6 +3832,10 @@ def _seal_suites(args: argparse.Namespace) -> dict[str, Any]:
     if any(path.exists() for path in stage_paths):
         raise FileExistsError("a canonical match stage already exists before suite seal")
 
+    selection_forbidden, current_private, current_audit = (
+        _current_corpus_exclusion(profile, forbidden)
+    )
+
     source_audits: dict[str, Any] = {}
     selected: dict[str, list[core.Root]] = {}
     rejected: dict[str, dict[str, int]] = {}
@@ -1453,10 +3852,17 @@ def _seal_suites(args: argparse.Namespace) -> dict[str, Any]:
         audit["deterministicReplay"] = _reproduce_sampler_source(
             source, gate, protocol
         )
-        source_audits[gate] = audit
+        # Fail on source-group/trajectory reuse before deterministic root
+        # selection.  Position collisions remain candidates for the unioned
+        # forbidden set to reject below.
+        _gate_current_corpus_evidence(roots, (), current_private)
         selected[gate], rejected[gate] = core._select_roots(
-            roots, core.GATE_SPECS[gate], forbidden, used_fresh
+            roots, core.GATE_SPECS[gate], selection_forbidden, used_fresh
         )
+        audit["currentCorpusDisjointness"] = _gate_current_corpus_evidence(
+            roots, selected[gate], current_private
+        )
+        source_audits[gate] = audit
 
     suite_seal_path.parent.mkdir(parents=True, exist_ok=True)
     schedules: dict[str, list[dict[str, Any]]] = {}
@@ -1497,6 +3903,7 @@ def _seal_suites(args: argparse.Namespace) -> dict[str, Any]:
                 "uniqueOrbitSignatures": len(forbidden),
                 "scan": exclusion_stats,
             },
+            "currentCorpusAudit": current_audit,
             "samplerSources": source_audits,
             "suites": {
                 gate: {
@@ -1530,6 +3937,12 @@ def _seal_suites(args: argparse.Namespace) -> dict[str, Any]:
         # Fail closed.  Any partially published suite blocks an automatic
         # retry and remains available for forensic comparison.
         raise
+    # The immediate deep verification deliberately re-derives these sets.
+    # Drop the first-pass multi-hundred-megabyte catalogs before entering it.
+    del selection_forbidden, current_private, current_audit
+    del forbidden, manifests, positions, exclusion_stats
+    del source_audits, selected, rejected, schedules, used_fresh
+    del seal, root_digest
     return _verify_suite_seal(suite_seal_path, protocol=protocol)
 
 
@@ -1571,6 +3984,7 @@ def _verify_suite_seal(
         "forbiddenCatalogManifests",
         "forbiddenPositionFiles",
         "forbiddenAudit",
+        "currentCorpusAudit",
         "samplerSources",
         "suites",
         "rootDigest",
@@ -1642,6 +4056,8 @@ def _verify_suite_seal(
     ):
         raise ValueError("suite-seal root-sampler bundle changed")
     forbidden: set[str] = set()
+    selection_forbidden: set[str] = set()
+    current_private: dict[str, set[str]] = {}
     expected_selected: dict[str, list[core.Root]] = {}
     expected_rejections: dict[str, dict[str, int]] = {}
     for list_name in ("forbiddenCatalogManifests", "forbiddenPositionFiles"):
@@ -1680,6 +4096,9 @@ def _verify_suite_seal(
     )
     for key, item in forbidden_scan.items():
         contract.exact_int(item, f"suite forbidden scan {key}")
+    recorded_current_audit = _validate_current_corpus_audit(
+        value.get("currentCorpusAudit")
+    )
     source_audits = contract.mapping(
         value.get("samplerSources"), "suite sampler sources"
     )
@@ -1699,6 +4118,7 @@ def _verify_suite_seal(
             "records",
             "phaseSideCounts",
             "deterministicReplay",
+            "currentCorpusDisjointness",
         }:
             raise ValueError(f"{gate} sampler-audit field inventory changed")
         contract.exact_int(recorded.get("workers"), f"{gate} sampler workers")
@@ -1756,6 +4176,9 @@ def _verify_suite_seal(
             or not replay_record["framework"]
         ):
             raise ValueError(f"{gate} deterministic replay framework changed")
+        _validate_gate_current_evidence(
+            recorded.get("currentCorpusDisjointness"), gate
+        )
     if deep:
         manifests = contract.strict_identity_list(
             value.get("forbiddenCatalogManifests"), "suite forbidden manifest"
@@ -1768,6 +4191,7 @@ def _verify_suite_seal(
             _validate_forbidden_inputs(
                 [Path(item["path"]) for item in manifests],
                 [Path(item["path"]) for item in positions],
+                profile=profile,
             )
         )
         if (
@@ -1783,6 +4207,13 @@ def _verify_suite_seal(
             },
         ):
             raise ValueError("suite-seal forbidden-position audit changed")
+        selection_forbidden, current_private, replay_current_audit = (
+            _current_corpus_exclusion(profile, forbidden)
+        )
+        if not contract.exact_json_equal(
+            recorded_current_audit, replay_current_audit
+        ):
+            raise ValueError("suite-seal current-corpus audit changed")
         used_expected: set[str] = set()
         for gate, source in _source_paths(protocol).items():
             recorded = contract.mapping(
@@ -1794,6 +4225,10 @@ def _verify_suite_seal(
             recorded_replay = contract.mapping(
                 recorded_base.pop("deterministicReplay"),
                 f"{gate} deterministic sampler replay",
+            )
+            recorded_disjointness = contract.mapping(
+                recorded_base.pop("currentCorpusDisjointness"),
+                f"{gate} current-corpus disjointness",
             )
             roots, recomputed_audit = _verify_sampler_source(source, gate, protocol)
             if not contract.exact_json_equal(
@@ -1824,12 +4259,22 @@ def _verify_suite_seal(
                 source, gate, protocol
             ) != recorded_replay:
                 raise ValueError(f"{gate} deterministic replay changed")
+            _gate_current_corpus_evidence(roots, (), current_private)
             expected_selected[gate], expected_rejections[gate] = core._select_roots(
                 roots,
                 core.GATE_SPECS[gate],
-                forbidden,
+                selection_forbidden,
                 used_expected,
             )
+            expected_disjointness = _gate_current_corpus_evidence(
+                roots, expected_selected[gate], current_private
+            )
+            if not contract.exact_json_equal(
+                recorded_disjointness, expected_disjointness
+            ):
+                raise ValueError(
+                    f"{gate} current-corpus disjointness evidence changed"
+                )
     suites = contract.mapping(value.get("suites"), "sealed suites")
     if set(suites) != set(GATES):
         raise ValueError("suite-seal gate inventory changed")
@@ -1922,8 +4367,10 @@ def _verify_suite_seal(
             raise ValueError(f"{gate} scheduled opening order changed")
         for opening in openings.values():
             signatures = set(opening["kingStateMatch"]["orbitSignatures"])
-            if deep and forbidden.intersection(signatures):
-                raise ValueError(f"{gate} suite intersects a forbidden orbit")
+            if deep and selection_forbidden.intersection(signatures):
+                raise ValueError(
+                    f"{gate} suite intersects historical/current forbidden data"
+                )
             if fresh.intersection(signatures):
                 raise ValueError("sealed suites are not mutually orbit disjoint")
             fresh.update(signatures)
@@ -2713,8 +5160,394 @@ def _verify_runtime_authorization(
     return value
 
 
+def _current_corpus_self_test_fixture(
+    root: Path,
+) -> tuple[dict[str, Any], dict[str, dict[str, Any]], dict[str, str]]:
+    placements = {
+        "opening": (
+            "krrrrrrrrr/pppppppppp/10/10/10/10/10/10/"
+            "PPPPPPPPPP/RRRRRRRRRK[-/-/-/-]"
+        ),
+        "middlegame": (
+            "krrrrrrrrr/pppppppppp/10/10/10/10/10/10/10/"
+            "RRRRRRRRRK[-/-/-/-]"
+        ),
+        "late": (
+            "krrrrrrrrr/10/10/10/10/10/10/10/10/"
+            "RRRRRRRRRK[-/-/-/-]"
+        ),
+        "endgame": "krrr6/10/10/10/10/10/10/10/10/6RRRK[-/-/-/-]",
+    }
+    source_only = (
+        "crnbqkbnrc/pppppppppp/10/10/10/10/10/10/"
+        "PPPPPPPPPP/CRNBQKBNRC[W/W/w/w] w KQkq - 0 1"
+    )
+    source_seed = 17
+    paths = {
+        "roots": root / "roots.jsonl",
+        "rootsManifest": root / "roots.jsonl.manifest.json",
+        "children": root / "children.jsonl",
+        "childrenManifest": root / "children.jsonl.manifest.json",
+        "sourceRootPool": root / "rules-only-pool.jsonl",
+        "sourceRootPoolManifest": root / "rules-only-pool.jsonl.manifest.json",
+        "sourceRootPoolSeal": root / "rules-only-pool.jsonl.complete.seal.json",
+        "rootSamplerAssembly": root / "root-sampler/OmegaRootSampler.dll",
+        "rootSamplerChessLibAssembly": root / "root-sampler/ChessLib.dll",
+        "decisionSamplerAssembly": root / "decision-sampler/OmegaDecisionSampler.dll",
+        "chessLibAssembly": root / "decision-sampler/ChessLib.dll",
+    }
+    paths["rootSamplerAssembly"].parent.mkdir(parents=True)
+    paths["decisionSamplerAssembly"].parent.mkdir(parents=True)
+    paths["rootSamplerAssembly"].write_bytes(b"root-sampler")
+    paths["decisionSamplerAssembly"].write_bytes(b"decision-sampler")
+    paths["chessLibAssembly"].write_bytes(b"chesslib")
+    paths["rootSamplerChessLibAssembly"].write_bytes(b"chesslib")
+
+    def jsonl(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
+        path.write_text(
+            "".join(
+                json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n"
+                for row in rows
+            ),
+            encoding="utf-8",
+            newline="",
+        )
+
+    roots: list[dict[str, Any]] = []
+    children: list[dict[str, Any]] = []
+    pool_rows: list[dict[str, Any]] = []
+    root_ofens: dict[str, str] = {}
+    ordinal = 0
+    for phase in PHASES:
+      for side in ("w", "b"):
+       for role in ("primary", "reserve"):
+        ordinal += 1
+        placement = placements[phase]
+        if role == "reserve":
+            board, pockets = placement.split("[", 1)
+            ranks = board.split("/")
+            ranks[-1] = ranks[-1][:-2] + ranks[-1][-1] + ranks[-1][-2]
+            placement = "/".join(ranks) + "[" + pockets
+        ofen = f"{placement} {side} - - 0 1"
+        child_side = "b" if side == "w" else "w"
+        child_ofen = f"{placement} {child_side} - - 1 1"
+        pair_id = f"random-pair-{ordinal:06d}"
+        root_id = f"root-{ordinal}"
+        group_id = f"group-{ordinal}"
+        source_game = f"source-run:game-{ordinal}:a1"
+        selection_rank = f"{ordinal:064x}"
+        root_row = {
+            "schemaVersion": 1,
+            "kind": "omega-hce-on-policy-root",
+            "rootId": root_id,
+            "groupId": group_id,
+            "sourceOpeningId": f"opening-{ordinal}",
+            "sourcePairId": f"source-pair-{ordinal}",
+            "sourceProvenanceTag": f"rules-only-pair:{pair_id}",
+            "sourceGameId": source_game,
+            "sourceRunId": "source-run",
+            "sourceAttempt": 1,
+            "sourcePly": 1,
+            "sourceLine": ordinal,
+            "sourceEngineId": "hce-a",
+            "sourceEngineSha256": "a" * 64,
+            "phase": phase,
+            "sideToMove": side,
+            "ofen": ofen,
+            "rootPvMove": "a0a1",
+            "selectionRank": selection_rank,
+            "candidateRole": role,
+        }
+        roots.append(root_row)
+        root_ofens[phase] = ofen
+        for move_ordinal, move in enumerate(("a0a1", "b0b1")):
+          child_id = hashlib.sha256(
+              (
+                  "omega-decision-child-v1\0"
+                  f"{root_id}\0{group_id}\0{move}\0{child_ofen}"
+              ).encode("utf-8")
+          ).hexdigest()
+          children.append(
+           {
+                "schemaVersion": 1,
+                "kind": "omega-legal-child",
+                "rootId": root_id,
+                "groupId": group_id,
+                "sourceGameId": source_game,
+                "phase": phase,
+                "rootPvMove": "a0a1",
+                "candidateRole": role,
+                "selectionRank": selection_rank,
+                "parentOfen": ofen,
+                "parentSideToMove": side,
+                "childId": child_id,
+                "move": move,
+                "moveOrdinal": move_ordinal,
+                "childOfen": child_ofen,
+                "childSideToMove": child_side,
+                "isPromotion": False,
+           }
+          )
+        pieces, _, _ = core.parse_ofen(ofen)
+        pool_rows.append(
+            {
+                "schemaVersion": 1,
+                "kind": "omega-rules-only-random-root",
+                "generatorSeed": str(source_seed),
+                "trajectorySeed": str(1000 + ordinal),
+                "trajectoryPairId": pair_id,
+                "trajectoryId": f"{pair_id}-ab",
+                "flavor": "ab",
+                "ply": {"opening": 10, "middlegame": 20, "late": 40, "endgame": 60}[phase],
+                "phase": phase,
+                "sideToMove": side,
+                "ofen": ofen,
+                "pieceCount": len(pieces),
+                "whitePieces": sum(side == 0 for _, side, _ in pieces),
+                "blackPieces": sum(side != 0 for _, side, _ in pieces),
+                "champions": sum(piece == 6 for piece, _, _ in pieces),
+                "wizards": sum(piece == 7 for piece, _, _ in pieces),
+                "halfmoveClock": 0,
+                "selectionRank": f"{ordinal + 20:064x}",
+            }
+        )
+    pieces, _, _ = core.parse_ofen(source_only)
+    pool_rows.append(
+        {
+            "schemaVersion": 1,
+            "kind": "omega-rules-only-random-root",
+            "generatorSeed": str(source_seed),
+            "trajectorySeed": "2000",
+            "trajectoryPairId": "random-pair-000017",
+            "trajectoryId": "random-pair-000017-ba",
+            "flavor": "ba",
+            "ply": 12,
+            "phase": "opening",
+            "sideToMove": "w",
+            "ofen": source_only,
+            "pieceCount": len(pieces),
+            "whitePieces": sum(side == 0 for _, side, _ in pieces),
+            "blackPieces": sum(side != 0 for _, side, _ in pieces),
+            "champions": sum(piece == 6 for piece, _, _ in pieces),
+            "wizards": sum(piece == 7 for piece, _, _ in pieces),
+            "halfmoveClock": 0,
+            "selectionRank": "f" * 64,
+        }
+    )
+    jsonl(paths["roots"], roots)
+    jsonl(paths["children"], children)
+    jsonl(paths["sourceRootPool"], pool_rows)
+    pins = {
+        name: contract.identity(path)
+        for name, path in paths.items()
+        if name not in {
+            "rootsManifest",
+            "childrenManifest",
+            "sourceRootPoolManifest",
+            "sourceRootPoolSeal",
+        }
+    }
+    contract.atomic_json(
+        paths["rootsManifest"],
+        {
+            "schemaVersion": 1,
+            "kind": "omega-decision-root-manifest",
+            "createdUtc": contract.utc_now(),
+            "profileId": PROFILE_ID,
+            "freshnessMarker": f"g4-source-{source_seed}",
+            "policy": {
+                "sourceSeed": source_seed,
+                "seed": 23,
+                "rootsPerPhase": 2,
+                "reservePerPhase": 2,
+                "maximumRootsPerSourceGroup": 1,
+                "primaryPerPhaseAndSide": 1,
+                "reservePerPhaseAndSide": 1,
+                "selection": "target-blind SHA-256 rank",
+                "source": "latest complete HCE-only OmegaMatch attempt",
+                "sourceGrouping": (
+                    "one root maximum per pinned opening Source provenance tag; "
+                    "the complete AB/BA pair stays indivisible"
+                ),
+                "equivalentAbBaPolicy": (
+                    "same-group exact inputs with the same move are "
+                    "deterministically collapsed; conflicts abort"
+                ),
+                "requiredHceOptions": ROOT_HCE_OPTIONS,
+                "requiredEngineSha256": "a" * 64,
+            },
+            "coverage": {
+                "records": len(roots),
+                "phaseCounts": {phase: 4 for phase in PHASES},
+                "phaseSideCounts": {
+                    f"{phase}/{side}": 2
+                    for phase in PHASES for side in ("w", "b")
+                },
+                "primaryPhaseSideCounts": {
+                    f"{phase}/{side}": 1
+                    for phase in PHASES for side in ("w", "b")
+                },
+                "primary": 8,
+                "reserve": 8,
+                "uniqueRootIds": len(roots),
+                "sourceGroups": len(roots),
+                "oneRootPerSourceGroup": True,
+                "collapsedEquivalentAbBaRecords": 0,
+            },
+            "sources": [],
+            "producer": {},
+            "finalStageSeal": True,
+            "output": pins["roots"],
+        },
+        exclusive=True,
+    )
+    contract.atomic_json(
+        paths["childrenManifest"],
+        {
+            "schemaVersion": 1,
+            "kind": "omega-decision-sampler-manifest",
+            "createdUtc": contract.utc_now(),
+            "policy": CHILD_POLICY,
+            "coverage": {
+                "roots": len(roots),
+                "uniqueRootIds": len(roots),
+                "children": len(children),
+                "uniqueChildIds": len(children),
+                "zeroChildRoots": 0,
+                "minimumChildrenPerRoot": 2,
+                "maximumChildrenPerRoot": 2,
+                "phaseCounts": {phase: 4 for phase in PHASES},
+                "sideToMoveCounts": {"w": 8, "b": 8},
+            },
+            "input": pins["roots"],
+            "output": pins["children"],
+            "runtime": {
+                "framework": ".NET synthetic",
+                "samplerAssembly": pins["decisionSamplerAssembly"],
+                "chessLibAssembly": pins["chessLibAssembly"],
+            },
+            "finalStageSeal": False,
+        },
+        exclusive=True,
+    )
+    contract.atomic_json(
+        paths["sourceRootPoolManifest"],
+        {
+            "schemaVersion": 1,
+            "kind": "omega-rules-only-random-root-manifest",
+            "createdUtc": contract.utc_now(),
+            "policy": {
+                "deterministicPrng": "SplitMix64",
+                "seed": str(source_seed),
+                "trajectoryPairs": 8192,
+                "independentTrajectoriesPerPair": 2,
+                "workers": 4,
+                "maxPlies": 220,
+                "positionsPerPhaseAndSide": 2,
+                "captureSelectionPercent": 72,
+                "terminalRootsEmitted": 0,
+                "maximumHalfmoveClock": 89,
+                "minimumPieces": 7,
+                "minimumPiecesPerSide": 2,
+                "phasePlyWindows": SOURCE_POOL_PHASE_WINDOWS,
+            },
+            "coverage": {
+                "records": len(pool_rows),
+                "phaseCounts": {
+                    phase: sum(row["phase"] == phase for row in pool_rows)
+                    for phase in PHASES
+                },
+                "sideToMoveCounts": {
+                    side: sum(row["sideToMove"] == side for row in pool_rows)
+                    for side in ("w", "b")
+                },
+                "terminalTrajectories": 0,
+                "maxPlyReached": 60,
+                "promotionSelections": {piece: 0 for piece in "qrbncw"},
+                "enPassantClassification": (
+                    "An en-passant move lands on an empty target and remains "
+                    "in the ordinary move pool; legality still comes from ChessLib."
+                ),
+            },
+            "runtime": {
+                "framework": ".NET synthetic",
+                "samplerAssembly": pins["rootSamplerAssembly"],
+                "chessLibAssembly": pins["rootSamplerChessLibAssembly"],
+            },
+            "output": pins["sourceRootPool"],
+            "finalStageSeal": False,
+        },
+        exclusive=True,
+    )
+    pins.update(
+        {
+            "rootsManifest": contract.identity(paths["rootsManifest"]),
+            "childrenManifest": contract.identity(paths["childrenManifest"]),
+            "sourceRootPoolManifest": contract.identity(
+                paths["sourceRootPoolManifest"]
+            ),
+        }
+    )
+    contract.atomic_json(
+        paths["sourceRootPoolSeal"],
+        {
+            "schemaVersion": 1,
+            "kind": "omega-rules-only-random-root-completion-seal",
+            "createdUtc": contract.utc_now(),
+            "output": pins["sourceRootPool"],
+            "manifest": pins["sourceRootPoolManifest"],
+            "producer": {
+                "samplerAssembly": pins["rootSamplerAssembly"],
+                "chessLibAssembly": pins["rootSamplerChessLibAssembly"],
+                "framework": ".NET synthetic",
+            },
+            "finalStageSeal": True,
+        },
+        exclusive=True,
+    )
+    pins["sourceRootPoolSeal"] = contract.identity(paths["sourceRootPoolSeal"])
+    completion = Path(str(paths["children"]) + ".complete.seal.json")
+    contract.atomic_json(
+        completion,
+        {
+            "schemaVersion": 1,
+            "kind": "omega-decision-sampler-completion-seal",
+            "createdUtc": contract.utc_now(),
+            "input": pins["roots"],
+            "output": pins["children"],
+            "manifest": pins["childrenManifest"],
+            "producer": {
+                "samplerAssembly": pins["decisionSamplerAssembly"],
+                "chessLibAssembly": pins["chessLibAssembly"],
+                "framework": ".NET synthetic",
+            },
+            "finalStageSeal": True,
+        },
+        exclusive=True,
+    )
+    profile = {
+        "_selfTestTeacherEngineSha256": "a" * 64,
+        "freshDecisionCorpus": {
+            "source": {
+                "requiredRunSeed": source_seed,
+                "rootSelectionUsesSeed": 23,
+                "requiredDataProfile": "omega-decision-v1",
+            },
+            "rootQuota": {
+                "completeRootsPerPhase": 2,
+                "reserveRootsPerPhase": 2,
+                "maximumCandidateRoots": 16,
+            },
+        }
+    }
+    return profile, pins, {
+        "root": root_ofens["opening"],
+        "child": children[0]["childOfen"],
+        "sourceOnly": source_only,
+    }
+
+
 def _self_test() -> None:
-    global _LAZY_DECISION_TEACHER, _LAZY_DECISION_TEACHER_BINDINGS
     global _LAZY_TRAINER, _LAZY_TRAINER_BINDINGS
 
     protocol = contract.validate_protocol()
@@ -2813,13 +5646,6 @@ def _self_test() -> None:
                 setattr(module, binding_name, original)
 
         lazy_cases = (
-            (
-                decision_teacher,
-                "decisionTeacherSource",
-                "Generation-4 decision-teacher module",
-                "_load_forbidden_catalogs",
-                ("_LAZY_DECISION_TEACHER", "_LAZY_DECISION_TEACHER_BINDINGS"),
-            ),
             (
                 training,
                 "trainerSource",
@@ -2971,11 +5797,24 @@ def _self_test() -> None:
                 }
             ],
         )
-        manifests, positions, signatures, scan = _validate_forbidden_inputs(
-            [manifest],
-            [payload],
-            _allow_template_module_for_self_test=True,
+        original_forbidden_loader = decision_teacher._load_forbidden_catalogs
+
+        def forged_forbidden_loader(*args: Any, **kwargs: Any) -> Any:
+            raise AssertionError("parent-memory forged loader executed")
+
+        forged_forbidden_loader.__module__ = decision_teacher.__name__
+        forged_forbidden_loader.__code__ = forged_forbidden_loader.__code__.replace(
+            co_filename=str(contract.REPO / "tools/omega_nnue/omega_decision_teacher.py")
         )
+        try:
+            decision_teacher._load_forbidden_catalogs = forged_forbidden_loader
+            manifests, positions, signatures, scan = _validate_forbidden_inputs(
+                [manifest],
+                [payload],
+                _allow_template_module_for_self_test=True,
+            )
+        finally:
+            decision_teacher._load_forbidden_catalogs = original_forbidden_loader
         if manifests != [contract.identity(manifest)] or positions != [
             contract.identity(payload)
         ] or not signatures or scan["positions"] != 1:
@@ -3010,6 +5849,371 @@ def _self_test() -> None:
             pass
         else:
             raise AssertionError("unbound forbidden-position payload was accepted")
+        corpus_root = root / "current-corpus"
+        corpus_root.mkdir()
+        corpus_profile, corpus_pins, corpus_ofens = (
+            _current_corpus_self_test_fixture(corpus_root)
+        )
+        command_pins = dict(corpus_pins)
+        for name in (
+            "sourceEvents",
+            "sourceOpeningSuite",
+            "sourceMatchConfig",
+            "sourceMatchHarnessAssembly",
+            "teacherEngineExecutable",
+        ):
+            source_path = corpus_root / f"{name}.bin"
+            source_path.write_bytes(name.encode("utf-8"))
+            command_pins[name] = contract.identity(source_path)
+        command_pins["decisionTeacherSource"] = contract.identity(
+            contract.REPO / "tools/omega_nnue/omega_decision_teacher.py"
+        )
+        command_python = contract.identity(Path(sys.executable))
+        command_output = corpus_root / "command-roots.jsonl"
+        prepare_command, command_chesslib = _prepare_roots_replay_command(
+            corpus_profile, command_pins, command_python, command_output
+        )
+        if (
+            prepare_command[0] != command_python["path"]
+            or prepare_command[1:3] != ["-I", "-B"]
+            or prepare_command[3:5]
+            != [
+                "-X",
+                f"pycache_prefix={contract.resolve(corpus_root / 'isolated-python-cache')}",
+            ]
+            or prepare_command[prepare_command.index("--seed") + 1] != "23"
+            or prepare_command[
+                prepare_command.index("--required-engine-sha256") + 1
+            ]
+            != command_pins["teacherEngineExecutable"]["sha256"]
+            or command_chesslib["path"]
+            == corpus_pins["chessLibAssembly"]["path"]
+            or not _same_content_identity(
+                command_chesslib, corpus_pins["chessLibAssembly"]
+            )
+        ):
+            raise AssertionError("prepare-roots replay command escaped frozen inputs")
+
+        # A timestamp/size-valid malicious legacy cache must be observable in
+        # the control and ignored by the exact command used for clean workers.
+        import importlib.util
+        import py_compile
+
+        pyc_root = corpus_root / "pyc-isolation"
+        pyc_root.mkdir()
+        victim = pyc_root / "victim.py"
+        malicious = pyc_root / "malicious.py"
+        driver = pyc_root / "driver.py"
+        victim.write_text("VALUE='source'\n", encoding="utf-8")
+        malicious.write_text("VALUE='cache!'\n", encoding="utf-8")
+        victim_stat = victim.stat()
+        os.utime(
+            malicious,
+            ns=(victim_stat.st_atime_ns, victim_stat.st_mtime_ns),
+        )
+        cache_path = Path(importlib.util.cache_from_source(str(victim)))
+        cache_path.parent.mkdir()
+        py_compile.compile(
+            str(malicious),
+            cfile=str(cache_path),
+            dfile=str(victim),
+            doraise=True,
+            invalidation_mode=py_compile.PycInvalidationMode.TIMESTAMP,
+        )
+        driver.write_text(
+            "import pathlib,sys,victim\n"
+            "pathlib.Path(sys.argv[1]).write_text(victim.VALUE,encoding='utf-8')\n",
+            encoding="utf-8",
+        )
+        driver_path = contract.resolve(driver)
+        bootstrap = (
+            "import runpy,sys;"
+            f"sys.path.insert(0,{str(driver_path.parent)!r});"
+            f"runpy.run_path({str(driver_path)!r},run_name='__main__')"
+        )
+        control_result = pyc_root / "control.txt"
+        subprocess.run(
+            [
+                str(command_python["path"]),
+                "-I",
+                "-B",
+                "-c",
+                bootstrap,
+                str(control_result),
+            ],
+            cwd=pyc_root,
+            env=_sanitized_python_environment(),
+            check=True,
+        )
+        isolated_result = pyc_root / "isolated.txt"
+        isolated_command = _python_script_command(
+            command_python,
+            contract.identity(driver),
+            [str(isolated_result)],
+            pycache_prefix=pyc_root / "fresh-cache",
+        )
+        subprocess.run(
+            isolated_command,
+            cwd=pyc_root,
+            env=_sanitized_python_environment(),
+            check=True,
+        )
+        if (
+            control_result.read_text(encoding="utf-8") != "cache!"
+            or isolated_result.read_text(encoding="utf-8") != "source"
+        ):
+            raise AssertionError("fresh Python bytecode namespace was bypassed")
+        selection_forbidden, current_private, current_audit = (
+            _current_corpus_exclusion_from_pins(
+                corpus_profile, set(), corpus_pins
+            )
+        )
+        _validate_current_corpus_audit(current_audit)
+        if (
+            not selection_forbidden
+            or current_audit["records"]["sourcePoolStates"] != 17
+            or current_audit["records"]["roots"] != 16
+            or current_audit["records"]["children"] != 32
+            or current_audit["historicalComparison"]["intersectionSignatures"]
+            != 0
+        ):
+            raise AssertionError("synthetic current-corpus exclusion audit changed")
+
+        def synthetic_match_root(
+            ofen: str,
+            *,
+            seed: int = 99,
+            pair_id: str = "random-pair-000100",
+            trajectory_id: str | None = None,
+        ) -> core.Root:
+            phase, side, identity, orbit, orbit_signatures = core._position_meta(ofen)
+            actual_trajectory = trajectory_id or f"{pair_id}-ab"
+            return core.Root(
+                gate="development",
+                source_path=corpus_root / "match.jsonl",
+                source_sha256="b" * 64,
+                line=1,
+                generator_seed=seed,
+                trajectory_pair_id=pair_id,
+                trajectory_id=actual_trajectory,
+                flavor="ab",
+                ply=10,
+                phase=phase,
+                side=side,
+                ofen=ofen,
+                identity=identity,
+                orbit=orbit,
+                orbit_signatures=orbit_signatures,
+                rank="c" * 64,
+            )
+
+        collision_cases = (
+            ("root", corpus_ofens["root"]),
+            ("child", corpus_ofens["child"]),
+            ("source-state", corpus_ofens["sourceOnly"]),
+        )
+        for label, ofen in collision_cases:
+            candidate = synthetic_match_root(ofen)
+            candidate_keys = {candidate.identity, *candidate.orbit_signatures}
+            if not candidate_keys.intersection(current_private["signatures"]):
+                raise AssertionError(f"synthetic {label} collision fixture changed")
+            try:
+                _gate_current_corpus_evidence(
+                    [candidate], [candidate], current_private
+                )
+            except ValueError:
+                pass
+            else:
+                raise AssertionError(f"selected current {label} collision was accepted")
+        source_group_collision = synthetic_match_root(
+            corpus_ofens["child"],
+            seed=17,
+            pair_id="random-pair-000001",
+            trajectory_id="random-pair-000001-ab",
+        )
+        try:
+            _gate_current_corpus_evidence(
+                [source_group_collision], [], current_private
+            )
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("current source-group/trajectory reuse was accepted")
+
+        target_like = corpus_root / "target-like.jsonl"
+        target_like.write_text(
+            '{"schemaVersion":1,"score":THIS_VALUE_MUST_NOT_BE_DECODED}\n',
+            encoding="utf-8",
+            newline="",
+        )
+        try:
+            list(
+                _iter_target_blind_jsonl(
+                    target_like,
+                    frozenset({"schemaVersion", "score"}),
+                    "synthetic target-like row",
+                )
+            )
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("target-like current-corpus field was decoded")
+        recursive_lexical_cases = (
+            (
+                '{"schemaVersion":1,"selectionRank":{"target":{"score":123}}}',
+                True,
+            ),
+            (
+                '{"schemaVersion":1,"selectionRank":{"targets":{"scores":123}}}',
+                True,
+            ),
+            ('{"schemaVersion":1,"selectionRank":{"TARGETS":123}}', True),
+            ('{"schemaVersion":1,"selectionRank":{"SCORES":123}}', True),
+            ('{"heldOutTARGETSDecoded":BROKEN}', True),
+            ('{"generation4HeldOutTargetsDecoded":BROKEN}', True),
+            ('{"policy":{"target":THIS_MUST_NOT_BE_DECODED}}', True),
+            ('{"sources":[BROKEN]}', False),
+        )
+        for text, reject_sensitive in recursive_lexical_cases:
+            try:
+                _target_blind_top_level_fields(
+                    text, reject_sensitive=reject_sensitive
+                )
+            except ValueError:
+                pass
+            else:
+                raise AssertionError(
+                    "recursive target quarantine/JSON grammar accepted poison"
+                )
+        nested_created = corpus_root / "nested-created.json"
+        nested_created.write_text(
+            '{"createdUtc":{"target":{"score":1}}}', encoding="utf-8"
+        )
+        try:
+            _load_pinned_json(
+                nested_created,
+                contract.identity(nested_created),
+                "synthetic nested createdUtc",
+            )
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("nested createdUtc target was decoded")
+        try:
+            _require_sha256_string(
+                int("1" * 64), "synthetic integer engine SHA-256"
+            )
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("integer sourceEngineSha256 was accepted")
+
+        impossible_replay = corpus_root / "impossible-replay-children.jsonl"
+        impossible_replay.write_bytes(
+            Path(corpus_pins["children"]["path"])
+            .read_bytes()
+            .replace(b'"move":"a0a1"', b'"move":"zzzz"', 1)
+        )
+        try:
+            _assert_exact_file_reproduction(
+                Path(corpus_pins["children"]["path"]),
+                corpus_pins["children"],
+                impossible_replay,
+                "synthetic impossible-move replay",
+            )
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("impossible-move replay bytes were accepted")
+
+        root_semantics, _ = _root_manifest_semantics(
+            Path(corpus_pins["rootsManifest"]["path"]),
+            corpus_pins["rootsManifest"],
+            "synthetic root semantics",
+        )
+        normalized_manifest = contract.strict_load(
+            Path(corpus_pins["rootsManifest"]["path"]),
+            "synthetic normalized manifest source",
+        )
+        normalized_manifest["createdUtc"] = "2026-07-23T00:00:00Z"
+        normalized_manifest["output"] = {
+            **normalized_manifest["output"],
+            "path": str(corpus_root / "different-output.jsonl"),
+        }
+        normalized_path = corpus_root / "normalized-root-manifest.json"
+        contract.atomic_json(normalized_path, normalized_manifest, exclusive=True)
+        normalized_semantics, _ = _root_manifest_semantics(
+            normalized_path,
+            contract.identity(normalized_path),
+            "synthetic normalized root semantics",
+        )
+        if not contract.exact_json_equal(root_semantics, normalized_semantics):
+            raise AssertionError("root replay normalization changed stable semantics")
+        normalized_manifest["policy"]["seed"] += 1
+        tampered_manifest = corpus_root / "tampered-root-manifest.json"
+        contract.atomic_json(tampered_manifest, normalized_manifest, exclusive=True)
+        tampered_semantics, _ = _root_manifest_semantics(
+            tampered_manifest,
+            contract.identity(tampered_manifest),
+            "synthetic tampered root semantics",
+        )
+        if contract.exact_json_equal(root_semantics, tampered_semantics):
+            raise AssertionError("root semantic replay ignored policy tampering")
+        malformed_identity = dict(corpus_pins["roots"])
+        malformed_identity["bytes"] = float(malformed_identity["bytes"])
+        for label, path, identity in (
+            ("bad identity type", Path(corpus_pins["roots"]["path"]), malformed_identity),
+            ("bad identity path", Path(corpus_pins["children"]["path"]), corpus_pins["roots"]),
+            (
+                "bad identity hash",
+                Path(corpus_pins["roots"]["path"]),
+                {**corpus_pins["roots"], "sha256": "0" * 64},
+            ),
+        ):
+            try:
+                _identity_snapshot(path, identity, f"synthetic {label}")
+            except ValueError:
+                pass
+            else:
+                raise AssertionError(f"synthetic {label} was accepted")
+        historical_collision = next(iter(current_private["signatures"]))
+        overlapped_union, _, overlapped_audit = (
+            _current_corpus_exclusion_from_pins(
+                corpus_profile, {historical_collision}, corpus_pins
+            )
+        )
+        if (
+            overlapped_audit["historicalComparison"]["intersectionSignatures"]
+            != 1
+            or historical_collision not in overlapped_union
+        ):
+            raise AssertionError("historical/current union accounting changed")
+
+        original_identity = contract.identity
+        roots_path = contract.resolve(Path(corpus_pins["roots"]["path"]))
+        root_identity_calls = 0
+
+        def mutating_identity(path: Path) -> dict[str, Any]:
+            nonlocal root_identity_calls
+            resolved = contract.resolve(path)
+            if resolved == roots_path:
+                root_identity_calls += 1
+                if root_identity_calls == 2:
+                    roots_path.write_bytes(roots_path.read_bytes() + b"\n")
+            return original_identity(path)
+
+        try:
+            contract.identity = mutating_identity
+            try:
+                _current_corpus_exclusion_from_pins(
+                    corpus_profile, set(), corpus_pins
+                )
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("current-corpus TOCTOU mutation was accepted")
+        finally:
+            contract.identity = original_identity
     poison = {
         "CORECLR_ENABLE_PROFILING": "1",
         "CORECLR_PROFILER": "{00000000-0000-0000-0000-000000000000}",
@@ -3099,28 +6303,6 @@ def _self_test() -> None:
             )
     finally:
         contract.verify_module_binding = original_binding_verifier
-    original_teacher_slot = sys.modules.get("omega_decision_teacher")
-    try:
-        sys.modules["omega_decision_teacher"] = object()
-        try:
-            _validate_forbidden_inputs(
-                [manifest],
-                [payload],
-                _allow_template_module_for_self_test=True,
-            )
-        except (ImportError, AttributeError, ValueError):
-            pass
-        else:
-            raise AssertionError(
-                "in-memory decision-teacher module substitution was accepted"
-            )
-    finally:
-        if original_teacher_slot is None:
-            sys.modules.pop("omega_decision_teacher", None)
-        else:
-            sys.modules["omega_decision_teacher"] = original_teacher_slot
-
-
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -3149,6 +6331,12 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     verify = commands.add_parser("verify-authorization")
     verify.add_argument("--protocol", type=Path, default=contract.PROTOCOL_PATH)
     verify.add_argument("--authorization", type=Path, default=None)
+    worker = commands.add_parser("forbidden-catalog-worker", help=argparse.SUPPRESS)
+    worker.add_argument("--teacher-source", type=Path, required=True)
+    worker.add_argument("--teacher-bytes", type=int, required=True)
+    worker.add_argument("--teacher-sha256", required=True)
+    worker.add_argument("--manifest", type=Path, action="append", required=True)
+    worker.add_argument("--output", type=Path, required=True)
     commands.add_parser("self-test")
     return parser.parse_args(argv)
 
@@ -3180,6 +6368,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         path = args.authorization or contract.namespace(protocol, "authorization")
         value = _verify_authorization(path, protocol=protocol)
         print(f"Generation-4 match authorization verified: {value['selectedNetwork']['sha256']}")
+    elif args.command == "forbidden-catalog-worker":
+        _forbidden_catalog_worker(args)
     else:
         contract.self_test()
         _self_test()
