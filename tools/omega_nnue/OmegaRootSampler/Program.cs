@@ -9,9 +9,19 @@ const string OmegaStart =
     "PPPPPPPPPP/CRNBQKBNRC[W/W/w/w] w KQkq - 0 1";
 
 var options = Options.Parse(args);
-Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(options.Output))!);
-var temporary = options.Output + ".tmp";
-if (File.Exists(temporary)) File.Delete(temporary);
+var output = Path.GetFullPath(options.Output);
+var manifestPath = output + ".manifest.json";
+var sealPath = output + ".complete.seal.json";
+RefuseExisting(output, "output");
+RefuseExisting(manifestPath, "manifest");
+RefuseExisting(sealPath, "completion seal");
+Directory.CreateDirectory(Path.GetDirectoryName(output)!);
+var temporary = AdjacentTemporary(output);
+var manifestTemporary = AdjacentTemporary(manifestPath);
+var sealTemporary = AdjacentTemporary(sealPath);
+var outputPublished = false;
+var manifestPublished = false;
+var sealPublished = false;
 
 var phaseCounts = new Dictionary<string, int>(StringComparer.Ordinal) {
     ["opening"] = 0, ["middlegame"] = 0, ["late"] = 0, ["endgame"] = 0
@@ -23,76 +33,32 @@ var terminalTrajectories = 0;
 var maxPlyReached = 0;
 var promotionSelections = "qrbncw".ToDictionary(
     value => value.ToString(), _ => 0, StringComparer.Ordinal);
+try {
+var pairResults = new PairResult[options.TrajectoryPairs];
+await Parallel.ForEachAsync(
+    Enumerable.Range(0, options.TrajectoryPairs),
+    new ParallelOptions { MaxDegreeOfParallelism = options.Workers },
+    async (pair, _) => pairResults[pair] = await GeneratePair(pair, options));
 await using (var stream = new FileStream(
     temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None,
     1 << 20, FileOptions.SequentialScan))
 await using (var writer = new StreamWriter(
     stream, new UTF8Encoding(false), 1 << 20, leaveOpen: true)) {
-    for (var pair = 0; pair < options.TrajectoryPairs; pair++) {
-        foreach (var flavor in new[] { "ab", "ba" }) {
-            var trajectorySeed = Mix(
-                options.Seed
-                ^ ((ulong)(pair + 1) * 0x9E3779B97F4A7C15UL)
-                ^ (flavor == "ab"
-                    ? 0xA0761D6478BD642FUL
-                    : 0xE7037ED1A0B428DBUL));
-            var rng = new SplitMix64(trajectorySeed);
-            using var game = CreateGame();
-            var retained = new Dictionary<(string Phase, string Side), List<Sample>>();
-            var ended = false;
-            for (var ply = 0; ply <= options.MaxPlies; ply++) {
-                var moves = LegalMoves(game);
-                if (moves.Count == 0 || game.IsDraw()) {
-                    ended = true;
-                    break;
-                }
-                Consider(
-                    retained, game, pair, flavor, trajectorySeed, ply,
-                    options.PositionsPerPhaseSide);
-                if (ply == options.MaxPlies) break;
-                var chosen = ChooseMove(moves, ref rng, options.CapturePercent);
-                if (chosen.Coordinate.Length == 5)
-                    promotionSelections[chosen.Coordinate[4].ToString()]++;
-                await game.DoMove(chosen.Coordinate, checkEndGame: false);
-                maxPlyReached = Math.Max(maxPlyReached, ply + 1);
-            }
-            if (ended) terminalTrajectories++;
-            foreach (var sample in retained.Values.SelectMany(value => value)
-                         .OrderBy(value => value.Phase, StringComparer.Ordinal)
-                         .ThenBy(value => value.Side, StringComparer.Ordinal)
-                         .ThenBy(value => value.Rank, StringComparer.Ordinal)) {
-                var record = new {
-                    schemaVersion = 1,
-                    kind = "omega-rules-only-random-root",
-                    generatorSeed = options.Seed.ToString(),
-                    trajectorySeed = trajectorySeed.ToString(),
-                    trajectoryPairId = $"random-pair-{pair + 1:D6}",
-                    trajectoryId = $"random-pair-{pair + 1:D6}-{flavor}",
-                    flavor,
-                    ply = sample.Ply,
-                    phase = sample.Phase,
-                    sideToMove = sample.Side,
-                    ofen = sample.Ofen,
-                    pieceCount = sample.PieceCount,
-                    whitePieces = sample.WhitePieces,
-                    blackPieces = sample.BlackPieces,
-                    champions = sample.Champions,
-                    wizards = sample.Wizards,
-                    halfmoveClock = sample.HalfmoveClock,
-                    selectionRank = sample.Rank
-                };
+    foreach (var result in pairResults) {
+        terminalTrajectories += result.TerminalTrajectories;
+        maxPlyReached = Math.Max(maxPlyReached, result.MaxPlyReached);
+        foreach (var item in result.PromotionSelections)
+            promotionSelections[item.Key] += item.Value;
+        foreach (var record in result.Records) {
                 await writer.WriteLineAsync(JsonSerializer.Serialize(record));
-                phaseCounts[sample.Phase]++;
-                sideCounts[sample.Side]++;
-            }
+                phaseCounts[record.phase]++;
+                sideCounts[record.sideToMove]++;
         }
     }
     await writer.FlushAsync();
     stream.Flush(flushToDisk: true);
 }
-File.Move(temporary, options.Output, overwrite: true);
-
-var outputBytes = await File.ReadAllBytesAsync(options.Output);
+var stagedOutput = Identity(temporary, output);
 var manifest = new {
     schemaVersion = 1,
     kind = "omega-rules-only-random-root-manifest",
@@ -102,6 +68,7 @@ var manifest = new {
         seed = options.Seed.ToString(),
         trajectoryPairs = options.TrajectoryPairs,
         independentTrajectoriesPerPair = 2,
+        workers = options.Workers,
         maxPlies = options.MaxPlies,
         positionsPerPhaseAndSide = options.PositionsPerPhaseSide,
         captureSelectionPercent = options.CapturePercent,
@@ -127,25 +94,116 @@ var manifest = new {
         samplerAssembly = Identity(Assembly.GetExecutingAssembly().Location),
         chessLibAssembly = Identity(typeof(Game).Assembly.Location)
     },
-    output = new {
-        path = Path.GetFullPath(options.Output),
-        bytes = outputBytes.Length,
-        sha256 = Convert.ToHexString(SHA256.HashData(outputBytes)).ToLowerInvariant()
-    }
+    output = stagedOutput,
+    finalStageSeal = false,
 };
-var manifestPath = options.Output + ".manifest.json";
-await File.WriteAllTextAsync(
-    manifestPath,
-    JsonSerializer.Serialize(
-        manifest, new JsonSerializerOptions { WriteIndented = true }) + "\n",
-    new UTF8Encoding(false));
+await WriteTemporaryJson(manifestTemporary, manifest);
+var seal = new {
+    schemaVersion = 1,
+    kind = "omega-rules-only-random-root-completion-seal",
+    createdUtc = DateTime.UtcNow,
+    output = stagedOutput,
+    manifest = Identity(manifestTemporary, manifestPath),
+    producer = new {
+        samplerAssembly = Identity(Assembly.GetExecutingAssembly().Location),
+        chessLibAssembly = Identity(typeof(Game).Assembly.Location),
+        framework = System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription,
+    },
+    finalStageSeal = true,
+};
+await WriteTemporaryJson(sealTemporary, seal);
+RefuseExisting(output, "output");
+RefuseExisting(manifestPath, "manifest");
+RefuseExisting(sealPath, "completion seal");
+File.Move(temporary, output);
+outputPublished = true;
+File.Move(manifestTemporary, manifestPath);
+manifestPublished = true;
+File.Move(sealTemporary, sealPath);
+sealPublished = true;
+} catch {
+    // Roll back only files this invocation proved absent and then published.
+    // This leaves no ambiguous partly committed source pool behind.
+    if (sealPublished) TryDelete(sealPath);
+    if (manifestPublished) TryDelete(manifestPath);
+    if (outputPublished) TryDelete(output);
+    TryDelete(temporary);
+    TryDelete(manifestTemporary);
+    TryDelete(sealTemporary);
+    throw;
+}
 Console.WriteLine(
     $"Wrote {phaseCounts.Values.Sum()} roots from " +
     $"{options.TrajectoryPairs * 2} legal trajectories.");
 Console.WriteLine(
     $"Phases: {string.Join(", ", phaseCounts.Select(item => $"{item.Key}={item.Value}"))}");
-Console.WriteLine($"Output: {Path.GetFullPath(options.Output)}");
+Console.WriteLine($"Output: {output}");
 Console.WriteLine($"Manifest: {Path.GetFullPath(manifestPath)}");
+Console.WriteLine($"Completion seal: {sealPath}");
+
+static async Task<PairResult> GeneratePair(int pair, Options options)
+{
+    var records = new List<RootRecord>();
+    var terminalTrajectories = 0;
+    var maxPlyReached = 0;
+    var promotionSelections = "qrbncw".ToDictionary(
+        value => value.ToString(), _ => 0, StringComparer.Ordinal);
+    foreach (var flavor in new[] { "ab", "ba" }) {
+        var trajectorySeed = Mix(
+            options.Seed
+            ^ ((ulong)(pair + 1) * 0x9E3779B97F4A7C15UL)
+            ^ (flavor == "ab"
+                ? 0xA0761D6478BD642FUL
+                : 0xE7037ED1A0B428DBUL));
+        var rng = new SplitMix64(trajectorySeed);
+        using var game = CreateGame();
+        var retained = new Dictionary<(string Phase, string Side), List<Sample>>();
+        var ended = false;
+        for (var ply = 0; ply <= options.MaxPlies; ply++) {
+            var moves = LegalMoves(game);
+            if (moves.Count == 0 || game.IsDraw()) {
+                ended = true;
+                break;
+            }
+            Consider(
+                retained, game, pair, flavor, trajectorySeed, ply,
+                options.PositionsPerPhaseSide);
+            if (ply == options.MaxPlies) break;
+            var chosen = ChooseMove(moves, ref rng, options.CapturePercent);
+            if (chosen.Coordinate.Length == 5)
+                promotionSelections[chosen.Coordinate[4].ToString()]++;
+            await game.DoMove(chosen.Coordinate, checkEndGame: false);
+            maxPlyReached = Math.Max(maxPlyReached, ply + 1);
+        }
+        if (ended) terminalTrajectories++;
+        foreach (var sample in retained.Values.SelectMany(value => value)
+                     .OrderBy(value => value.Phase, StringComparer.Ordinal)
+                     .ThenBy(value => value.Side, StringComparer.Ordinal)
+                     .ThenBy(value => value.Rank, StringComparer.Ordinal)) {
+            records.Add(new RootRecord(
+                schemaVersion: 1,
+                kind: "omega-rules-only-random-root",
+                generatorSeed: options.Seed.ToString(),
+                trajectorySeed: trajectorySeed.ToString(),
+                trajectoryPairId: $"random-pair-{pair + 1:D6}",
+                trajectoryId: $"random-pair-{pair + 1:D6}-{flavor}",
+                flavor: flavor,
+                ply: sample.Ply,
+                phase: sample.Phase,
+                sideToMove: sample.Side,
+                ofen: sample.Ofen,
+                pieceCount: sample.PieceCount,
+                whitePieces: sample.WhitePieces,
+                blackPieces: sample.BlackPieces,
+                champions: sample.Champions,
+                wizards: sample.Wizards,
+                halfmoveClock: sample.HalfmoveClock,
+                selectionRank: sample.Rank));
+        }
+    }
+    return new PairResult(
+        records, terminalTrajectories, maxPlyReached, promotionSelections);
+}
 
 static Game CreateGame()
 {
@@ -247,14 +305,48 @@ static ulong Mix(ulong value)
     return value ^ (value >> 31);
 }
 
-static object Identity(string path)
+static object Identity(string path, string? reportedPath = null)
 {
     var bytes = File.ReadAllBytes(path);
     return new {
-        path = Path.GetFullPath(path),
+        path = Path.GetFullPath(reportedPath ?? path),
         bytes = bytes.Length,
         sha256 = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant()
     };
+}
+
+static string AdjacentTemporary(string path) =>
+    Path.Combine(
+        Path.GetDirectoryName(path)!,
+        $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
+
+static void RefuseExisting(string path, string label)
+{
+    if (File.Exists(path))
+        throw new IOException($"Refusing to replace existing {label}: {path}");
+}
+
+static async Task WriteTemporaryJson(string path, object value)
+{
+    var payload = JsonSerializer.Serialize(
+        value, new JsonSerializerOptions { WriteIndented = true }) + "\n";
+    await using var stream = new FileStream(
+        path, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+        1 << 16, FileOptions.WriteThrough);
+    await using var writer = new StreamWriter(
+        stream, new UTF8Encoding(false), 1 << 16, leaveOpen: true);
+    await writer.WriteAsync(payload);
+    await writer.FlushAsync();
+    stream.Flush(flushToDisk: true);
+}
+
+static void TryDelete(string path)
+{
+    try {
+        if (File.Exists(path)) File.Delete(path);
+    } catch {
+        // Preserve the original publication failure.
+    }
 }
 
 readonly record struct LegalMove(string Coordinate, bool Capture);
@@ -270,6 +362,30 @@ readonly record struct Sample(
     int Champions,
     int Wizards,
     int HalfmoveClock);
+sealed record RootRecord(
+    int schemaVersion,
+    string kind,
+    string generatorSeed,
+    string trajectorySeed,
+    string trajectoryPairId,
+    string trajectoryId,
+    string flavor,
+    int ply,
+    string phase,
+    string sideToMove,
+    string ofen,
+    int pieceCount,
+    int whitePieces,
+    int blackPieces,
+    int champions,
+    int wizards,
+    int halfmoveClock,
+    string selectionRank);
+sealed record PairResult(
+    List<RootRecord> Records,
+    int TerminalTrajectories,
+    int MaxPlyReached,
+    Dictionary<string, int> PromotionSelections);
 
 struct SplitMix64
 {
@@ -319,7 +435,8 @@ sealed record Options(
     int TrajectoryPairs,
     int MaxPlies,
     int PositionsPerPhaseSide,
-    int CapturePercent)
+    int CapturePercent,
+    int Workers)
 {
     public static Options Parse(string[] args)
     {
@@ -331,15 +448,16 @@ sealed record Options(
         }
         var output = Value("--output")
             ?? throw new ArgumentException("--output FILE is required");
-        var seed = ulong.Parse(Value("--seed") ?? "2026071802");
-        var pairs = int.Parse(Value("--trajectory-pairs") ?? "2048");
+        var seed = ulong.Parse(Value("--seed") ?? "2026072201");
+        var pairs = int.Parse(Value("--trajectory-pairs") ?? "8192");
         var maxPlies = int.Parse(Value("--max-plies") ?? "220");
         var retained = int.Parse(Value("--positions-per-phase-side") ?? "2");
         var capture = int.Parse(Value("--capture-percent") ?? "72");
-        if (pairs <= 0 || maxPlies <= 0 || retained <= 0)
+        var workers = int.Parse(Value("--workers") ?? "4");
+        if (pairs <= 0 || maxPlies <= 0 || retained <= 0 || workers <= 0)
             throw new ArgumentException("numeric counts must be positive");
         if (capture < 0 || capture > 100)
             throw new ArgumentException("--capture-percent must be 0..100");
-        return new Options(output, seed, pairs, maxPlies, retained, capture);
+        return new Options(output, seed, pairs, maxPlies, retained, capture, workers);
     }
 }

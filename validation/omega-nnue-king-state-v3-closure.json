@@ -1,0 +1,737 @@
+{
+  "authenticatedInputs": {
+    "closureGenerator": {
+      "bytes": 32113,
+      "path": "tools/omega_nnue/king_state_generation3_closure.py",
+      "sha256": "98e43751df5826751ed4f38e0992b1bfc610e63f5b434ac92cbefad76588bb1c"
+    },
+    "declarations": {
+      "amendment001": {
+        "bytes": 8729,
+        "path": "validation/omega-nnue-king-state-v3-amendment-001.json",
+        "sha256": "846f43487558246edec871359f9f0a5dbd0377e69a3b95baee6ab6f47f32f78b"
+      },
+      "amendment002": {
+        "bytes": 7192,
+        "path": "validation/omega-nnue-king-state-v3-amendment-002.json",
+        "sha256": "833886a638ebda8d062dfd195d22cfc482152730284d7da5f73a5066fb69c266"
+      },
+      "amendment003": {
+        "bytes": 68249,
+        "path": "validation/omega-nnue-king-state-v3-amendment-003.json",
+        "sha256": "30d4eeb080d7a8d07d20b11abe8f3b2df19dc8c5e3c4ab354c523fcdce642469"
+      },
+      "preregistration": {
+        "bytes": 33071,
+        "path": "validation/omega-nnue-king-state-v3-preregistration.json",
+        "sha256": "7ed714f11e370bb183815bd597a58cce5090396d1b6fe1b0a07849994b48c10c"
+      }
+    },
+    "pinnedCommit": "39a2519adda56a2f0bb0a8df77d9a4276f180c70",
+    "plan": {
+      "bytes": 36868,
+      "path": "build-msvc/king-state-v3/training-plan.json",
+      "sha256": "6b6015c9c2b568c0dc62bb291fa21ca51ff71db319518c750a0c03f6f4a6f50d"
+    },
+    "planSourceBlobs": {
+      "baseTrainer": {
+        "bytes": 124508,
+        "path": "tools/omega_nnue/train.py",
+        "sha256": "ac64a0941c176c0d0b2a9024e31955739635d4e958d5f9fda06394d239e3f1a3"
+      },
+      "networkFormat": {
+        "bytes": 44266,
+        "path": "tools/omega_nnue/omega_nnue.py",
+        "sha256": "bbab323356cb1f7194852af13c0ea632d7262f90d14d94032a1bcf88da2c0eb2"
+      },
+      "orchestrator": {
+        "bytes": 214271,
+        "path": "tools/omega_nnue/king_state_train_generation3.py",
+        "sha256": "cdae1319d2880207b2ff4a632df90fc9dc26662ec4eb785694afddaa8b533de1"
+      },
+      "phaseIncidencePreflight": {
+        "bytes": 31219,
+        "path": "tools/omega_nnue/phase_incidence_preflight.py",
+        "sha256": "d58f1cb9150c79910c460dea7e95aefd2153e9ce3c8866cd2da3f5a953d591b9"
+      }
+    }
+  },
+  "baselines": {
+    "I0": {
+      "cpMae": 215.09929516929614,
+      "huberLoss": 2.9811117157108944,
+      "phase": {
+        "endgame": {
+          "cpMae": 242.70197044334975,
+          "groups": 203,
+          "huberLoss": 3.3406674876847293,
+          "rows": 406
+        },
+        "late": {
+          "cpMae": 208.89267015706807,
+          "groups": 191,
+          "huberLoss": 2.7538954188481672,
+          "rows": 382
+        },
+        "middlegame": {
+          "cpMae": 228.5606796116505,
+          "groups": 206,
+          "huberLoss": 3.25006395631068,
+          "rows": 412
+        },
+        "opening": {
+          "cpMae": 180.24186046511628,
+          "groups": 215,
+          "huberLoss": 2.5798200000000007,
+          "rows": 430
+        }
+      }
+    },
+    "zeroResidual": {
+      "cpMae": 230.57536141826762,
+      "huberLoss": 3.2326513525358087,
+      "phase": {
+        "endgame": {
+          "cpMae": 251.98029556650246,
+          "groups": 203,
+          "huberLoss": 3.4725514778325124,
+          "rows": 406
+        },
+        "late": {
+          "cpMae": 223.1937172774869,
+          "groups": 191,
+          "huberLoss": 3.0119880890052353,
+          "rows": 382
+        },
+        "middlegame": {
+          "cpMae": 250.65533980582524,
+          "groups": 206,
+          "huberLoss": 3.628920145631068,
+          "rows": 412
+        },
+        "opening": {
+          "cpMae": 196.4720930232558,
+          "groups": 215,
+          "huberLoss": 2.8171456976744182,
+          "rows": 430
+        }
+      }
+    }
+  },
+  "candidateGateSummary": [
+    {
+      "candidateId": "G3A",
+      "commonValidation": {
+        "cpMae": 205.89464069468156,
+        "huberLoss": 2.6561400701842506,
+        "phase": {
+          "endgame": {
+            "cpMae": 227.20443349753694,
+            "groups": 203,
+            "huberLoss": 3.0449879310344827,
+            "rows": 406
+          },
+          "late": {
+            "cpMae": 211.3324607329843,
+            "groups": 191,
+            "huberLoss": 2.6823764397905765,
+            "rows": 382
+          },
+          "middlegame": {
+            "cpMae": 220.0509708737864,
+            "groups": 206,
+            "huberLoss": 2.8689245145631066,
+            "rows": 412
+          },
+          "opening": {
+            "cpMae": 164.9906976744186,
+            "groups": 215,
+            "huberLoss": 2.0282713953488374,
+            "rows": 430
+          }
+        }
+      },
+      "eligible": false,
+      "gates": {
+        "deploymentHealth": false,
+        "lowerHuberLossThanZeroResidual": true,
+        "lowerPhaseMacroCpMaeVersusI0": true,
+        "maximumAnyPhaseCpMaeRegressionVersusI0": true,
+        "minimumRelativeHuberImprovementOverI0": true
+      },
+      "health": {
+        "checks": {
+          "deadDenseUnits": true,
+          "deadDenseUnitsVsI0": true,
+          "denseActiveFraction": false,
+          "deploymentFloatParameterRoundTripExact": true,
+          "deploymentFloatRequantizationByteIdentical": true,
+          "expectedFileSize": true,
+          "finitePredictions": true,
+          "maximumAbsoluteCorrection": true,
+          "meanFloatQuantizationPenalty": true,
+          "roundTripHash": true,
+          "saturatedDenseUnits": true,
+          "singleFloatQuantizationPenalty": true,
+          "wholeCorpusPythonCppIntegerAgreement": true
+        },
+        "deadDenseUnits": 0,
+        "denseActiveFraction": 0.9287452697753906,
+        "maximumAbsoluteCorrectionCp": 886,
+        "maximumFloatQuantizationPenaltyCp": 5.477783203125,
+        "meanFloatQuantizationPenaltyCp": 1.062844380736351,
+        "passed": false,
+        "pythonCppMismatches": 0,
+        "saturatedDenseUnits": 0
+      },
+      "i0Validation": {
+        "cpMae": 215.09929516929614,
+        "huberLoss": 2.9811117157108944,
+        "phase": {
+          "endgame": {
+            "cpMae": 242.70197044334975,
+            "groups": 203,
+            "huberLoss": 3.3406674876847293,
+            "rows": 406
+          },
+          "late": {
+            "cpMae": 208.89267015706807,
+            "groups": 191,
+            "huberLoss": 2.7538954188481672,
+            "rows": 382
+          },
+          "middlegame": {
+            "cpMae": 228.5606796116505,
+            "groups": 206,
+            "huberLoss": 3.25006395631068,
+            "rows": 412
+          },
+          "opening": {
+            "cpMae": 180.24186046511628,
+            "groups": 215,
+            "huberLoss": 2.5798200000000007,
+            "rows": 430
+          }
+        }
+      },
+      "informationBoundary": {
+        "heldOutMetricsComputed": false,
+        "heldOutRowsWithheld": 1666,
+        "heldOutTargetFieldsDecoded": 0,
+        "trainTargetsDecoded": 13088,
+        "validationTargetsDecoded": 1630
+      },
+      "manifest": {
+        "bytes": 86353,
+        "path": "build-msvc/king-state-v3/G3A.bundle/G3A.manifest.json",
+        "sha256": "e7872e45f5fffdd6d370fe347b441169ebb63a2422b0ad571598969f80aac972"
+      },
+      "maximumAnyPhaseCpMaeRegressionVersusI0": 2.43979057591622,
+      "phaseCpMaeRegressionVersusI0": {
+        "endgame": -15.497536945812811,
+        "late": 2.43979057591622,
+        "middlegame": -8.509708737864088,
+        "opening": -15.251162790697663
+      },
+      "relativeHuberImprovementOverI0": 0.10901022052075263,
+      "selectedEpoch": 48,
+      "verifiedArtifacts": {
+        "canonicalDeploymentFloat": {
+          "bytes": 24802112,
+          "path": "build-msvc/king-state-v3/G3A.bundle/G3A.float",
+          "sha256": "537ef69d226f093a2675230490b039b241bd55af15bd4f3a47516d5c4f89f656"
+        },
+        "initializer": {
+          "bytes": 12392940,
+          "path": "build-msvc/king-state-v2/K2.nnue",
+          "sha256": "74cfefdad87ce4e620597f1153bf03aa88b301cf66b2c959700b07e85acafe33"
+        },
+        "initializerManifest": {
+          "bytes": 116217,
+          "path": "build-msvc/king-state-v2/K2.manifest.json",
+          "sha256": "48e0666d6a86bc253d435ee0b42908667dfb200d3cfc27bcbef9dbeced677b99"
+        },
+        "network": {
+          "bytes": 12392940,
+          "path": "build-msvc/king-state-v3/G3A.bundle/G3A.nnue",
+          "sha256": "596305bf8749928e783660b7dd962b21020cea84d1e92b847550e9d7fc72ec0c"
+        },
+        "optimizerShadow": {
+          "bytes": 24802112,
+          "path": "build-msvc/king-state-v3/G3A.bundle/G3A.optimizer-shadow.float",
+          "sha256": "46a9b9297ecb05b83bfedd4e1257e6840a5418214d61e703c1cdeac9b0c8114a"
+        },
+        "plan": {
+          "bytes": 36868,
+          "path": "build-msvc/king-state-v3/training-plan.json",
+          "sha256": "6b6015c9c2b568c0dc62bb291fa21ca51ff71db319518c750a0c03f6f4a6f50d"
+        }
+      },
+      "zeroResidualValidation": {
+        "cpMae": 230.57536141826762,
+        "huberLoss": 3.2326513525358087,
+        "phase": {
+          "endgame": {
+            "cpMae": 251.98029556650246,
+            "groups": 203,
+            "huberLoss": 3.4725514778325124,
+            "rows": 406
+          },
+          "late": {
+            "cpMae": 223.1937172774869,
+            "groups": 191,
+            "huberLoss": 3.0119880890052353,
+            "rows": 382
+          },
+          "middlegame": {
+            "cpMae": 250.65533980582524,
+            "groups": 206,
+            "huberLoss": 3.628920145631068,
+            "rows": 412
+          },
+          "opening": {
+            "cpMae": 196.4720930232558,
+            "groups": 215,
+            "huberLoss": 2.8171456976744182,
+            "rows": 430
+          }
+        }
+      }
+    },
+    {
+      "candidateId": "G3B",
+      "commonValidation": {
+        "cpMae": 197.6260676587786,
+        "huberLoss": 2.524302689112831,
+        "phase": {
+          "endgame": {
+            "cpMae": 213.7512315270936,
+            "groups": 203,
+            "huberLoss": 2.8251532019704437,
+            "rows": 406
+          },
+          "late": {
+            "cpMae": 196.6544502617801,
+            "groups": 191,
+            "huberLoss": 2.4338869109947647,
+            "rows": 382
+          },
+          "middlegame": {
+            "cpMae": 214.52184466019418,
+            "groups": 206,
+            "huberLoss": 2.7830070388349513,
+            "rows": 412
+          },
+          "opening": {
+            "cpMae": 165.5767441860465,
+            "groups": 215,
+            "huberLoss": 2.0551636046511623,
+            "rows": 430
+          }
+        }
+      },
+      "eligible": false,
+      "gates": {
+        "deploymentHealth": false,
+        "lowerHuberLossThanZeroResidual": true,
+        "lowerPhaseMacroCpMaeVersusI0": true,
+        "maximumAnyPhaseCpMaeRegressionVersusI0": true,
+        "minimumRelativeHuberImprovementOverI0": true
+      },
+      "health": {
+        "checks": {
+          "deadDenseUnits": true,
+          "deadDenseUnitsVsI0": true,
+          "denseActiveFraction": false,
+          "deploymentFloatParameterRoundTripExact": true,
+          "deploymentFloatRequantizationByteIdentical": true,
+          "expectedFileSize": true,
+          "finitePredictions": true,
+          "maximumAbsoluteCorrection": true,
+          "meanFloatQuantizationPenalty": true,
+          "roundTripHash": true,
+          "saturatedDenseUnits": true,
+          "singleFloatQuantizationPenalty": true,
+          "wholeCorpusPythonCppIntegerAgreement": true
+        },
+        "deadDenseUnits": 0,
+        "denseActiveFraction": 0.9338207244873047,
+        "maximumAbsoluteCorrectionCp": 638,
+        "maximumFloatQuantizationPenaltyCp": 4.433349609375,
+        "meanFloatQuantizationPenaltyCp": 0.9444678574800491,
+        "passed": false,
+        "pythonCppMismatches": 0,
+        "saturatedDenseUnits": 0
+      },
+      "i0Validation": {
+        "cpMae": 215.09929516929614,
+        "huberLoss": 2.9811117157108944,
+        "phase": {
+          "endgame": {
+            "cpMae": 242.70197044334975,
+            "groups": 203,
+            "huberLoss": 3.3406674876847293,
+            "rows": 406
+          },
+          "late": {
+            "cpMae": 208.89267015706807,
+            "groups": 191,
+            "huberLoss": 2.7538954188481672,
+            "rows": 382
+          },
+          "middlegame": {
+            "cpMae": 228.5606796116505,
+            "groups": 206,
+            "huberLoss": 3.25006395631068,
+            "rows": 412
+          },
+          "opening": {
+            "cpMae": 180.24186046511628,
+            "groups": 215,
+            "huberLoss": 2.5798200000000007,
+            "rows": 430
+          }
+        }
+      },
+      "informationBoundary": {
+        "heldOutMetricsComputed": false,
+        "heldOutRowsWithheld": 1666,
+        "heldOutTargetFieldsDecoded": 0,
+        "trainTargetsDecoded": 13088,
+        "validationTargetsDecoded": 1630
+      },
+      "manifest": {
+        "bytes": 86458,
+        "path": "build-msvc/king-state-v3/G3B.bundle/G3B.manifest.json",
+        "sha256": "1b9383a2389b01e834e6e1dcb1d28c6200d57fc29319bf03ccb428920bbd27ff"
+      },
+      "maximumAnyPhaseCpMaeRegressionVersusI0": -12.238219895287955,
+      "phaseCpMaeRegressionVersusI0": {
+        "endgame": -28.950738916256142,
+        "late": -12.238219895287955,
+        "middlegame": -14.038834951456323,
+        "opening": -14.665116279069764
+      },
+      "relativeHuberImprovementOverI0": 0.15323445417714915,
+      "selectedEpoch": 48,
+      "verifiedArtifacts": {
+        "canonicalDeploymentFloat": {
+          "bytes": 24802112,
+          "path": "build-msvc/king-state-v3/G3B.bundle/G3B.float",
+          "sha256": "f2d9f0e956939ed6165e874e9e13ce8cd361a4ccc4f197e098503185328faeed"
+        },
+        "initializer": {
+          "bytes": 12392940,
+          "path": "build-msvc/king-state-v2/K2.nnue",
+          "sha256": "74cfefdad87ce4e620597f1153bf03aa88b301cf66b2c959700b07e85acafe33"
+        },
+        "initializerManifest": {
+          "bytes": 116217,
+          "path": "build-msvc/king-state-v2/K2.manifest.json",
+          "sha256": "48e0666d6a86bc253d435ee0b42908667dfb200d3cfc27bcbef9dbeced677b99"
+        },
+        "network": {
+          "bytes": 12392940,
+          "path": "build-msvc/king-state-v3/G3B.bundle/G3B.nnue",
+          "sha256": "e5855b46a9f1310da7ec7121bb2418072d8750ee9a9bfbd7484fb778286fec4f"
+        },
+        "optimizerShadow": {
+          "bytes": 24802112,
+          "path": "build-msvc/king-state-v3/G3B.bundle/G3B.optimizer-shadow.float",
+          "sha256": "a8278f605459dc9aec552c2a6c8881ca60e38037a149714deccd5d8789aa12e8"
+        },
+        "plan": {
+          "bytes": 36868,
+          "path": "build-msvc/king-state-v3/training-plan.json",
+          "sha256": "6b6015c9c2b568c0dc62bb291fa21ca51ff71db319518c750a0c03f6f4a6f50d"
+        }
+      },
+      "zeroResidualValidation": {
+        "cpMae": 230.57536141826762,
+        "huberLoss": 3.2326513525358087,
+        "phase": {
+          "endgame": {
+            "cpMae": 251.98029556650246,
+            "groups": 203,
+            "huberLoss": 3.4725514778325124,
+            "rows": 406
+          },
+          "late": {
+            "cpMae": 223.1937172774869,
+            "groups": 191,
+            "huberLoss": 3.0119880890052353,
+            "rows": 382
+          },
+          "middlegame": {
+            "cpMae": 250.65533980582524,
+            "groups": 206,
+            "huberLoss": 3.628920145631068,
+            "rows": 412
+          },
+          "opening": {
+            "cpMae": 196.4720930232558,
+            "groups": 215,
+            "huberLoss": 2.8171456976744182,
+            "rows": 430
+          }
+        }
+      }
+    },
+    {
+      "candidateId": "G3C",
+      "commonValidation": {
+        "cpMae": 197.46417470063597,
+        "huberLoss": 2.5250045263425194,
+        "phase": {
+          "endgame": {
+            "cpMae": 214.04679802955664,
+            "groups": 203,
+            "huberLoss": 2.8280514778325125,
+            "rows": 406
+          },
+          "late": {
+            "cpMae": 196.63612565445027,
+            "groups": 191,
+            "huberLoss": 2.430749607329843,
+            "rows": 382
+          },
+          "middlegame": {
+            "cpMae": 214.31796116504853,
+            "groups": 206,
+            "huberLoss": 2.7823399271844664,
+            "rows": 412
+          },
+          "opening": {
+            "cpMae": 164.85581395348837,
+            "groups": 215,
+            "huberLoss": 2.058877093023256,
+            "rows": 430
+          }
+        }
+      },
+      "eligible": false,
+      "gates": {
+        "deploymentHealth": false,
+        "lowerHuberLossThanZeroResidual": true,
+        "lowerPhaseMacroCpMaeVersusI0": true,
+        "maximumAnyPhaseCpMaeRegressionVersusI0": true,
+        "minimumRelativeHuberImprovementOverI0": true
+      },
+      "health": {
+        "checks": {
+          "deadDenseUnits": true,
+          "deadDenseUnitsVsI0": true,
+          "denseActiveFraction": false,
+          "deploymentFloatParameterRoundTripExact": true,
+          "deploymentFloatRequantizationByteIdentical": true,
+          "expectedFileSize": true,
+          "finitePredictions": true,
+          "maximumAbsoluteCorrection": true,
+          "meanFloatQuantizationPenalty": true,
+          "roundTripHash": true,
+          "saturatedDenseUnits": true,
+          "singleFloatQuantizationPenalty": true,
+          "wholeCorpusPythonCppIntegerAgreement": true
+        },
+        "deadDenseUnits": 0,
+        "denseActiveFraction": 0.9363365173339844,
+        "maximumAbsoluteCorrectionCp": 630,
+        "maximumFloatQuantizationPenaltyCp": 5.035888671875,
+        "meanFloatQuantizationPenaltyCp": 0.9398306012153625,
+        "passed": false,
+        "pythonCppMismatches": 0,
+        "saturatedDenseUnits": 0
+      },
+      "i0Validation": {
+        "cpMae": 215.09929516929614,
+        "huberLoss": 2.9811117157108944,
+        "phase": {
+          "endgame": {
+            "cpMae": 242.70197044334975,
+            "groups": 203,
+            "huberLoss": 3.3406674876847293,
+            "rows": 406
+          },
+          "late": {
+            "cpMae": 208.89267015706807,
+            "groups": 191,
+            "huberLoss": 2.7538954188481672,
+            "rows": 382
+          },
+          "middlegame": {
+            "cpMae": 228.5606796116505,
+            "groups": 206,
+            "huberLoss": 3.25006395631068,
+            "rows": 412
+          },
+          "opening": {
+            "cpMae": 180.24186046511628,
+            "groups": 215,
+            "huberLoss": 2.5798200000000007,
+            "rows": 430
+          }
+        }
+      },
+      "informationBoundary": {
+        "heldOutMetricsComputed": false,
+        "heldOutRowsWithheld": 1666,
+        "heldOutTargetFieldsDecoded": 0,
+        "trainTargetsDecoded": 13088,
+        "validationTargetsDecoded": 1630
+      },
+      "manifest": {
+        "bytes": 86501,
+        "path": "build-msvc/king-state-v3/G3C.bundle/G3C.manifest.json",
+        "sha256": "e3d6d42f8dba466149482839140b2015f815e051bedec2f8ea89bbdb8c91bb2e"
+      },
+      "maximumAnyPhaseCpMaeRegressionVersusI0": -12.2565445026178,
+      "phaseCpMaeRegressionVersusI0": {
+        "endgame": -28.65517241379311,
+        "late": -12.2565445026178,
+        "middlegame": -14.24271844660197,
+        "opening": -15.38604651162791
+      },
+      "relativeHuberImprovementOverI0": 0.15299902615679362,
+      "selectedEpoch": 46,
+      "verifiedArtifacts": {
+        "canonicalDeploymentFloat": {
+          "bytes": 24802112,
+          "path": "build-msvc/king-state-v3/G3C.bundle/G3C.float",
+          "sha256": "a9f06ec10a19ca9040ce6f9b1825cff62a7c5acc1bd12488fcdc70d55dc48856"
+        },
+        "initializer": {
+          "bytes": 12392940,
+          "path": "build-msvc/king-state-v2/K2.nnue",
+          "sha256": "74cfefdad87ce4e620597f1153bf03aa88b301cf66b2c959700b07e85acafe33"
+        },
+        "initializerManifest": {
+          "bytes": 116217,
+          "path": "build-msvc/king-state-v2/K2.manifest.json",
+          "sha256": "48e0666d6a86bc253d435ee0b42908667dfb200d3cfc27bcbef9dbeced677b99"
+        },
+        "network": {
+          "bytes": 12392940,
+          "path": "build-msvc/king-state-v3/G3C.bundle/G3C.nnue",
+          "sha256": "123c2e8e277cb334e246da3187117c6579dd9ecea668a39e611e2f4e2ea00bb5"
+        },
+        "optimizerShadow": {
+          "bytes": 24802112,
+          "path": "build-msvc/king-state-v3/G3C.bundle/G3C.optimizer-shadow.float",
+          "sha256": "a286aa91b8f88eac1cc747eeefb228ead3c956d332afe01798d0be4c2b77d0b8"
+        },
+        "plan": {
+          "bytes": 36868,
+          "path": "build-msvc/king-state-v3/training-plan.json",
+          "sha256": "6b6015c9c2b568c0dc62bb291fa21ca51ff71db319518c750a0c03f6f4a6f50d"
+        }
+      },
+      "zeroResidualValidation": {
+        "cpMae": 230.57536141826762,
+        "huberLoss": 3.2326513525358087,
+        "phase": {
+          "endgame": {
+            "cpMae": 251.98029556650246,
+            "groups": 203,
+            "huberLoss": 3.4725514778325124,
+            "rows": 406
+          },
+          "late": {
+            "cpMae": 223.1937172774869,
+            "groups": 191,
+            "huberLoss": 3.0119880890052353,
+            "rows": 382
+          },
+          "middlegame": {
+            "cpMae": 250.65533980582524,
+            "groups": 206,
+            "huberLoss": 3.628920145631068,
+            "rows": 412
+          },
+          "opening": {
+            "cpMae": 196.4720930232558,
+            "groups": 215,
+            "huberLoss": 2.8171456976744182,
+            "rows": 430
+          }
+        }
+      }
+    }
+  ],
+  "createdUtc": "2026-07-21T23:16:52.724575Z",
+  "decision": {
+    "eligibleCandidates": [],
+    "heldOutAuthorized": false,
+    "matchesAuthorized": false,
+    "reason": "no candidate passed every frozen validation and deployment-health gate",
+    "robustnessAuthorized": false,
+    "selectedCandidateId": null,
+    "selectionSealCreated": false
+  },
+  "frozenThresholds": {
+    "deploymentHealth": {
+      "deadDenseUnitsMayExceedI0": false,
+      "denseActiveFractionRangeInclusive": [
+        0.2,
+        0.75
+      ],
+      "maximumAbsoluteCorrectionCp": 2500,
+      "maximumDeadDenseUnits": 8,
+      "maximumMeanFloatQuantizationPenaltyCp": 2.0,
+      "maximumSaturatedDenseUnits": 0,
+      "maximumSingleFloatQuantizationPenaltyCp": 10.0
+    },
+    "tiePriority": [
+      "G3B",
+      "G3C",
+      "G3A"
+    ],
+    "tieRelativeLoss": 0.0025,
+    "validationEligibility": {
+      "maximumAnyPhaseCpMaeRegressionVersusI0": 5.0,
+      "minimumRelativeHuberImprovementOverI0": 0.005
+    }
+  },
+  "informationBoundary": {
+    "candidateManifestHeldOutTargetFieldsDecoded": 0,
+    "generation3HeldOutMetricsComputed": false,
+    "generation3HeldOutTargetFieldsDecoded": 0,
+    "selectionUsesOnlyAuthenticatedAggregateManifestFields": [
+      "commonValidation",
+      "i0Validation",
+      "zeroResidualValidation",
+      "health"
+    ],
+    "sourceCorpusOpenedByClosure": false,
+    "sourceRowsDecodedByClosure": 0
+  },
+  "kind": "omega-nnue-king-state-v3-closure",
+  "nextGenerationRule": {
+    "freshNamespacesRequired": true,
+    "freshPreregistrationRequired": true,
+    "freshSeedsRequired": true,
+    "generation3HeldOutMayBeReused": false,
+    "runnerUpFallbackPermitted": false
+  },
+  "outcome": "closed-no-eligible-validation-candidate",
+  "postValidationArtifactsCheckedAbsent": {
+    "G3APrimaryFailure": "build-msvc/king-state-v3/G3A.failure.json",
+    "G3ARobustnessBundle": "build-msvc/king-state-v3/G3A-robustness.bundle",
+    "G3ARobustnessFailure": "build-msvc/king-state-v3/G3A-robustness.failure.json",
+    "G3BPrimaryFailure": "build-msvc/king-state-v3/G3B.failure.json",
+    "G3BRobustnessBundle": "build-msvc/king-state-v3/G3B-robustness.bundle",
+    "G3BRobustnessFailure": "build-msvc/king-state-v3/G3B-robustness.failure.json",
+    "G3CPrimaryFailure": "build-msvc/king-state-v3/G3C.failure.json",
+    "G3CRobustnessBundle": "build-msvc/king-state-v3/G3C-robustness.bundle",
+    "G3CRobustnessFailure": "build-msvc/king-state-v3/G3C-robustness.failure.json",
+    "matchInnerSeal": "build-king-state-v3/matches/sealed/king-state-v1-matches.seal.json",
+    "matchOuterSeal": "build-king-state-v3/matches/sealed/king-state-v3-matches.seal.json",
+    "offlineAccessClaim": "build-msvc/king-state-v3/offline-test.json.access.json",
+    "offlineFailure": "build-msvc/king-state-v3/offline-test.failure.json",
+    "offlineReport": "build-msvc/king-state-v3/offline-test.json",
+    "offlineSufficientStatistics": "build-msvc/king-state-v3/offline-test.sufficient.json",
+    "robustnessSeal": "build-msvc/king-state-v3/robustness.seal.json",
+    "validationSelection": "build-msvc/king-state-v3/validation-selection.seal.json"
+  },
+  "profileId": "king-state-v3-deep-hce-v4",
+  "schemaVersion": 1
+}

@@ -8,7 +8,9 @@ an independent implementation used to catch exporter and arithmetic drift.
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Sequence
 import hashlib
@@ -28,6 +30,7 @@ HEADER_BYTES = 72
 ARCHITECTURE_ABSOLUTE = 1
 ARCHITECTURE_RESIDUAL = 2
 ARCHITECTURE_KING_STATE_RESIDUAL = 3
+ARCHITECTURE_OMEGA_INTERACTION_RESIDUAL = 4
 # Preserve the original public constant for callers that construct an
 # absolute OMNNUE1 network. The header's architecture field now also
 # self-describes residual/correction semantics without changing the tensor
@@ -37,6 +40,7 @@ ARCHITECTURE_NAMES = {
     ARCHITECTURE_ABSOLUTE: "absolute",
     ARCHITECTURE_RESIDUAL: "residual",
     ARCHITECTURE_KING_STATE_RESIDUAL: "king-state-residual",
+    ARCHITECTURE_OMEGA_INTERACTION_RESIDUAL: "omega-interaction-residual",
 }
 SQUARE_COUNT = 104
 PIECE_COUNT = 8
@@ -68,6 +72,53 @@ KING_STATE_PAYLOAD_BYTES = (
     + 4
     + HIDDEN_SIZE
 )
+OMEGA_INTERACTION_DEVELOPMENT_FEATURE_BASE = KING_STATE_FEATURE_COUNT
+OMEGA_INTERACTION_DEVELOPMENT_FEATURES = 18
+OMEGA_INTERACTION_LEAPER_COUNT_FEATURE_BASE = (
+    OMEGA_INTERACTION_DEVELOPMENT_FEATURE_BASE
+    + OMEGA_INTERACTION_DEVELOPMENT_FEATURES
+)
+OMEGA_INTERACTION_LEAPER_COUNT_FEATURES = 12
+OMEGA_INTERACTION_COEXISTENCE_FEATURE_BASE = (
+    OMEGA_INTERACTION_LEAPER_COUNT_FEATURE_BASE
+    + OMEGA_INTERACTION_LEAPER_COUNT_FEATURES
+)
+OMEGA_INTERACTION_COEXISTENCE_FEATURES = 4
+OMEGA_INTERACTION_KING_DISTANCE_FEATURE_BASE = (
+    OMEGA_INTERACTION_COEXISTENCE_FEATURE_BASE
+    + OMEGA_INTERACTION_COEXISTENCE_FEATURES
+)
+OMEGA_INTERACTION_KING_DISTANCE_FEATURES = 16
+OMEGA_INTERACTION_ACTIVATED_WIZARD_FEATURE_BASE = (
+    OMEGA_INTERACTION_KING_DISTANCE_FEATURE_BASE
+    + OMEGA_INTERACTION_KING_DISTANCE_FEATURES
+)
+OMEGA_INTERACTION_ACTIVATED_WIZARD_FEATURES = 6
+OMEGA_INTERACTION_CHAMPION_PAIR_FEATURE_BASE = (
+    OMEGA_INTERACTION_ACTIVATED_WIZARD_FEATURE_BASE
+    + OMEGA_INTERACTION_ACTIVATED_WIZARD_FEATURES
+)
+OMEGA_INTERACTION_CHAMPION_PAIR_FEATURES = 8
+OMEGA_INTERACTION_FEATURES = (
+    OMEGA_INTERACTION_DEVELOPMENT_FEATURES
+    + OMEGA_INTERACTION_LEAPER_COUNT_FEATURES
+    + OMEGA_INTERACTION_COEXISTENCE_FEATURES
+    + OMEGA_INTERACTION_KING_DISTANCE_FEATURES
+    + OMEGA_INTERACTION_ACTIVATED_WIZARD_FEATURES
+    + OMEGA_INTERACTION_CHAMPION_PAIR_FEATURES
+)
+OMEGA_INTERACTION_FEATURE_COUNT = (
+    KING_STATE_FEATURE_COUNT + OMEGA_INTERACTION_FEATURES
+)
+OMEGA_INTERACTION_PAYLOAD_BYTES = (
+    ACCUMULATOR_SIZE * 2
+    + OMEGA_INTERACTION_FEATURE_COUNT * ACCUMULATOR_SIZE * 2
+    + HIDDEN_SIZE * 4
+    + HIDDEN_SIZE * ACCUMULATOR_SIZE * 2
+    + 4
+    + HIDDEN_SIZE
+)
+OMEGA_INTERACTION_RESIDUAL_LIMIT_CP = 600
 
 FNV64_OFFSET_BASIS = 14695981039346656037
 FNV64_PRIME = 1099511628211
@@ -93,6 +144,7 @@ def is_residual_architecture(architecture: int) -> bool:
     return architecture in (
         ARCHITECTURE_RESIDUAL,
         ARCHITECTURE_KING_STATE_RESIDUAL,
+        ARCHITECTURE_OMEGA_INTERACTION_RESIDUAL,
     )
 
 
@@ -101,6 +153,8 @@ def feature_count_for_architecture(architecture: int) -> int:
         return FEATURE_COUNT
     if architecture == ARCHITECTURE_KING_STATE_RESIDUAL:
         return KING_STATE_FEATURE_COUNT
+    if architecture == ARCHITECTURE_OMEGA_INTERACTION_RESIDUAL:
+        return OMEGA_INTERACTION_FEATURE_COUNT
     raise ValueError(f"unsupported architecture semantics {architecture}")
 
 
@@ -109,6 +163,8 @@ def payload_bytes_for_architecture(architecture: int) -> int:
         return PAYLOAD_BYTES
     if architecture == ARCHITECTURE_KING_STATE_RESIDUAL:
         return KING_STATE_PAYLOAD_BYTES
+    if architecture == ARCHITECTURE_OMEGA_INTERACTION_RESIDUAL:
+        return OMEGA_INTERACTION_PAYLOAD_BYTES
     raise ValueError(f"unsupported architecture semantics {architecture}")
 
 
@@ -383,7 +439,14 @@ class QuantizedNetwork:
         output_raw = int(self.output_bias) + dense @ self.output_weights.astype(
             np.int64
         )
-        return _divide_round(output_raw, OUTPUT_DIVISOR).astype(np.int32)
+        result = _divide_round(output_raw, OUTPUT_DIVISOR)
+        if self.architecture == ARCHITECTURE_OMEGA_INTERACTION_RESIDUAL:
+            result = np.clip(
+                result,
+                -OMEGA_INTERACTION_RESIDUAL_LIMIT_CP,
+                OMEGA_INTERACTION_RESIDUAL_LIMIT_CP,
+            )
+        return result.astype(np.int32)
 
 
 def _parse_rank(rank_text: str) -> list[str | None]:
@@ -555,6 +618,225 @@ def material_phase_bin(pieces: Sequence[tuple[int, int, int]]) -> int:
     return 3
 
 
+_CHAMPION_DELTAS = (
+    (+1, 0),
+    (-1, 0),
+    (0, +1),
+    (0, -1),
+    (+2, 0),
+    (-2, 0),
+    (0, +2),
+    (0, -2),
+    (+2, +2),
+    (+2, -2),
+    (-2, +2),
+    (-2, -2),
+)
+_WIZARD_DELTAS = (
+    (+1, +1),
+    (+1, -1),
+    (-1, +1),
+    (-1, -1),
+    (+1, +3),
+    (+1, -3),
+    (-1, +3),
+    (-1, -3),
+    (+3, +1),
+    (+3, -1),
+    (-3, +1),
+    (-3, -1),
+)
+_CORNER_COORDINATES = ((-1, -1), (10, -1), (10, 10), (-1, 10))
+_COORDINATE_CORNERS = {
+    coordinates: 100 + corner
+    for corner, coordinates in enumerate(_CORNER_COORDINATES)
+}
+
+
+def _square_coordinates(square: int) -> tuple[int, int]:
+    if not 0 <= square < SQUARE_COUNT:
+        raise ValueError(f"invalid square index {square}")
+    if square < 100:
+        return divmod(square, 10)
+    return _CORNER_COORDINATES[square - 100]
+
+
+def _square_from_coordinates(file: int, rank: int) -> int | None:
+    if 0 <= file < 10 and 0 <= rank < 10:
+        return file * 10 + rank
+    return _COORDINATE_CORNERS.get((file, rank))
+
+
+@lru_cache(maxsize=2)
+def _empty_board_leaper_distances(piece: int) -> tuple[tuple[int, ...], ...]:
+    if piece == PIECE_INDEX["c"]:
+        deltas = _CHAMPION_DELTAS
+    elif piece == PIECE_INDEX["w"]:
+        deltas = _WIZARD_DELTAS
+    else:
+        raise ValueError("empty-board distance requires Champion or Wizard")
+
+    unreachable = SQUARE_COUNT + 1
+    rows: list[tuple[int, ...]] = []
+    for source in range(SQUARE_COUNT):
+        distances = [unreachable] * SQUARE_COUNT
+        distances[source] = 0
+        pending: deque[int] = deque((source,))
+        while pending:
+            square = pending.popleft()
+            file, rank = _square_coordinates(square)
+            next_distance = distances[square] + 1
+            for file_delta, rank_delta in deltas:
+                target = _square_from_coordinates(
+                    file + file_delta, rank + rank_delta
+                )
+                if target is None or distances[target] != unreachable:
+                    continue
+                distances[target] = next_distance
+                pending.append(target)
+        rows.append(tuple(distances))
+    return tuple(rows)
+
+
+def empty_board_leaper_distance(piece: int, source: int, target: int) -> int:
+    """Return exact distance on the empty 104-square C/W movement graph."""
+
+    if not 0 <= source < SQUARE_COUNT or not 0 <= target < SQUARE_COUNT:
+        raise ValueError("empty-board distance square is out of range")
+    return _empty_board_leaper_distances(piece)[source][target]
+
+
+def _undeveloped_units(
+    pieces: Sequence[tuple[int, int, int]], side: int
+) -> int:
+    developed = 0
+    home_rank_pieces = {
+        PIECE_INDEX["n"],
+        PIECE_INDEX["b"],
+        PIECE_INDEX["c"],
+    }
+    for piece, piece_side, square in pieces:
+        if piece_side != side:
+            continue
+        if piece in home_rank_pieces:
+            if square >= 100:
+                developed += 1
+            else:
+                _, rank = divmod(square, 10)
+                relative_rank = rank if side == 0 else 9 - rank
+                if relative_rank != 0:
+                    developed += 1
+        elif piece == PIECE_INDEX["w"] and square < 100:
+            developed += 1
+    return max(0, 8 - developed)
+
+
+def _interaction_features(
+    pieces: Sequence[tuple[int, int, int]], perspective: int
+) -> list[int]:
+    by_piece_side: dict[tuple[int, int], list[int]] = {}
+    kings: list[list[int]] = [[], []]
+    for piece, side, square in pieces:
+        by_piece_side.setdefault((piece, side), []).append(square)
+        if piece == PIECE_INDEX["k"]:
+            kings[side].append(square)
+
+    result: list[int] = []
+    champion = PIECE_INDEX["c"]
+    wizard = PIECE_INDEX["w"]
+    leapers = (champion, wizard)
+
+    for relation in (0, 1):
+        side = perspective if relation == 0 else 1 - perspective
+        result.append(
+            OMEGA_INTERACTION_DEVELOPMENT_FEATURE_BASE
+            + relation * 9
+            + _undeveloped_units(pieces, side)
+        )
+
+    for relation in (0, 1):
+        side = perspective if relation == 0 else 1 - perspective
+        for kind, piece in enumerate(leapers):
+            count = min(len(by_piece_side.get((piece, side), ())), 2)
+            group = relation * 2 + kind
+            result.append(
+                OMEGA_INTERACTION_LEAPER_COUNT_FEATURE_BASE
+                + group * 3
+                + count
+            )
+
+    for relation in (0, 1):
+        side = perspective if relation == 0 else 1 - perspective
+        coexist = bool(by_piece_side.get((champion, side))) and bool(
+            by_piece_side.get((wizard, side))
+        )
+        result.append(
+            OMEGA_INTERACTION_COEXISTENCE_FEATURE_BASE
+            + relation * 2
+            + int(coexist)
+        )
+
+    for relation in (0, 1):
+        side = perspective if relation == 0 else 1 - perspective
+        defender = 1 - side
+        if len(kings[defender]) != 1:
+            raise ValueError(
+                "Omega-interaction NNUE requires one opposing king"
+            )
+        target = kings[defender][0]
+        for kind, piece in enumerate(leapers):
+            sources = by_piece_side.get((piece, side), ())
+            if not sources:
+                bin_index = 0
+            else:
+                distance = min(
+                    empty_board_leaper_distance(piece, source, target)
+                    for source in sources
+                )
+                bin_index = 1 if distance <= 1 else 2 if distance == 2 else 3
+            group = relation * 2 + kind
+            result.append(
+                OMEGA_INTERACTION_KING_DISTANCE_FEATURE_BASE
+                + group * 4
+                + bin_index
+            )
+
+    wizard_home = ({100, 101}, {102, 103})
+    for relation in (0, 1):
+        side = perspective if relation == 0 else 1 - perspective
+        activated = sum(
+            square not in wizard_home[side]
+            for square in by_piece_side.get((wizard, side), ())
+        )
+        result.append(
+            OMEGA_INTERACTION_ACTIVATED_WIZARD_FEATURE_BASE
+            + relation * 3
+            + min(activated, 2)
+        )
+
+    for relation in (0, 1):
+        side = perspective if relation == 0 else 1 - perspective
+        champions = by_piece_side.get((champion, side), ())
+        if len(champions) < 2:
+            bin_index = 0
+        else:
+            distance = min(
+                empty_board_leaper_distance(champion, left, right)
+                for index, left in enumerate(champions)
+                for right in champions[index + 1 :]
+            )
+            bin_index = 1 if distance <= 1 else 2 if distance == 2 else 3
+        result.append(
+            OMEGA_INTERACTION_CHAMPION_PAIR_FEATURE_BASE
+            + relation * 4
+            + bin_index
+        )
+
+    if len(result) != 16:
+        raise AssertionError("Omega interaction feature-group count changed")
+    return result
+
+
 def _active_features_from_parsed(
     pieces: Sequence[tuple[int, int, int]],
     castling: str,
@@ -579,7 +861,11 @@ def _active_features_from_parsed(
             kings[side].append(square)
 
     result: list[int] = []
-    if architecture == ARCHITECTURE_KING_STATE_RESIDUAL:
+    king_state = architecture in (
+        ARCHITECTURE_KING_STATE_RESIDUAL,
+        ARCHITECTURE_OMEGA_INTERACTION_RESIDUAL,
+    )
+    if king_state:
         if len(kings[perspective]) != 1:
             raise ValueError(
                 "king-state NNUE requires exactly one friendly king per perspective"
@@ -631,7 +917,7 @@ def _active_features_from_parsed(
                 + (1 if right_of_king else 0)
             )
 
-    if architecture == ARCHITECTURE_KING_STATE_RESIDUAL:
+    if king_state:
         for square in ep_squares:
             if not 0 <= square < 100:
                 raise ValueError("en-passant target must be on the regular board")
@@ -646,6 +932,9 @@ def _active_features_from_parsed(
         result.append(
             KING_STATE_PHASE_FEATURE_BASE + material_phase_bin(pieces)
         )
+
+    if architecture == ARCHITECTURE_OMEGA_INTERACTION_RESIDUAL:
+        result.extend(_interaction_features(pieces, perspective))
 
     if len(set(result)) != len(result):
         raise ValueError("OFEN produced duplicate NNUE features")
@@ -688,9 +977,12 @@ def nnue_input_signature(
     digest = hashlib.sha256()
     feature_count_for_architecture(architecture)
     digest.update(b"OMNNUE1-input\0")
-    # Preserve every existing architecture-1/2 signature. Architecture 3 has
-    # a different feature namespace and therefore receives an explicit tag.
-    if architecture == ARCHITECTURE_KING_STATE_RESIDUAL:
+    # Preserve every existing architecture-1/2 signature. Architectures 3/4
+    # have distinct feature namespaces and therefore receive explicit tags.
+    if architecture in (
+        ARCHITECTURE_KING_STATE_RESIDUAL,
+        ARCHITECTURE_OMEGA_INTERACTION_RESIDUAL,
+    ):
         digest.update(struct.pack("<I", architecture))
     for perspective in (stm, opponent):
         if len(perspective) > 0xFFFF:

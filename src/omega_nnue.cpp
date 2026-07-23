@@ -13,6 +13,7 @@
 
 #include "bit.hpp"
 #include "common.hpp"
+#include "omega_eval.hpp"
 #include "pos.hpp"
 
 namespace omega_nnue {
@@ -139,6 +140,80 @@ int clipped_activation(std::int64_t value) {
 std::int64_t divide_round(std::int64_t value, std::int64_t divisor) {
    if (value >= 0) return (value + divisor / 2) / divisor;
    return -((-value + divisor / 2) / divisor);
+}
+
+using Leaper_Distance_Row = std::array<
+   std::uint8_t, format::Square_Count
+>;
+using Leaper_Distance_Table = std::array<
+   Leaper_Distance_Row, format::Square_Count
+>;
+
+const int Champion_Deltas[12][2] {
+   {+1, 0}, {-1, 0}, {0, +1}, {0, -1},
+   {+2, 0}, {-2, 0}, {0, +2}, {0, -2},
+   {+2, +2}, {+2, -2}, {-2, +2}, {-2, -2},
+};
+
+const int Wizard_Deltas[12][2] {
+   {+1, +1}, {+1, -1}, {-1, +1}, {-1, -1},
+   {+1, +3}, {+1, -3}, {-1, +3}, {-1, -3},
+   {+3, +1}, {+3, -1}, {-3, +1}, {-3, -1},
+};
+
+void build_leaper_distances(
+   Leaper_Distance_Table & table,
+   const int deltas[12][2]
+) {
+   const std::uint8_t unreachable = 0xFFU;
+   for (std::size_t source = 0; source < table.size(); ++source) {
+      table[source].fill(unreachable);
+      std::array<Square, format::Square_Count> queue;
+      std::size_t head = 0;
+      std::size_t tail = 0;
+      table[source][source] = 0U;
+      queue[tail++] = Square(source);
+
+      while (head < tail) {
+         const Square from = queue[head++];
+         const std::uint8_t next = static_cast<std::uint8_t>(
+            table[source][std::size_t(from)] + 1U
+         );
+         const int file = int(square_file(from));
+         const int rank = int(square_rank(from));
+
+         for (int index = 0; index < 12; ++index) {
+            const Square to = square_from_coordinates(
+               file + deltas[index][0], rank + deltas[index][1]
+            );
+            if (to == Square_None) continue;
+            std::uint8_t & distance =
+               table[source][std::size_t(to)];
+            if (distance != unreachable) continue;
+            distance = next;
+            queue[tail++] = to;
+         }
+      }
+      assert(tail <= queue.size());
+   }
+}
+
+struct Empty_Board_Leaper_Distances {
+   Leaper_Distance_Table champion;
+   Leaper_Distance_Table wizard;
+
+   Empty_Board_Leaper_Distances() : champion(), wizard() {
+      // Architecture 4 is Omega-only.  Building after bit/common variant
+      // initialization also pins the four detached corner coordinates.
+      assert(variant_is_omega());
+      build_leaper_distances(champion, Champion_Deltas);
+      build_leaper_distances(wizard, Wizard_Deltas);
+   }
+};
+
+const Empty_Board_Leaper_Distances & empty_board_leaper_distances() {
+   static const Empty_Board_Leaper_Distances value;
+   return value;
 }
 
 } // namespace
@@ -268,6 +343,183 @@ int material_phase_bin(const Pos & pos) {
    return 3;
 }
 
+int empty_board_leaper_distance(Piece pc, Square from, Square to) {
+   assert(pc == Champion || pc == Wizard);
+   assert(int(from) >= 0 && int(from) < int(Square_Count));
+   assert(int(to) >= 0 && int(to) < int(Square_Count));
+   if ((pc != Champion && pc != Wizard)
+    || int(from) < 0 || int(from) >= int(Square_Count)
+    || int(to) < 0 || int(to) >= int(Square_Count)) {
+      return int(Square_Count) + 1;
+   }
+
+   const Empty_Board_Leaper_Distances & distances =
+      empty_board_leaper_distances();
+   const std::uint8_t value = pc == Champion
+      ? distances.champion[std::size_t(from)][std::size_t(to)]
+      : distances.wizard[std::size_t(from)][std::size_t(to)];
+   return value == 0xFFU ? int(Square_Count) + 1 : int(value);
+}
+
+namespace {
+
+int leaper_count_group(Piece pc) {
+   assert(pc == Champion || pc == Wizard);
+   return pc == Champion ? 0 : 1;
+}
+
+int clipped_leaper_count(const Pos & pos, Piece pc, Side side) {
+   return std::min(pos.count(pc, side), 2);
+}
+
+int distance_feature_bin(int distance, bool present) {
+   if (!present) return 0;
+   if (distance <= 1) return 1;
+   if (distance == 2) return 2;
+   return 3;
+}
+
+int minimum_king_distance(
+   const Pos & pos,
+   Piece pc,
+   Side attacker,
+   Square king
+) {
+   int best = int(Square_Count) + 1;
+   for (Bit pieces = pos.pieces(pc, attacker);
+        pieces != 0;
+        pieces = bit::rest(pieces)) {
+      best = std::min(
+         best,
+         empty_board_leaper_distance(pc, bit::first(pieces), king)
+      );
+   }
+   return best;
+}
+
+bool wizard_is_activated(Square square, Side side) {
+   if (!square_is_corner(square)) return true;
+   const Corner corner = square_corner(square);
+   return side == White
+      ? corner != Corner_SW && corner != Corner_SE
+      : corner != Corner_NE && corner != Corner_NW;
+}
+
+int activated_wizard_count(const Pos & pos, Side side) {
+   int count = 0;
+   for (Bit pieces = pos.pieces(Wizard, side);
+        pieces != 0;
+        pieces = bit::rest(pieces)) {
+      if (wizard_is_activated(bit::first(pieces), side)) ++count;
+   }
+   return std::min(count, 2);
+}
+
+int champion_pair_distance_bin(const Pos & pos, Side side) {
+   const Bit champions = pos.pieces(Champion, side);
+   if (bit::count(champions) < 2) return 0;
+
+   int best = int(Square_Count) + 1;
+   for (Bit firsts = champions;
+        firsts != 0;
+        firsts = bit::rest(firsts)) {
+      const Square first = bit::first(firsts);
+      for (Bit seconds = bit::rest(firsts);
+           seconds != 0;
+           seconds = bit::rest(seconds)) {
+         best = std::min(
+            best,
+            empty_board_leaper_distance(
+               Champion, first, bit::first(seconds)
+            )
+         );
+      }
+   }
+   if (best <= 1) return 1;
+   if (best == 2) return 2;
+   return 3;
+}
+
+void append_omega_interaction_features(
+   const Pos & pos,
+   Side perspective,
+   std::vector<int> & output
+) {
+   const std::size_t begin = output.size();
+
+   for (int relation = 0; relation < Side_Size; ++relation) {
+      const Side side = relation == 0 ? perspective : side_opp(perspective);
+      const int undeveloped = omega_eval::undeveloped_units(pos, side);
+      assert(undeveloped >= 0 && undeveloped <= 8);
+      output.push_back(
+         int(Omega_Interaction_Development_Feature_Base)
+         + relation * 9 + undeveloped
+      );
+   }
+
+   for (int relation = 0; relation < Side_Size; ++relation) {
+      const Side side = relation == 0 ? perspective : side_opp(perspective);
+      for (Piece pc : { Champion, Wizard }) {
+         const int group = relation * 2 + leaper_count_group(pc);
+         output.push_back(
+            int(Omega_Interaction_Leaper_Count_Feature_Base)
+            + group * 3 + clipped_leaper_count(pos, pc, side)
+         );
+      }
+   }
+
+   for (int relation = 0; relation < Side_Size; ++relation) {
+      const Side side = relation == 0 ? perspective : side_opp(perspective);
+      const bool coexist = pos.count(Champion, side) != 0
+                        && pos.count(Wizard, side) != 0;
+      output.push_back(
+         int(Omega_Interaction_Coexistence_Feature_Base)
+         + relation * 2 + (coexist ? 1 : 0)
+      );
+   }
+
+   for (int relation = 0; relation < Side_Size; ++relation) {
+      const Side side = relation == 0 ? perspective : side_opp(perspective);
+      const Side defender = side_opp(side);
+      const Bit kings = pos.pieces(King, defender);
+      assert(bit::count(kings) == 1);
+      if (bit::count(kings) != 1) continue;
+      const Square king = bit::first(kings);
+      for (Piece pc : { Champion, Wizard }) {
+         const Bit leapers = pos.pieces(pc, side);
+         const int bin = distance_feature_bin(
+            minimum_king_distance(pos, pc, side, king), leapers != 0
+         );
+         const int group = relation * 2 + leaper_count_group(pc);
+         output.push_back(
+            int(Omega_Interaction_King_Distance_Feature_Base)
+            + group * 4 + bin
+         );
+      }
+   }
+
+   for (int relation = 0; relation < Side_Size; ++relation) {
+      const Side side = relation == 0 ? perspective : side_opp(perspective);
+      output.push_back(
+         int(Omega_Interaction_Activated_Wizard_Feature_Base)
+         + relation * 3 + activated_wizard_count(pos, side)
+      );
+   }
+
+   for (int relation = 0; relation < Side_Size; ++relation) {
+      const Side side = relation == 0 ? perspective : side_opp(perspective);
+      output.push_back(
+         int(Omega_Interaction_Champion_Pair_Feature_Base)
+         + relation * 4 + champion_pair_distance_bin(pos, side)
+      );
+   }
+
+   // Sixteen disjoint categorical groups, one active row from each.
+   assert(output.size() == begin + 16U);
+}
+
+} // namespace
+
 int castling_feature(bool own, bool right_of_king) {
    const int relation = own ? 0 : 1;
    const int flank = right_of_king ? 1 : 0;
@@ -281,19 +533,25 @@ void active_features(
    std::uint32_t architecture
 ) {
    output.clear();
-   output.reserve(52);
+   output.reserve(68);
 
    assert(perspective == White || perspective == Black);
    if (perspective != White && perspective != Black) return;
    assert(architecture == Architecture_Absolute
        || architecture == Architecture_Residual
-       || architecture == Architecture_King_State_Residual);
+       || architecture == Architecture_King_State_Residual
+       || architecture == Architecture_Omega_Interaction_Residual);
    if (architecture != Architecture_Absolute
     && architecture != Architecture_Residual
-    && architecture != Architecture_King_State_Residual) return;
+    && architecture != Architecture_King_State_Residual
+    && architecture != Architecture_Omega_Interaction_Residual) return;
+
+   const bool king_state =
+      architecture == Architecture_King_State_Residual
+      || architecture == Architecture_Omega_Interaction_Residual;
 
    int bucket = -1;
-   if (architecture == Architecture_King_State_Residual) {
+   if (king_state) {
       const Bit kings = pos.pieces(King, perspective);
       assert(bit::count(kings) == 1);
       if (bit::count(kings) != 1) return;
@@ -311,7 +569,7 @@ void active_features(
               pieces != 0;
               pieces = bit::rest(pieces)) {
             const int feature =
-               architecture == Architecture_King_State_Residual
+               king_state
                ? king_state_piece_feature(
                     pc, piece_side, bit::first(pieces), perspective, bucket
                  )
@@ -319,7 +577,7 @@ void active_features(
                     pc, piece_side, bit::first(pieces), perspective
                  );
             const int occupancy_limit =
-               architecture == Architecture_King_State_Residual
+               king_state
                ? int(King_State_Occupancy_Features)
                : int(Occupancy_Features);
             assert(feature >= 0 && feature < occupancy_limit);
@@ -354,7 +612,7 @@ void active_features(
             const int relation = castling_side == perspective ? 0 : 1;
             const int relative = relation * 2 + flank;
             output.push_back(
-               architecture == Architecture_King_State_Residual
+               king_state
                ? int(King_State_Castling_Feature_Base) + relative
                : int(Occupancy_Features) + relative
             );
@@ -362,7 +620,7 @@ void active_features(
       }
    }
 
-   if (architecture == Architecture_King_State_Residual) {
+   if (king_state) {
       for (Bit ep = pos.ep_squares(); ep != 0; ep = bit::rest(ep)) {
          const Square square = bit::first(ep);
          const int oriented = orient_square(square, perspective);
@@ -380,6 +638,10 @@ void active_features(
       output.push_back(
          int(King_State_Phase_Feature_Base) + material_phase_bin(pos)
       );
+   }
+
+   if (architecture == Architecture_Omega_Interaction_Residual) {
+      append_omega_interaction_features(pos, perspective, output);
    }
 }
 
@@ -422,11 +684,14 @@ Configure_Result Runtime_Network::configure(
 
    const std::uint64_t file_size = static_cast<std::uint64_t>(end);
    if (file_size != format::File_Bytes
-    && file_size != format::King_State_File_Bytes) {
+    && file_size != format::King_State_File_Bytes
+    && file_size != format::Omega_Interaction_File_Bytes) {
       return failure(
          "wrong file size in " + file_name + " (expected "
          + std::to_string(format::File_Bytes) + " or "
          + std::to_string(format::King_State_File_Bytes)
+         + " or "
+         + std::to_string(format::Omega_Interaction_File_Bytes)
          + ", got " + std::to_string(file_size) + ")",
          previous != nullptr
       );
@@ -510,18 +775,31 @@ Configure_Result Runtime_Network::configure(
    }
    if (architecture != format::Architecture_Absolute
     && architecture != format::Architecture_Residual
-    && architecture != format::Architecture_King_State_Residual) {
+    && architecture != format::Architecture_King_State_Residual
+    && architecture != format::Architecture_Omega_Interaction_Residual) {
       return failure("unsupported architecture in " + file_name,
                      previous != nullptr);
    }
    const bool king_state =
-      architecture == format::Architecture_King_State_Residual;
+      architecture == format::Architecture_King_State_Residual
+      || architecture == format::Architecture_Omega_Interaction_Residual;
+   const bool omega_interaction =
+      architecture == format::Architecture_Omega_Interaction_Residual;
    const std::uint32_t expected_features =
-      king_state ? format::King_State_Feature_Count : format::Feature_Count;
+      omega_interaction
+      ? format::Omega_Interaction_Feature_Count
+      : (king_state ? format::King_State_Feature_Count
+                    : format::Feature_Count);
    const std::uint64_t expected_payload =
-      king_state ? format::King_State_Payload_Bytes : format::Payload_Bytes;
+      omega_interaction
+      ? format::Omega_Interaction_Payload_Bytes
+      : (king_state ? format::King_State_Payload_Bytes
+                    : format::Payload_Bytes);
    const std::uint64_t expected_file =
-      king_state ? format::King_State_File_Bytes : format::File_Bytes;
+      omega_interaction
+      ? format::Omega_Interaction_File_Bytes
+      : (king_state ? format::King_State_File_Bytes
+                    : format::File_Bytes);
    if (file_size != expected_file) {
       return failure(
          "file size does not match architecture in " + file_name,
@@ -554,7 +832,8 @@ Configure_Result Runtime_Network::configure(
    next->feature_count = expected_features;
    next->residual_correction =
       architecture == format::Architecture_Residual
-      || architecture == format::Architecture_King_State_Residual;
+      || architecture == format::Architecture_King_State_Residual
+      || architecture == format::Architecture_Omega_Interaction_Residual;
    next->ft_weights.resize(
       std::size_t(expected_features) * format::Accumulator_Size
    );
@@ -610,7 +889,11 @@ Configure_Result Runtime_Network::configure(
 
    Configure_Result result;
    result.ok = true;
-   if (king_state) {
+   if (omega_interaction) {
+      result.message =
+         "Omega NNUE loaded: KingPS104-Omega64-128x2-32 "
+         "bounded residual correction from " + file_name;
+   } else if (king_state) {
       result.message =
          "Omega NNUE loaded: KingPS104-state-128x2-32 residual correction from "
          + file_name;
@@ -651,8 +934,10 @@ bool Runtime_Network::evaluate(
    // sparse list avoids a heap allocation at every leaf while remaining safe
    // for Senpai's independent search threads.
    static thread_local std::vector<int> features;
-   if (features.capacity() < format::Square_Count + format::Castling_Features) {
-      features.reserve(format::Square_Count + format::Castling_Features);
+   const std::size_t sparse_capacity =
+      format::Square_Count + format::Castling_Features + 32U;
+   if (features.capacity() < sparse_capacity) {
+      features.reserve(sparse_capacity);
    }
 
    for (int s = 0; s < Side_Size; ++s) {
@@ -713,6 +998,16 @@ bool Runtime_Network::evaluate(
               * std::int64_t(hidden[i]);
    }
    output = divide_round(output, format::Output_Divisor);
+
+   if (network->architecture
+       == format::Architecture_Omega_Interaction_Residual) {
+      output = std::max<std::int64_t>(
+         -format::Omega_Interaction_Residual_Limit_Cp,
+         std::min<std::int64_t>(
+            format::Omega_Interaction_Residual_Limit_Cp, output
+         )
+      );
+   }
 
    if (output > std::numeric_limits<int>::max()) {
       side_to_move_cp = std::numeric_limits<int>::max();

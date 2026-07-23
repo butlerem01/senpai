@@ -15,9 +15,17 @@ if (-not (Get-Command link.exe -ErrorAction SilentlyContinue)) {
 $root = $PSScriptRoot
 $source = Join-Path $root "src"
 $tests = Join-Path $root "tests"
-$output = Join-Path $root ".build-msvc-tests\$Configuration"
+$outputRoot = Join-Path $root ".build-msvc-tests-g4"
+$output = Join-Path $outputRoot $Configuration
 $objects = Join-Path $output "obj"
 $executables = Join-Path $output "tests"
+foreach ($candidate in @($outputRoot, $output, $executables)) {
+    if ((Test-Path -LiteralPath $candidate) -and
+        ((Get-Item -LiteralPath $candidate).Attributes -band
+            [IO.FileAttributes]::ReparsePoint)) {
+        throw "Refusing to build through a reparse point: $candidate"
+    }
+}
 New-Item -ItemType Directory -Force -Path $objects, $executables | Out-Null
 
 $compile = @("/nologo", "/EHsc", "/std:c++14", "/I$source")
@@ -131,6 +139,13 @@ if ($numpyAvailable) {
         "--cpp-evaluator" (Join-Path $executables "omega_nnue.exe")
     if ($LASTEXITCODE -ne 0) {
         throw "Python/C++ Omega NNUE parity test failed with exit code $LASTEXITCODE"
+    }
+
+    & $python.Source `
+        (Join-Path $tests "omega_nnue_arch4_parity.py") `
+        "--cpp-evaluator" (Join-Path $executables "omega_nnue.exe")
+    if ($LASTEXITCODE -ne 0) {
+        throw "Architecture-4 Python/C++ parity test failed with exit code $LASTEXITCODE"
     }
 } else {
     Write-Host "Skipping Python/C++ NNUE parity test: Python with NumPy is unavailable"

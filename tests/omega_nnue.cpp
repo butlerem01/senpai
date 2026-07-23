@@ -40,6 +40,9 @@ const std::string Good_Residual {
 const std::string Good_King_State {
    "omega-nnue-good-king-state-test.omnnue"
 };
+const std::string Good_Omega_Interaction {
+   "omega-nnue-good-omega-interaction-test.omnnue"
+};
 const std::string Bad_File { "omega-nnue-bad-test.omnnue" };
 const std::string Missing_File { "omega-nnue-missing-test.omnnue" };
 
@@ -84,6 +87,18 @@ static_assert(fmt::King_State_Payload_Bytes == 12392868ULL,
               "king-state payload size changed");
 static_assert(fmt::King_State_File_Bytes == 12392940ULL,
               "king-state file size changed");
+static_assert(fmt::Architecture_Omega_Interaction_Residual == 4U,
+              "Omega-interaction architecture id changed");
+static_assert(fmt::Omega_Interaction_Features == 64U,
+              "Omega-interaction row count changed");
+static_assert(fmt::Omega_Interaction_Feature_Count == 48440U,
+              "Omega-interaction feature count changed");
+static_assert(fmt::Omega_Interaction_Payload_Bytes == 12409252ULL,
+              "Omega-interaction payload size changed");
+static_assert(fmt::Omega_Interaction_File_Bytes == 12409324ULL,
+              "Omega-interaction file size changed");
+static_assert(fmt::Omega_Interaction_Residual_Limit_Cp == 600,
+              "Omega-interaction residual limit changed");
 static_assert(Output_Weight_Offset + fmt::Hidden_Size == fmt::File_Bytes,
               "OMNNUE1 payload layout changed");
 
@@ -292,6 +307,46 @@ std::vector<unsigned char> make_king_state_fixture(int output_cp = 1) {
         fmt::Header_Bytes
       + fmt::Accumulator_Size * 2U
       + std::size_t(fmt::King_State_Feature_Count)
+        * fmt::Accumulator_Size * 2U
+      + fmt::Hidden_Size * 4U
+      + std::size_t(fmt::Hidden_Size) * fmt::Dense_Input_Size;
+   put_i32(
+      bytes,
+      output_bias,
+      std::int32_t(output_cp * int(fmt::Output_Divisor))
+   );
+   put_u64(bytes, 64, fnv1a(bytes, fmt::Header_Bytes));
+   return bytes;
+}
+
+std::vector<unsigned char> make_omega_interaction_fixture(
+   int output_cp = 1
+) {
+   std::vector<unsigned char> bytes(
+      static_cast<std::size_t>(fmt::Omega_Interaction_File_Bytes), 0
+   );
+   const unsigned char magic[8] {
+      'O', 'M', 'N', 'N', 'U', 'E', '1', 0,
+   };
+   std::copy(magic, magic + 8, bytes.begin());
+   put_u32(bytes, 8, fmt::Endian_Tag);
+   put_u32(bytes, 12, fmt::Format_Version);
+   put_u32(bytes, 16, fmt::Header_Bytes);
+   put_u32(bytes, 20, fmt::Architecture_Omega_Interaction_Residual);
+   put_u32(bytes, 24, fmt::Square_Count);
+   put_u32(bytes, 28, fmt::Piece_Count);
+   put_u32(bytes, 32, fmt::Omega_Interaction_Feature_Count);
+   put_u32(bytes, 36, fmt::Accumulator_Size);
+   put_u32(bytes, 40, fmt::Hidden_Size);
+   put_u32(bytes, 44, fmt::Activation_Max);
+   put_u32(bytes, 48, fmt::Hidden_Divisor);
+   put_u32(bytes, 52, fmt::Output_Divisor);
+   put_u64(bytes, 56, fmt::Omega_Interaction_Payload_Bytes);
+
+   const std::size_t output_bias =
+        fmt::Header_Bytes
+      + fmt::Accumulator_Size * 2U
+      + std::size_t(fmt::Omega_Interaction_Feature_Count)
         * fmt::Accumulator_Size * 2U
       + fmt::Hidden_Size * 4U
       + std::size_t(fmt::Hidden_Size) * fmt::Dense_Input_Size;
@@ -806,6 +861,131 @@ void test_king_state_features() {
    ));
 }
 
+void test_omega_interaction_features() {
+   for (Piece pc : { Champion, Wizard }) {
+      for (int from = 0; from < int(fmt::Square_Count); ++from) {
+         for (int to = 0; to < int(fmt::Square_Count); ++to) {
+            const int distance = fmt::empty_board_leaper_distance(
+               pc, Square(from), Square(to)
+            );
+            assert(distance >= 0);
+            assert((distance == 0) == (from == to));
+            assert((distance == 1) == bit::has(
+               bit::piece_attacks(pc, Square(from)), Square(to)
+            ));
+         }
+      }
+   }
+   assert(fmt::empty_board_leaper_distance(
+      Champion, square_from_string("a0"), square_from_string("c2")
+   ) == 1);
+   assert(fmt::empty_board_leaper_distance(
+      Wizard, square_from_string("w1"), square_from_string("a0")
+   ) == 1);
+   assert(fmt::empty_board_leaper_distance(
+      Wizard, square_from_string("w1"), square_from_string("a1")
+   ) > int(fmt::Square_Count));
+
+   const Pos start = pos_from_fen(Omega_Start_OFEN, Omega);
+   const std::vector<int> white = sorted_features(
+      start, White, fmt::Architecture_Omega_Interaction_Residual
+   );
+   const std::vector<int> black = sorted_features(
+      start, Black, fmt::Architecture_Omega_Interaction_Residual
+   );
+   assert(white.size() == 66U); // architecture 3's 50 plus 16 categories
+   assert(white == black);
+   assert(std::adjacent_find(white.begin(), white.end()) == white.end());
+   assert(has(
+      white,
+      int(fmt::Omega_Interaction_Development_Feature_Base) + 8
+   ));
+   assert(has(
+      white,
+      int(fmt::Omega_Interaction_Development_Feature_Base) + 9 + 8
+   ));
+   assert(has(
+      white,
+      int(fmt::Omega_Interaction_Leaper_Count_Feature_Base) + 2
+   ));
+   assert(has(
+      white,
+      int(fmt::Omega_Interaction_Leaper_Count_Feature_Base) + 5
+   ));
+   assert(has(
+      white,
+      int(fmt::Omega_Interaction_Coexistence_Feature_Base) + 1
+   ));
+   assert(has(
+      white,
+      int(fmt::Omega_Interaction_Coexistence_Feature_Base) + 3
+   ));
+   assert(has(
+      white,
+      int(fmt::Omega_Interaction_Activated_Wizard_Feature_Base)
+   ));
+   assert(has(
+      white,
+      int(fmt::Omega_Interaction_Activated_Wizard_Feature_Base) + 3
+   ));
+
+   int interaction_count = 0;
+   for (int feature : white) {
+      assert(feature >= 0
+          && feature < int(fmt::Omega_Interaction_Feature_Count));
+      if (feature >= int(fmt::King_State_Feature_Count)) {
+         ++interaction_count;
+      }
+   }
+   assert(interaction_count == 16);
+
+   List legal;
+   gen_legals(legal, start);
+   const Move wizard_move = move::from_uci("w1a2", start);
+   assert(list::has(legal, wizard_move));
+   const std::vector<int> wizard_after = sorted_features(
+      start.succ(wizard_move),
+      White,
+      fmt::Architecture_Omega_Interaction_Residual
+   );
+   assert(has(
+      wizard_after,
+      int(fmt::Omega_Interaction_Development_Feature_Base) + 7
+   ));
+   assert(!has(
+      wizard_after,
+      int(fmt::Omega_Interaction_Development_Feature_Base) + 8
+   ));
+   assert(has(
+      wizard_after,
+      int(fmt::Omega_Interaction_Activated_Wizard_Feature_Base) + 1
+   ));
+   assert(!has(
+      wizard_after,
+      int(fmt::Omega_Interaction_Activated_Wizard_Feature_Base)
+   ));
+
+   Ofen_Position pressure;
+   pressure.turn = White;
+   put(pressure, King, White, "f0");
+   put(pressure, King, Black, "e2");
+   put(pressure, Champion, White, "a0");
+   put(pressure, Champion, White, "c2");
+   const std::vector<int> pressure_features = sorted_features(
+      pos_from_ofen(pressure),
+      White,
+      fmt::Architecture_Omega_Interaction_Residual
+   );
+   assert(has(
+      pressure_features,
+      int(fmt::Omega_Interaction_King_Distance_Feature_Base) + 1
+   ));
+   assert(has(
+      pressure_features,
+      int(fmt::Omega_Interaction_Champion_Pair_Feature_Base) + 1
+   ));
+}
+
 void test_symmetry() {
    const Ofen_Position source = diagnostic_source();
    const Ofen_Position reflected = colour_rank_mirror(source);
@@ -825,6 +1005,16 @@ void test_symmetry() {
       original, Black, fmt::Architecture_King_State_Residual
    ) == sorted_features(
       mirrored, White, fmt::Architecture_King_State_Residual
+   ));
+   assert(sorted_features(
+      original, White, fmt::Architecture_Omega_Interaction_Residual
+   ) == sorted_features(
+      mirrored, Black, fmt::Architecture_Omega_Interaction_Residual
+   ));
+   assert(sorted_features(
+      original, Black, fmt::Architecture_Omega_Interaction_Residual
+   ) == sorted_features(
+      mirrored, White, fmt::Architecture_Omega_Interaction_Residual
    ));
 }
 
@@ -869,7 +1059,7 @@ void test_loader_corruption(const std::vector<unsigned char> & good) {
       { 8U,  0x04030201U },
       { 12U, fmt::Format_Version + 1U },
       { 16U, fmt::Header_Bytes + 4U },
-      { 20U, fmt::Architecture_King_State_Residual + 1U },
+      { 20U, fmt::Architecture_Omega_Interaction_Residual + 1U },
       { 24U, 64U }, // a standard-chess network is not an Omega network
       { 28U, fmt::Piece_Count - 1U },
       { 32U, fmt::Feature_Count - 1U },
@@ -1094,6 +1284,48 @@ void test_king_state_loading() {
    assert(correction == 1);
 }
 
+void test_omega_interaction_loading_and_clamp() {
+   write_bytes(
+      Good_Omega_Interaction, make_omega_interaction_fixture(1000)
+   );
+   nn::Configure_Result loaded =
+      nn::G_Network.configure(Good_Omega_Interaction);
+   assert(loaded.ok);
+   assert(loaded.message ==
+          "Omega NNUE loaded: KingPS104-Omega64-128x2-32 "
+          "bounded residual correction from " + Good_Omega_Interaction);
+
+   const Pos original = pos_from_ofen(diagnostic_source());
+   int correction = 0;
+   bool residual = false;
+   assert(nn::G_Network.evaluate(original, correction, residual));
+   assert(residual);
+   assert(correction == fmt::Omega_Interaction_Residual_Limit_Cp);
+
+   var::set("UseOmegaNNUE", "false");
+   var::update();
+   const int handcrafted = int(eval(original, White));
+   var::set("UseOmegaNNUE", "true");
+   var::update();
+   assert(int(eval(original, White)) == handcrafted + correction);
+
+   write_bytes(
+      Good_Omega_Interaction, make_omega_interaction_fixture(-1000)
+   );
+   loaded = nn::G_Network.configure(Good_Omega_Interaction);
+   assert(loaded.ok);
+   assert(nn::G_Network.evaluate(original, correction, residual));
+   assert(correction == -fmt::Omega_Interaction_Residual_Limit_Cp);
+
+   // Architecture 3 remains byte-compatible and unbounded by architecture
+   // 4's search-safety contract.
+   write_bytes(Good_King_State, make_king_state_fixture(1000));
+   assert(nn::G_Network.configure(Good_King_State).ok);
+   assert(nn::G_Network.evaluate(original, correction, residual));
+   assert(correction == 1000);
+   write_bytes(Good_King_State, make_king_state_fixture(1));
+}
+
 void test_network_stream_helpers() {
    std::string valid = ofen_serialize(pos_from_ofen(diagnostic_source()));
    assert(normalize_stream_ofen(valid));
@@ -1138,6 +1370,7 @@ struct Cleanup {
       std::remove(Good_B.c_str());
       std::remove(Good_Residual.c_str());
       std::remove(Good_King_State.c_str());
+      std::remove(Good_Omega_Interaction.c_str());
       std::remove(Bad_File.c_str());
       std::remove(Missing_File.c_str());
    }
@@ -1158,6 +1391,22 @@ int main(int argc, char * argv[]) {
    if (argc == 3
     && std::string(argv[1]) == "--evaluate-network-stream") {
       return evaluate_network_stream(argv[2]);
+   }
+   if (argc == 5 && std::string(argv[1]) == "--dump-features") {
+      initialize_omega_runtime();
+      const int architecture = std::stoi(argv[2]);
+      const int perspective = std::stoi(argv[3]);
+      if (perspective < 0 || perspective >= Side_Size) return 4;
+      const Pos pos = pos_from_fen(argv[4], Omega);
+      std::vector<int> features = sorted_features(
+         pos, side_make(perspective), std::uint32_t(architecture)
+      );
+      for (std::size_t index = 0; index < features.size(); ++index) {
+         if (index != 0) std::cout << ',';
+         std::cout << features[index];
+      }
+      std::cout << std::endl;
+      return 0;
    }
    if (argc == 4 && std::string(argv[1]) == "--evaluate-network") {
       initialize_omega_runtime();
@@ -1190,6 +1439,7 @@ int main(int argc, char * argv[]) {
    test_feature_map();
    test_active_features();
    test_king_state_features();
+   test_omega_interaction_features();
    test_symmetry();
 
    const std::vector<unsigned char> good_a = make_fixture();
@@ -1198,6 +1448,7 @@ int main(int argc, char * argv[]) {
    test_loading_and_inference(good_a, good_b);
    test_residual_evaluation();
    test_king_state_loading();
+   test_omega_interaction_loading_and_clamp();
    test_network_stream_helpers();
 
    return 0;
