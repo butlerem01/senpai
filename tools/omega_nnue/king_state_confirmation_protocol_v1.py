@@ -9,9 +9,11 @@ no candidate selection, match launch, result parsing, or attempt mutation.
 The protocol uses attempt indices k = 1, 2, ... and spends
 beta_k = 0.01 / 2**k.  Formal decisions are made in log space against
 log(100) + k * log(2), so the policy itself does not acquire a finite-float
-horizon within the admissible signed-32-bit seed range.  Rules-only source and
-suite generation for every attempt is fixed by the attempt index and cannot
-depend on a nominated candidate.
+horizon within the admissible v1 attempt range.  Rules-only source and suite
+selection algorithms are fixed without a nominated candidate.  Their realized
+seeds are committed from fresh claim-time OS entropy only after candidate
+validation, so no confirmation suite is public before the exclusive claim
+consumes its attempt index.
 """
 
 from __future__ import annotations
@@ -20,10 +22,15 @@ import copy
 from decimal import Decimal, localcontext
 from fractions import Fraction
 import hashlib
+import hmac
 import json
 import math
+import os
 from pathlib import Path
+import random
 import re
+import secrets
+import struct
 import sys
 import tempfile
 import types
@@ -111,23 +118,25 @@ SIDES = ("w", "b")
 FAMILYWISE_ALPHA_NUMERATOR = 1
 FAMILYWISE_ALPHA_DENOMINATOR = 100
 FIRST_ATTEMPT_INDEX = 1
-FIRST_ATTEMPT_BASE_SEED = 2_026_072_311
-ATTEMPT_SEED_STRIDE = 100
-STAGE_SEED_OFFSETS = {
-    "development": 0,
-    "equal-node": 1,
-    "equal-time": 2,
-}
 G5_SCREENING_STAGE_SEEDS = (2_026_072_308, 2_026_072_309, 2_026_072_310)
 DOTNET_RANDOM_SEED_MAX = (1 << 31) - 1
-MAX_SEED_ATTEMPT_INDEX = (
-    (
-        DOTNET_RANDOM_SEED_MAX
-        - FIRST_ATTEMPT_BASE_SEED
-        - max(STAGE_SEED_OFFSETS.values())
-    )
-    // ATTEMPT_SEED_STRIDE
-) + 1
+UINT32_MAX = (1 << 32) - 1
+ENTROPY_BYTES = 32
+SEED_ALGORITHM_ID = "hmac-sha256-int32-rejection-v1"
+SEED_HMAC_DOMAIN = b"omega-nnue-confirmation-stage-seed-v1\x00"
+ENTROPY_COMMITMENT_DOMAIN = b"omega-nnue-confirmation-entropy-commitment-v1\x00"
+_IMPORTED_SECRETS_MODULE = secrets
+_IMPORTED_HMAC_MODULE = hmac
+_IMPORTED_HASHLIB_MODULE = hashlib
+_IMPORTED_RANDOM_MODULE = random
+_IMPORTED_OS_MODULE = os
+_SECRETS_TOKEN_BYTES = secrets.token_bytes
+_SECRETS_SYSRAND = secrets._sysrand
+_SYSTEM_RANDOM_RANDBYTES = random.SystemRandom.randbytes
+_RANDOM_URANDOM = random._urandom
+_OS_URANDOM = os.urandom
+_HMAC_NEW = hmac.new
+_SHA256 = hashlib.sha256
 FORMAL_MAXIMUM_PAIRS = 512
 FORMAL_NULL_ELO = 15.0
 E_PROCESS_BET_FRACTIONS = (
@@ -142,7 +151,7 @@ E_PROCESS_BET_FRACTIONS = (
 )
 MAX_FEASIBLE_ATTEMPT_INDEX = 377
 FIRST_STATISTICALLY_EXHAUSTED_ATTEMPT_INDEX = 378
-MAX_ATTEMPT_INDEX = min(MAX_SEED_ATTEMPT_INDEX, MAX_FEASIBLE_ATTEMPT_INDEX)
+MAX_ATTEMPT_INDEX = MAX_FEASIBLE_ATTEMPT_INDEX
 MATERIALIZED_POWER_LIMIT = 1_000_000
 THRESHOLD_DECIMAL_PRECISION = 80
 THRESHOLD_DECIMAL_UPPER_GUARD = Decimal("1e-70")
@@ -407,22 +416,214 @@ def _validate_attempt_index(value: Any) -> int:
     return index
 
 
-def attempt_base_seed(attempt_index: Any) -> int:
-    index = _validate_attempt_index(attempt_index)
-    value = FIRST_ATTEMPT_BASE_SEED + ATTEMPT_SEED_STRIDE * (index - 1)
-    if not 0 <= value <= DOTNET_RANDOM_SEED_MAX:
-        raise OverflowError("attempt base seed exceeds signed Int32")
+def _validate_entropy(entropy: Any) -> bytes:
+    if type(entropy) is not bytes or len(entropy) != ENTROPY_BYTES:
+        raise ValueError(f"claim entropy must be exactly {ENTROPY_BYTES} bytes")
+    return entropy
+
+
+def _require_unmodified_crypto_primitives() -> None:
+    if (
+        secrets is not _IMPORTED_SECRETS_MODULE
+        or sys.modules.get("secrets") is not _IMPORTED_SECRETS_MODULE
+        or secrets.token_bytes is not _SECRETS_TOKEN_BYTES
+        or secrets._sysrand is not _SECRETS_SYSRAND
+        or type(_SECRETS_SYSRAND) is not random.SystemRandom
+        or "randbytes" in getattr(_SECRETS_SYSRAND, "__dict__", {})
+        or random is not _IMPORTED_RANDOM_MODULE
+        or sys.modules.get("random") is not _IMPORTED_RANDOM_MODULE
+        or random.SystemRandom.randbytes is not _SYSTEM_RANDOM_RANDBYTES
+        or random._urandom is not _RANDOM_URANDOM
+        or os is not _IMPORTED_OS_MODULE
+        or sys.modules.get("os") is not _IMPORTED_OS_MODULE
+        or os.urandom is not _OS_URANDOM
+        or _RANDOM_URANDOM is not _OS_URANDOM
+    ):
+        raise RuntimeError("OS CSPRNG primitive was substituted")
+    if (
+        hmac is not _IMPORTED_HMAC_MODULE
+        or sys.modules.get("hmac") is not _IMPORTED_HMAC_MODULE
+        or hmac.new is not _HMAC_NEW
+    ):
+        raise RuntimeError("HMAC primitive was substituted")
+    if (
+        hashlib is not _IMPORTED_HASHLIB_MODULE
+        or sys.modules.get("hashlib") is not _IMPORTED_HASHLIB_MODULE
+        or hashlib.sha256 is not _SHA256
+    ):
+        raise RuntimeError("SHA-256 primitive was substituted")
+
+
+def _validate_stage(value: Any) -> str:
+    if type(value) is not str or value not in GATES:
+        raise ValueError(f"unknown confirmation stage: {value!r}")
     return value
 
 
-def stage_seed(attempt_index: Any, gate: str) -> int:
+def _forbidden_seed_set(
+    values: Iterable[Any], *, require_unique_history: bool = False
+) -> set[int]:
+    if isinstance(values, (str, bytes, bytearray)):
+        raise ValueError("forbidden seeds must be an iterable of integers")
+    try:
+        iterator = iter(values)
+    except TypeError as error:
+        raise ValueError("forbidden seeds must be an iterable of integers") from error
+    result = set(G5_SCREENING_STAGE_SEEDS)
+    observed_history: set[int] = set()
+    for value in iterator:
+        if type(value) is not int or not 0 <= value <= DOTNET_RANDOM_SEED_MAX:
+            raise ValueError("forbidden seed escaped nonnegative signed Int32")
+        if require_unique_history and (
+            value in observed_history or value in G5_SCREENING_STAGE_SEEDS
+        ):
+            raise ValueError("prior stage-seed history contains a collision")
+        observed_history.add(value)
+        result.add(value)
+    return result
+
+
+def _seed_hmac_message(attempt_index: int, stage: str, counter: int) -> bytes:
+    return b"".join(
+        (
+            SEED_HMAC_DOMAIN,
+            PROTOCOL_ID.encode("ascii"),
+            b"\x00",
+            struct.pack(">Q", attempt_index),
+            b"\x00",
+            stage.encode("ascii"),
+            b"\x00",
+            struct.pack(">I", counter),
+        )
+    )
+
+
+def entropy_commitment(entropy: Any, attempt_index: Any) -> str:
+    _require_unmodified_crypto_primitives()
+    material = _validate_entropy(entropy)
     index = _validate_attempt_index(attempt_index)
-    if type(gate) is not str or gate not in GATES:
-        raise ValueError(f"unknown confirmation gate: {gate!r}")
-    value = attempt_base_seed(index) + STAGE_SEED_OFFSETS[gate]
-    if not 0 <= value <= DOTNET_RANDOM_SEED_MAX:
-        raise OverflowError("attempt stage seed exceeds signed Int32")
-    return value
+    payload = b"".join(
+        (
+            ENTROPY_COMMITMENT_DOMAIN,
+            PROTOCOL_ID.encode("ascii"),
+            b"\x00",
+            struct.pack(">Q", index),
+            material,
+        )
+    )
+    return _SHA256(payload).hexdigest()
+
+
+def derive_stage_seed(
+    entropy: Any,
+    attempt_index: Any,
+    stage: Any,
+    forbidden_seeds: Iterable[Any],
+) -> tuple[int, int]:
+    """Derive one uniform nonnegative Int32 seed and rejection counter."""
+
+    material = _validate_entropy(entropy)
+    _require_unmodified_crypto_primitives()
+    index = _validate_attempt_index(attempt_index)
+    canonical_stage = _validate_stage(stage)
+    forbidden = _forbidden_seed_set(forbidden_seeds)
+    for counter in range(UINT32_MAX + 1):
+        digest = _HMAC_NEW(
+            material,
+            _seed_hmac_message(index, canonical_stage, counter),
+            _SHA256,
+        ).digest()
+        candidate = struct.unpack(">I", digest[:4])[0]
+        if candidate <= DOTNET_RANDOM_SEED_MAX and candidate not in forbidden:
+            return candidate, counter
+    raise RuntimeError("stage-seed rejection counter exhausted")
+
+
+def _draw_seed_bundle_with_source(
+    attempt_index: Any,
+    prior_attempt_seeds: Iterable[Any],
+    entropy_source: Any,
+) -> dict[str, Any]:
+    index = _validate_attempt_index(attempt_index)
+    prior = _forbidden_seed_set(
+        prior_attempt_seeds, require_unique_history=True
+    )
+    if not callable(entropy_source):
+        raise ValueError("entropy source must be callable")
+    entropy = entropy_source(ENTROPY_BYTES)
+    material = _validate_entropy(entropy)
+    stage_seeds: dict[str, int] = {}
+    counters: dict[str, int] = {}
+    forbidden = set(prior)
+    for stage in GATES:
+        seed, counter = derive_stage_seed(material, index, stage, forbidden)
+        stage_seeds[stage] = seed
+        counters[stage] = counter
+        forbidden.add(seed)
+    return {
+        "algorithmId": SEED_ALGORITHM_ID,
+        "entropyCommitment": entropy_commitment(material, index),
+        "stageSeeds": stage_seeds,
+        "rejectionCounters": counters,
+    }
+
+
+def draw_seed_bundle(
+    attempt_index: Any, prior_attempt_seeds: Iterable[Any]
+) -> dict[str, Any]:
+    """Draw once and derive the claim record; callers may never reroll k."""
+
+    _require_unmodified_crypto_primitives()
+    return _draw_seed_bundle_with_source(
+        attempt_index, prior_attempt_seeds, _SECRETS_TOKEN_BYTES
+    )
+
+
+def validate_published_seed_bundle(
+    value: Any, prior_attempt_seeds: Iterable[Any]
+) -> dict[str, Any]:
+    """Validate a published claim record without predicting hidden entropy."""
+
+    record = mapping(value, "published seed derivation")
+    if set(record) != {
+        "algorithmId",
+        "entropyCommitment",
+        "stageSeeds",
+        "rejectionCounters",
+    }:
+        raise ValueError("published seed derivation fields changed")
+    if record.get("algorithmId") != SEED_ALGORITHM_ID:
+        raise ValueError("published seed derivation algorithm changed")
+    commitment = record.get("entropyCommitment")
+    if type(commitment) is not str or HEX_256.fullmatch(commitment) is None:
+        raise ValueError("entropy commitment must be lowercase SHA-256")
+    seeds = mapping(record.get("stageSeeds"), "published stage seeds")
+    counters = mapping(record.get("rejectionCounters"), "rejection counters")
+    if set(seeds) != set(GATES) or set(counters) != set(GATES):
+        raise ValueError("published seed stage inventory changed")
+    forbidden = _forbidden_seed_set(
+        prior_attempt_seeds, require_unique_history=True
+    )
+    normalized_seeds: dict[str, int] = {}
+    normalized_counters: dict[str, int] = {}
+    for stage in GATES:
+        seed = seeds.get(stage)
+        counter = counters.get(stage)
+        if type(seed) is not int or not 0 <= seed <= DOTNET_RANDOM_SEED_MAX:
+            raise ValueError(f"{stage} seed escaped nonnegative signed Int32")
+        if seed in forbidden:
+            raise ValueError(f"{stage} seed collides with excluded history")
+        if type(counter) is not int or not 0 <= counter <= UINT32_MAX:
+            raise ValueError(f"{stage} rejection counter escaped uint32")
+        normalized_seeds[stage] = seed
+        normalized_counters[stage] = counter
+        forbidden.add(seed)
+    return {
+        "algorithmId": SEED_ALGORITHM_ID,
+        "entropyCommitment": commitment,
+        "stageSeeds": normalized_seeds,
+        "rejectionCounters": normalized_counters,
+    }
 
 
 def attempt_directory_name(attempt_index: Any) -> str:
@@ -580,6 +781,17 @@ def _expected_protocol() -> dict[str, Any]:
         "protocolId": PROTOCOL_ID,
         "createdUtc": "2026-07-23T14:41:02Z",
         "status": "frozen before any open-confirmation candidate claim, pool, or result access",
+        "amendment": {
+            "amendmentId": "omega-nnue-open-confirmation-v1-unpredictable-seeds",
+            "amendedUtc": "2026-07-23T16:18:50Z",
+            "preResult": True,
+            "revokedPriorProtocolSha256": "34dd52b89193940c894645968ecf91f546baf85f1ccc34c7cf061e6ed881867b",
+            "revokedPriorProtocolToolSha256": "40eef9fc085930d209cd4afec9db6acfa006b7b721eb0d384e350565e1e96140",
+            "historicalCommit": "f0e9e6013d772b2299db2c0ba9878d98c14554b2",
+            "revocationReason": "joint audit found that fixed public attempt seeds leaked all confirmation suites before candidate claim",
+            "priorBytesMayNotAuthorizeClaimsPoolsSuitesMatchesOrResults": True,
+            "claimsPoolsSuitesMatchesOrResultsAccessedBeforeAmendment": 0,
+        },
         "scope": {
             "generation5Role": "screening and exact candidate nomination only",
             "confirmationRole": "only this layer may authorize the project-level clearly-superior claim",
@@ -597,6 +809,9 @@ def _expected_protocol() -> dict[str, Any]:
             "implementationSealPredatesCandidateClaim": True,
             "candidateClaimPredatesAllAttemptSampling": True,
             "candidateClaimIdentityUnavailableToSamplerAndSelector": True,
+            "attemptSeedsUnavailableUntilExclusiveCandidateClaim": True,
+            "samplerReceivesOnlySealedStageSeed": True,
+            "samplerNeverReceivesCandidateClaimEntropyOrCommitment": True,
             "allThreeSuitesSealedTogetherBeforeMatchAuthorization": True,
             "matchResultsAccessedByProtocol": 0,
             "targetFieldsDecodedByProtocol": 0,
@@ -605,6 +820,9 @@ def _expected_protocol() -> dict[str, Any]:
             "root": "build-king-state-confirmation-v1",
             "attemptDirectoryFormat": "attempt-{k:06d}",
             "attemptDirectoryMinimumDigits": 6,
+            "attemptReservationFile": "attempt-reservation.json",
+            "candidateClaimFile": "candidate-claim.json",
+            "attemptClosureFile": "attempt-closure.json",
             "attemptChildren": [
                 "sampler",
                 "sealed",
@@ -616,7 +834,6 @@ def _expected_protocol() -> dict[str, Any]:
         "attemptSequence": {
             "firstAttemptIndex": FIRST_ATTEMPT_INDEX,
             "maximumAdmissibleAttemptIndex": MAX_ATTEMPT_INDEX,
-            "maximumAttemptIndexFromSignedInt32Seeds": MAX_SEED_ATTEMPT_INDEX,
             "maximumAttemptIndexFromFormal512PairFeasibility": MAX_FEASIBLE_ATTEMPT_INDEX,
             "firstRejectedAttemptIndex": FIRST_STATISTICALLY_EXHAUSTED_ATTEMPT_INDEX,
             "firstRejectedAttemptReason": "statistical-cap-exhausted",
@@ -632,15 +849,108 @@ def _expected_protocol() -> dict[str, Any]:
             "previousClosureRequiredAfterAttempt1": True,
             "candidateClaimPublicationConsumesAttempt": True,
             "claimedAttemptConsumedByTerminalFailureOrAbort": True,
-            "baseSeedFormula": "2026072311 + 100 * (k - 1)",
-            "baseSeedAtAttempt1": FIRST_ATTEMPT_BASE_SEED,
-            "baseSeedStride": ATTEMPT_SEED_STRIDE,
-            "seedIntegerDomain": "nonnegative signed 32-bit System.Random seed",
-            "stageSeedOffsets": copy.deepcopy(STAGE_SEED_OFFSETS),
-            "attempt1StageSeeds": {
-                gate: stage_seed(1, gate) for gate in GATES
-            },
-            "g5ScreeningStageSeedsExcluded": list(G5_SCREENING_STAGE_SEEDS),
+            "attemptReservationKind": "omega-nnue-open-confirmation-v1-attempt-reservation",
+            "attemptReservationFieldInventory": [
+                "schemaVersion",
+                "kind",
+                "protocol",
+                "attemptIndex",
+                "predecessorClosure",
+                "createdUtc",
+                "implementationSeal",
+                "orchestrator",
+                "g5Authorization",
+                "g5Decisions",
+                "g5Lineage",
+                "g5Verifier",
+                "g5Chronology",
+                "requiredG5Decisions",
+                "selectedNetwork",
+                "selectedManifest",
+                "engine",
+                "candidateValidationComplete",
+                "reservationConsumesAttempt",
+                "status",
+            ],
+            "attemptReservationForbiddenFields": [
+                "seedDerivation",
+                "entropyCommitment",
+                "stageSeeds",
+                "rejectionCounters",
+            ],
+            "reservationPublishedUnderExclusiveGlobalAttemptLock": True,
+            "reservationPublishedExclusivelyAfterCandidateValidationBeforeEntropyDraw": True,
+            "reservationCreationConsumesAttempt": True,
+            "reservationContainsNoSeedDerivation": True,
+            "reservationCarriesProtocolIndexUtcImplementationOrchestratorAndFullValidatedG5CandidateEvidence": True,
+            "candidateClaimMustPinReservationIdentity": True,
+            "candidateClaimReservationIdentityField": "attemptReservation",
+            "candidateValidationCompletesBeforeEntropyDraw": True,
+            "exclusiveAtomicClaimOperationRequired": True,
+            "attemptDurablyConsumedBeforeEntropyDraw": True,
+            "entropyDrawsPerAttemptIndex": 1,
+            "noEntropyRerollOrAlternateClaimForSameAttempt": True,
+            "postReservationCrashAbortDrawOrPublicationFailureConsumesAttempt": True,
+            "failedClaimMustCloseConsumedAttemptBeforeNextIndex": True,
+        },
+        "claimSeedDerivation": {
+            "algorithmId": SEED_ALGORITHM_ID,
+            "entropySource": "Python secrets.token_bytes backed by the operating-system CSPRNG",
+            "entropyBytes": ENTROPY_BYTES,
+            "entropyDrawTiming": "after candidate and predecessor validation, inside the same exclusive claim operation, after durable attempt consumption",
+            "entropyDrawCount": "exactly one for each consumed attempt index",
+            "rawEntropyPersistedOrPublished": False,
+            "commitmentAlgorithm": "SHA-256",
+            "commitmentDomainAsciiEscaped": "omega-nnue-confirmation-entropy-commitment-v1\\0",
+            "commitmentMessageEncoding": "domain || protocolId ASCII || NUL || attemptIndex uint64 big-endian || 32-byte entropy",
+            "hmacAlgorithm": "HMAC-SHA256",
+            "hmacKey": "the single 32-byte claim entropy",
+            "hmacDomainAsciiEscaped": "omega-nnue-confirmation-stage-seed-v1\\0",
+            "hmacMessageEncoding": "domain || protocolId ASCII || NUL || attemptIndex uint64 big-endian || NUL || stage ASCII || NUL || rejectionCounter uint32 big-endian",
+            "digestCandidateEncoding": "first four digest bytes as uint32 big-endian",
+            "acceptedSeedDomain": "0 through 2147483647 inclusive (nonnegative signed Int32)",
+            "rejectionRule": "reject candidate > 2147483647 or colliding with any forbidden seed; increment uint32 counter without drawing new entropy",
+            "rejectionCounterStartsAt": 0,
+            "rejectionCounterMaximum": UINT32_MAX,
+            "stageOrder": list(GATES),
+            "forbiddenSeedUnion": [
+                "Generation-5 screening stage seeds 2026072308, 2026072309, 2026072310",
+                "every published stage seed from every prior confirmation attempt or successor protocol",
+                "earlier stage seeds derived for the current attempt",
+            ],
+            "candidateClaimField": "seedDerivation",
+            "publishedFieldInventory": [
+                "algorithmId",
+                "entropyCommitment",
+                "stageSeeds",
+                "rejectionCounters",
+            ],
+            "publishedStageSeedKeys": list(GATES),
+            "publishedRejectionCounterKeys": list(GATES),
+            "candidateClaimPublishesCommitmentAndExactStageSeeds": True,
+            "validatorPinsAlgorithmButNeverPredictsClaimSeedValues": True,
+            "samplerInput": "only the authenticated sealed integer seed for its stage",
+            "samplerForbiddenInputs": [
+                "candidate identity",
+                "candidate claim bytes",
+                "raw entropy",
+                "entropy commitment",
+                "other-stage entropy material",
+            ],
+            "rerollPolicy": "no alternate entropy or seed bundle for the same attempt index under any failure mode",
+            "claimWriterUsesFrozenStdlibCallableIdentities": True,
+            "cryptographicPrimitiveSubstitutionMustAbortConsumedAttempt": True,
+        },
+        "attemptClosure": {
+            "reservationIdentityRequired": True,
+            "reservationMayLeadOnlyToExactClaimOrTerminalPrepublicationAbortClosure": True,
+            "successfulCandidateClaimMustPinExactReservationIdentity": True,
+            "candidateClaimRequiredExceptPrepublicationAbort": True,
+            "candidateClaimNullableOnlyWhenOutcome": "aborted",
+            "nullableCandidateClaimReason": "claim-publication-failure",
+            "candidateNetworkIdentitySourceWhenClaimAbsent": "validated attempt reservation",
+            "prepublicationAbortConsumesAttemptAndForbidsRetry": True,
+            "nextAttemptRequiresAuthenticatedTerminalClosure": True,
         },
         "alphaSpending": {
             "familywiseAlphaNumerator": FAMILYWISE_ALPHA_NUMERATOR,
@@ -785,6 +1095,9 @@ def _expected_protocol() -> dict[str, Any]:
             "candidateClaimPublishedBeforeAnyAttemptSampling": True,
             "candidateClaimRequiresPriorImplementationSeal": True,
             "candidateClaimRequiresPreG5SamplerSelectorSeal": True,
+            "candidateInputsValidatedBeforeExclusiveEntropyDraw": True,
+            "candidateClaimMustPublishSeedDerivationRecord": True,
+            "candidateClaimSeedDerivationImmutable": True,
             "candidateClaimActivatesAndConsumesAttempt": True,
             "candidateClaimUnavailableToSamplerAndSelector": True,
             "matchAuthorizationOccursOnlyAfterSuiteSeal": True,
@@ -965,6 +1278,9 @@ def _expected_protocol() -> dict[str, Any]:
             "sealedCleanWorkerAcceptsNoClaimOrCandidateInputs": True,
             "samplerSelectorSealMustPinCompleteTransitiveSourceAndRuntimeClosure": True,
             "deterministicCandidateInvarianceProofRequiredBeforeG5Launch": True,
+            "claimWriterMustUsePinnedDrawSeedBundleExactlyOnce": True,
+            "claimWriterMustAuthenticateAllPriorPublishedStageSeeds": True,
+            "claimWriterMustNeverRetryEntropyForConsumedAttempt": True,
             "readinessAndOrchestratorMustBePinnedBeforeCandidateClaim": True,
             "implementationSealRequiredBeforeCandidateClaim": True,
             "implementationSealUnavailableToCandidateAwareMutation": True,
@@ -1063,11 +1379,13 @@ def _verify_runtime_bindings(protocol: Mapping[str, Any]) -> None:
         identities["dotnetRuntimeManifest"], ".NET runtime manifest"
     )
     runtime = _DOTNET_VERIFY_MANIFEST(manifest_path)
+    runtime_root = protocol_path(
+        runtime.get("root"), ".NET runtime manifest root"
+    )
     if (
         runtime.get("runtimeVersion") != shared.get("dotnetRuntimeVersion")
         or runtime.get("bundleSha256") != shared.get("dotnetRuntimeBundleSha256")
-        or resolve(Path(str(runtime.get("root", ""))))
-        != resolve(dotnet_runtime.RUNTIME_ROOT)
+        or runtime_root != resolve(dotnet_runtime.RUNTIME_ROOT)
     ):
         raise ValueError("frozen .NET runtime bundle changed")
 
@@ -1087,24 +1405,9 @@ def _verify_runtime_bindings(protocol: Mapping[str, Any]) -> None:
         raise ValueError("frozen root-sampler bundle changed")
 
 
-def _verify_seed_contract(protocol: Mapping[str, Any]) -> None:
+def _verify_entropy_contract(protocol: Mapping[str, Any]) -> None:
     sequence = mapping(protocol.get("attemptSequence"), "attempt sequence")
-    if ATTEMPT_SEED_STRIDE <= max(STAGE_SEED_OFFSETS.values()):
-        raise AssertionError("stage seed offsets overlap the next attempt")
-    if FIRST_ATTEMPT_BASE_SEED <= max(G5_SCREENING_STAGE_SEEDS):
-        raise AssertionError("attempt-1 seeds collide with Generation 5")
-    require_exact_json(
-        sequence.get("attempt1StageSeeds"),
-        {gate: stage_seed(1, gate) for gate in GATES},
-        "attempt-1 stage seeds",
-    )
-    seed_maximum = exact_int(
-        sequence.get("maximumAttemptIndexFromSignedInt32Seeds"),
-        "maximum seed-compatible attempt index",
-        minimum=1,
-    )
-    if seed_maximum != MAX_SEED_ATTEMPT_INDEX:
-        raise ValueError("maximum seed-compatible attempt index changed")
+    derivation = mapping(protocol.get("claimSeedDerivation"), "claim seed derivation")
     admissible_maximum = exact_int(
         sequence.get("maximumAdmissibleAttemptIndex"),
         "maximum admissible attempt index",
@@ -1112,18 +1415,24 @@ def _verify_seed_contract(protocol: Mapping[str, Any]) -> None:
     )
     if admissible_maximum != MAX_ATTEMPT_INDEX:
         raise ValueError("maximum admissible attempt index changed")
-    last_seed = (
-        FIRST_ATTEMPT_BASE_SEED
-        + ATTEMPT_SEED_STRIDE * (seed_maximum - 1)
-        + max(STAGE_SEED_OFFSETS.values())
-    )
-    next_seed = last_seed + ATTEMPT_SEED_STRIDE
-    if not last_seed <= DOTNET_RANDOM_SEED_MAX < next_seed:
-        raise AssertionError("signed-Int32 seed boundary derivation changed")
-    for gate in GATES:
-        seed = stage_seed(admissible_maximum, gate)
-        if not 0 <= seed <= DOTNET_RANDOM_SEED_MAX:
-            raise AssertionError("maximum attempt seed escaped signed Int32")
+    if derivation.get("algorithmId") != SEED_ALGORITHM_ID:
+        raise ValueError("claim seed algorithm changed")
+    if derivation.get("entropyBytes") != ENTROPY_BYTES:
+        raise ValueError("claim entropy length changed")
+    if derivation.get("rejectionCounterMaximum") != UINT32_MAX:
+        raise ValueError("claim rejection counter domain changed")
+    require_exact_json(derivation.get("stageOrder"), list(GATES), "seed stage order")
+    if any(
+        field in sequence
+        for field in (
+            "baseSeedFormula",
+            "baseSeedAtAttempt1",
+            "baseSeedStride",
+            "stageSeedOffsets",
+            "attempt1StageSeeds",
+        )
+    ):
+        raise ValueError("protocol predicts an open-confirmation stage seed")
 
 
 def _verify_feasibility_contract(protocol: Mapping[str, Any]) -> None:
@@ -1172,6 +1481,9 @@ def validate_protocol(
     require_exact_json(value, expected, "open-confirmation protocol")
     if CANONICAL_UTC.fullmatch(str(value.get("createdUtc", ""))) is None:
         raise ValueError("protocol createdUtc is not canonical UTC")
+    amendment = mapping(value.get("amendment"), "protocol amendment")
+    if CANONICAL_UTC.fullmatch(str(amendment.get("amendedUtc", ""))) is None:
+        raise ValueError("protocol amendedUtc is not canonical UTC")
 
     # Recheck every identity from the parsed document.  Exact comparison above
     # prevents inventory substitution; these checks authenticate current bytes.
@@ -1188,7 +1500,7 @@ def validate_protocol(
     root = protocol_path(value["namespaces"]["root"], "artifact root")
     if root != resolve(ARTIFACT_ROOT):
         raise ValueError("artifact root changed")
-    _verify_seed_contract(value)
+    _verify_entropy_contract(value)
     _verify_feasibility_contract(value)
     _verify_runtime_bindings(value)
     return value
@@ -1222,6 +1534,12 @@ def _expect_invalid(path: Path, label: str) -> None:
 
 def self_test() -> None:
     protocol = validate_protocol()
+    original_cwd = Path.cwd()
+    try:
+        os.chdir(TOOL_PATH.parent)
+        validate_protocol()
+    finally:
+        os.chdir(original_cwd)
 
     # Exact alpha-spending identities and first-attempt requirements.
     if beta_components(1) != {
@@ -1277,37 +1595,178 @@ def self_test() -> None:
     if spent + remaining != Fraction(1, 100) or spent >= Fraction(1, 100):
         raise AssertionError("geometric alpha-spending identity changed")
 
-    # Seed uniqueness, G5 separation, range bounds, and canonical namespaces.
-    observed: set[int] = set(G5_SCREENING_STAGE_SEEDS)
+    # Claim-time entropy derivation, collision rejection, and namespaces.
     for attempt in range(1, MAX_ATTEMPT_INDEX + 1):
-        current = {stage_seed(attempt, gate) for gate in GATES}
-        if len(current) != len(GATES) or observed.intersection(current):
-            raise AssertionError("confirmation stage seeds collide")
-        observed.update(current)
         name = attempt_directory_name(attempt)
         if parse_attempt_directory_name(name) != attempt:
             raise AssertionError("attempt directory round trip changed")
         if attempt_namespace(attempt).parent != resolve(ARTIFACT_ROOT):
             raise AssertionError("attempt namespace escaped its root")
-    if [stage_seed(1, gate) for gate in GATES] != [
-        2_026_072_311,
-        2_026_072_312,
-        2_026_072_313,
-    ]:
-        raise AssertionError("attempt-1 stage seeds changed")
-    if MAX_SEED_ATTEMPT_INDEX != 1_214_114:
-        raise AssertionError("signed-Int32 attempt boundary changed")
     if MAX_ATTEMPT_INDEX != 377:
         raise AssertionError("statistical feasibility attempt boundary changed")
-    last_seed_compatible = (
-        FIRST_ATTEMPT_BASE_SEED
-        + ATTEMPT_SEED_STRIDE * (MAX_SEED_ATTEMPT_INDEX - 1)
-        + STAGE_SEED_OFFSETS["equal-time"]
+    fixture_entropy = bytes(range(ENTROPY_BYTES))
+    fixture_bundle = {
+        "algorithmId": SEED_ALGORITHM_ID,
+        "entropyCommitment": "d8be1c3f622dbdb6152f09f662093d7896a803c90c2357626e5dc20904ae3c64",
+        "stageSeeds": {
+            "development": 95_436_355,
+            "equal-node": 909_308_771,
+            "equal-time": 2_068_431_035,
+        },
+        "rejectionCounters": {
+            "development": 3,
+            "equal-node": 0,
+            "equal-time": 7,
+        },
+    }
+    if entropy_commitment(fixture_entropy, 1) != fixture_bundle["entropyCommitment"]:
+        raise AssertionError("entropy commitment test vector changed")
+    forbidden: set[int] = set()
+    derived_seeds: dict[str, int] = {}
+    derived_counters: dict[str, int] = {}
+    for stage in GATES:
+        seed, counter = derive_stage_seed(fixture_entropy, 1, stage, forbidden)
+        derived_seeds[stage] = seed
+        derived_counters[stage] = counter
+        forbidden.add(seed)
+    if derived_seeds != fixture_bundle["stageSeeds"] or derived_counters != fixture_bundle[
+        "rejectionCounters"
+    ]:
+        raise AssertionError("HMAC/rejection derivation test vector changed")
+    if validate_published_seed_bundle(fixture_bundle, ()) != fixture_bundle:
+        raise AssertionError("published seed bundle normalization changed")
+    collision_seed, collision_counter = derive_stage_seed(
+        fixture_entropy, 1, "development", {fixture_bundle["stageSeeds"]["development"]}
     )
-    if last_seed_compatible != 2_147_483_613:
-        raise AssertionError("maximum seed-compatible stage seed changed")
+    if (collision_seed, collision_counter) != (1_800_351_596, 8):
+        raise AssertionError("forbidden-seed rejection changed")
+    if entropy_commitment(fixture_entropy, 2) == fixture_bundle["entropyCommitment"]:
+        raise AssertionError("entropy commitment lacks attempt separation")
+    if derive_stage_seed(fixture_entropy, 2, "development", ())[0] == fixture_bundle[
+        "stageSeeds"
+    ]["development"]:
+        raise AssertionError("stage seed lacks attempt separation")
+
+    draw_calls: list[int] = []
+
+    def fixed_token_bytes(length: int) -> bytes:
+        draw_calls.append(length)
+        return fixture_entropy
+
+    drawn = _draw_seed_bundle_with_source(
+        1, {fixture_bundle["stageSeeds"]["development"]}, fixed_token_bytes
+    )
+    if draw_calls != [ENTROPY_BYTES]:
+        raise AssertionError("claim entropy was drawn more than once")
+    if drawn["stageSeeds"]["development"] != collision_seed:
+        raise AssertionError("collision caused an entropy reroll instead of counter advance")
+    validate_published_seed_bundle(
+        drawn, {fixture_bundle["stageSeeds"]["development"]}
+    )
+
+    def malformed_token_bytes(length: int) -> bytes:
+        draw_calls.append(length)
+        return b"x" * (ENTROPY_BYTES - 1)
+
+    draw_calls.clear()
     try:
-        attempt_base_seed(FIRST_STATISTICALLY_EXHAUSTED_ATTEMPT_INDEX)
+        _draw_seed_bundle_with_source(1, (), malformed_token_bytes)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("malformed CSPRNG output was accepted")
+    if draw_calls != [ENTROPY_BYTES]:
+        raise AssertionError("malformed entropy triggered an impermissible reroll")
+
+    # Published-record validation authenticates structure/collisions but never
+    # predicts hidden claim entropy or invokes the CSPRNG.
+    original_token_bytes = secrets.token_bytes
+    substituted_calls: list[int] = []
+
+    def substituted_token_bytes(length: int) -> bytes:
+        substituted_calls.append(length)
+        return fixture_entropy
+
+    try:
+        secrets.token_bytes = substituted_token_bytes
+        try:
+            draw_seed_bundle(1, ())
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("substituted CSPRNG primitive was accepted")
+    finally:
+        secrets.token_bytes = original_token_bytes
+    if substituted_calls:
+        raise AssertionError("substituted CSPRNG primitive was invoked")
+    original_sysrand = secrets._sysrand
+    try:
+        secrets._sysrand = object()
+        try:
+            draw_seed_bundle(1, ())
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("substituted SystemRandom instance was accepted")
+    finally:
+        secrets._sysrand = original_sysrand
+
+    try:
+        secrets.token_bytes = lambda length: (_ for _ in ()).throw(
+            AssertionError("validator attempted to predict claim entropy")
+        )
+        validate_published_seed_bundle(fixture_bundle, ())
+    finally:
+        secrets.token_bytes = original_token_bytes
+    original_hmac_new = hmac.new
+    try:
+        hmac.new = lambda *args, **kwargs: None
+        try:
+            derive_stage_seed(fixture_entropy, 1, "development", ())
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("substituted HMAC primitive was accepted")
+    finally:
+        hmac.new = original_hmac_new
+    for malformed_entropy in (b"", b"x" * 31, b"x" * 33, bytearray(32), True):
+        try:
+            entropy_commitment(malformed_entropy, 1)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("malformed entropy structure was accepted")
+    collision_record = copy.deepcopy(fixture_bundle)
+    collision_record["stageSeeds"]["development"] = G5_SCREENING_STAGE_SEEDS[0]
+    try:
+        validate_published_seed_bundle(collision_record, ())
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Generation-5 seed collision was accepted")
+    duplicate_record = copy.deepcopy(fixture_bundle)
+    duplicate_record["stageSeeds"]["equal-node"] = duplicate_record["stageSeeds"][
+        "development"
+    ]
+    try:
+        validate_published_seed_bundle(duplicate_record, ())
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("same-attempt stage-seed collision was accepted")
+    for malformed_history in (
+        [123_456, 123_456],
+        [G5_SCREENING_STAGE_SEEDS[0]],
+        None,
+    ):
+        try:
+            validate_published_seed_bundle(fixture_bundle, malformed_history)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("colliding prior seed history was accepted")
+    try:
+        _validate_attempt_index(FIRST_STATISTICALLY_EXHAUSTED_ATTEMPT_INDEX)
     except ValueError as error:
         if "statistical-cap-exhausted" not in str(error):
             raise AssertionError("attempt exhaustion reason changed") from error
@@ -1315,7 +1774,7 @@ def self_test() -> None:
         raise AssertionError("statistically exhausted attempt was admitted")
     for invalid in (0, -1, 1.0, True, MAX_ATTEMPT_INDEX + 1):
         try:
-            attempt_base_seed(invalid)
+            _validate_attempt_index(invalid)
         except ValueError:
             pass
         else:
@@ -1396,21 +1855,81 @@ def self_test() -> None:
                 ),
             ),
             (
-                "seed stride",
-                lambda value: value["attemptSequence"].__setitem__(
-                    "baseSeedStride", 1
+                "claim seed algorithm",
+                lambda value: value["claimSeedDerivation"].__setitem__(
+                    "algorithmId", "sha256-counter-v1"
                 ),
             ),
             (
-                "equal-time seed offset",
-                lambda value: value["attemptSequence"]["stageSeedOffsets"].__setitem__(
-                    "equal-time", 1
+                "public fixed seed leakage",
+                lambda value: value["attemptSequence"].__setitem__(
+                    "attempt1StageSeeds", [1, 2, 3]
                 ),
             ),
             (
-                "G5 seed exclusion",
+                "claim entropy draw count",
                 lambda value: value["attemptSequence"].__setitem__(
-                    "g5ScreeningStageSeedsExcluded", [2_026_072_308]
+                    "entropyDrawsPerAttemptIndex", 2
+                ),
+            ),
+            (
+                "pre-draw reservation consumption",
+                lambda value: value["attemptSequence"].__setitem__(
+                    "reservationCreationConsumesAttempt", False
+                ),
+            ),
+            (
+                "exclusive global reservation lock",
+                lambda value: value["attemptSequence"].__setitem__(
+                    "reservationPublishedUnderExclusiveGlobalAttemptLock", False
+                ),
+            ),
+            (
+                "reservation seed leakage",
+                lambda value: value["attemptSequence"].__setitem__(
+                    "reservationContainsNoSeedDerivation", False
+                ),
+            ),
+            (
+                "claim entropy reroll",
+                lambda value: value["attemptSequence"].__setitem__(
+                    "noEntropyRerollOrAlternateClaimForSameAttempt", False
+                ),
+            ),
+            (
+                "claim entropy timing",
+                lambda value: value["attemptSequence"].__setitem__(
+                    "candidateValidationCompletesBeforeEntropyDraw", False
+                ),
+            ),
+            (
+                "sampler entropy isolation",
+                lambda value: value["claimSeedDerivation"][
+                    "samplerForbiddenInputs"
+                ].pop(),
+            ),
+            (
+                "seed collision universe",
+                lambda value: value["claimSeedDerivation"][
+                    "forbiddenSeedUnion"
+                ].pop(),
+            ),
+            (
+                "validator seed unpredictability",
+                lambda value: value["claimSeedDerivation"].__setitem__(
+                    "validatorPinsAlgorithmButNeverPredictsClaimSeedValues", False
+                ),
+            ),
+            (
+                "cryptographic primitive substitution",
+                lambda value: value["claimSeedDerivation"].__setitem__(
+                    "claimWriterUsesFrozenStdlibCallableIdentities", False
+                ),
+            ),
+            (
+                "prepublication abort closure",
+                lambda value: value["attemptClosure"].__setitem__(
+                    "nullableCandidateClaimReason", "retryable-write-failure"
                 ),
             ),
             (

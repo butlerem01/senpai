@@ -4,6 +4,17 @@
   "protocolId": "omega-nnue-open-confirmation-v1",
   "createdUtc": "2026-07-23T14:41:02Z",
   "status": "frozen before any open-confirmation candidate claim, pool, or result access",
+  "amendment": {
+    "amendmentId": "omega-nnue-open-confirmation-v1-unpredictable-seeds",
+    "amendedUtc": "2026-07-23T16:18:50Z",
+    "preResult": true,
+    "revokedPriorProtocolSha256": "34dd52b89193940c894645968ecf91f546baf85f1ccc34c7cf061e6ed881867b",
+    "revokedPriorProtocolToolSha256": "40eef9fc085930d209cd4afec9db6acfa006b7b721eb0d384e350565e1e96140",
+    "historicalCommit": "f0e9e6013d772b2299db2c0ba9878d98c14554b2",
+    "revocationReason": "joint audit found that fixed public attempt seeds leaked all confirmation suites before candidate claim",
+    "priorBytesMayNotAuthorizeClaimsPoolsSuitesMatchesOrResults": true,
+    "claimsPoolsSuitesMatchesOrResultsAccessedBeforeAmendment": 0
+  },
   "scope": {
     "generation5Role": "screening and exact candidate nomination only",
     "confirmationRole": "only this layer may authorize the project-level clearly-superior claim",
@@ -24,6 +35,9 @@
     "implementationSealPredatesCandidateClaim": true,
     "candidateClaimPredatesAllAttemptSampling": true,
     "candidateClaimIdentityUnavailableToSamplerAndSelector": true,
+    "attemptSeedsUnavailableUntilExclusiveCandidateClaim": true,
+    "samplerReceivesOnlySealedStageSeed": true,
+    "samplerNeverReceivesCandidateClaimEntropyOrCommitment": true,
     "allThreeSuitesSealedTogetherBeforeMatchAuthorization": true,
     "matchResultsAccessedByProtocol": 0,
     "targetFieldsDecodedByProtocol": 0
@@ -32,6 +46,9 @@
     "root": "build-king-state-confirmation-v1",
     "attemptDirectoryFormat": "attempt-{k:06d}",
     "attemptDirectoryMinimumDigits": 6,
+    "attemptReservationFile": "attempt-reservation.json",
+    "candidateClaimFile": "candidate-claim.json",
+    "attemptClosureFile": "attempt-closure.json",
     "attemptChildren": [
       "sampler",
       "sealed",
@@ -43,7 +60,6 @@
   "attemptSequence": {
     "firstAttemptIndex": 1,
     "maximumAdmissibleAttemptIndex": 377,
-    "maximumAttemptIndexFromSignedInt32Seeds": 1214114,
     "maximumAttemptIndexFromFormal512PairFeasibility": 377,
     "firstRejectedAttemptIndex": 378,
     "firstRejectedAttemptReason": "statistical-cap-exhausted",
@@ -59,25 +75,120 @@
     "previousClosureRequiredAfterAttempt1": true,
     "candidateClaimPublicationConsumesAttempt": true,
     "claimedAttemptConsumedByTerminalFailureOrAbort": true,
-    "baseSeedFormula": "2026072311 + 100 * (k - 1)",
-    "baseSeedAtAttempt1": 2026072311,
-    "baseSeedStride": 100,
-    "seedIntegerDomain": "nonnegative signed 32-bit System.Random seed",
-    "stageSeedOffsets": {
-      "development": 0,
-      "equal-node": 1,
-      "equal-time": 2
-    },
-    "attempt1StageSeeds": {
-      "development": 2026072311,
-      "equal-node": 2026072312,
-      "equal-time": 2026072313
-    },
-    "g5ScreeningStageSeedsExcluded": [
-      2026072308,
-      2026072309,
-      2026072310
-    ]
+    "attemptReservationKind": "omega-nnue-open-confirmation-v1-attempt-reservation",
+    "attemptReservationFieldInventory": [
+      "schemaVersion",
+      "kind",
+      "protocol",
+      "attemptIndex",
+      "predecessorClosure",
+      "createdUtc",
+      "implementationSeal",
+      "orchestrator",
+      "g5Authorization",
+      "g5Decisions",
+      "g5Lineage",
+      "g5Verifier",
+      "g5Chronology",
+      "requiredG5Decisions",
+      "selectedNetwork",
+      "selectedManifest",
+      "engine",
+      "candidateValidationComplete",
+      "reservationConsumesAttempt",
+      "status"
+    ],
+    "attemptReservationForbiddenFields": [
+      "seedDerivation",
+      "entropyCommitment",
+      "stageSeeds",
+      "rejectionCounters"
+    ],
+    "reservationPublishedUnderExclusiveGlobalAttemptLock": true,
+    "reservationPublishedExclusivelyAfterCandidateValidationBeforeEntropyDraw": true,
+    "reservationCreationConsumesAttempt": true,
+    "reservationContainsNoSeedDerivation": true,
+    "reservationCarriesProtocolIndexUtcImplementationOrchestratorAndFullValidatedG5CandidateEvidence": true,
+    "candidateClaimMustPinReservationIdentity": true,
+    "candidateClaimReservationIdentityField": "attemptReservation",
+    "candidateValidationCompletesBeforeEntropyDraw": true,
+    "exclusiveAtomicClaimOperationRequired": true,
+    "attemptDurablyConsumedBeforeEntropyDraw": true,
+    "entropyDrawsPerAttemptIndex": 1,
+    "noEntropyRerollOrAlternateClaimForSameAttempt": true,
+    "postReservationCrashAbortDrawOrPublicationFailureConsumesAttempt": true,
+    "failedClaimMustCloseConsumedAttemptBeforeNextIndex": true
+  },
+  "claimSeedDerivation": {
+    "algorithmId": "hmac-sha256-int32-rejection-v1",
+    "entropySource": "Python secrets.token_bytes backed by the operating-system CSPRNG",
+    "entropyBytes": 32,
+    "entropyDrawTiming": "after candidate and predecessor validation, inside the same exclusive claim operation, after durable attempt consumption",
+    "entropyDrawCount": "exactly one for each consumed attempt index",
+    "rawEntropyPersistedOrPublished": false,
+    "commitmentAlgorithm": "SHA-256",
+    "commitmentDomainAsciiEscaped": "omega-nnue-confirmation-entropy-commitment-v1\\0",
+    "commitmentMessageEncoding": "domain || protocolId ASCII || NUL || attemptIndex uint64 big-endian || 32-byte entropy",
+    "hmacAlgorithm": "HMAC-SHA256",
+    "hmacKey": "the single 32-byte claim entropy",
+    "hmacDomainAsciiEscaped": "omega-nnue-confirmation-stage-seed-v1\\0",
+    "hmacMessageEncoding": "domain || protocolId ASCII || NUL || attemptIndex uint64 big-endian || NUL || stage ASCII || NUL || rejectionCounter uint32 big-endian",
+    "digestCandidateEncoding": "first four digest bytes as uint32 big-endian",
+    "acceptedSeedDomain": "0 through 2147483647 inclusive (nonnegative signed Int32)",
+    "rejectionRule": "reject candidate > 2147483647 or colliding with any forbidden seed; increment uint32 counter without drawing new entropy",
+    "rejectionCounterStartsAt": 0,
+    "rejectionCounterMaximum": 4294967295,
+    "stageOrder": [
+      "development",
+      "equal-node",
+      "equal-time"
+    ],
+    "forbiddenSeedUnion": [
+      "Generation-5 screening stage seeds 2026072308, 2026072309, 2026072310",
+      "every published stage seed from every prior confirmation attempt or successor protocol",
+      "earlier stage seeds derived for the current attempt"
+    ],
+    "candidateClaimField": "seedDerivation",
+    "publishedFieldInventory": [
+      "algorithmId",
+      "entropyCommitment",
+      "stageSeeds",
+      "rejectionCounters"
+    ],
+    "publishedStageSeedKeys": [
+      "development",
+      "equal-node",
+      "equal-time"
+    ],
+    "publishedRejectionCounterKeys": [
+      "development",
+      "equal-node",
+      "equal-time"
+    ],
+    "candidateClaimPublishesCommitmentAndExactStageSeeds": true,
+    "validatorPinsAlgorithmButNeverPredictsClaimSeedValues": true,
+    "samplerInput": "only the authenticated sealed integer seed for its stage",
+    "samplerForbiddenInputs": [
+      "candidate identity",
+      "candidate claim bytes",
+      "raw entropy",
+      "entropy commitment",
+      "other-stage entropy material"
+    ],
+    "rerollPolicy": "no alternate entropy or seed bundle for the same attempt index under any failure mode",
+    "claimWriterUsesFrozenStdlibCallableIdentities": true,
+    "cryptographicPrimitiveSubstitutionMustAbortConsumedAttempt": true
+  },
+  "attemptClosure": {
+    "reservationIdentityRequired": true,
+    "reservationMayLeadOnlyToExactClaimOrTerminalPrepublicationAbortClosure": true,
+    "successfulCandidateClaimMustPinExactReservationIdentity": true,
+    "candidateClaimRequiredExceptPrepublicationAbort": true,
+    "candidateClaimNullableOnlyWhenOutcome": "aborted",
+    "nullableCandidateClaimReason": "claim-publication-failure",
+    "candidateNetworkIdentitySourceWhenClaimAbsent": "validated attempt reservation",
+    "prepublicationAbortConsumesAttemptAndForbidsRetry": true,
+    "nextAttemptRequiresAuthenticatedTerminalClosure": true
   },
   "alphaSpending": {
     "familywiseAlphaNumerator": 1,
@@ -262,6 +373,9 @@
     "candidateClaimPublishedBeforeAnyAttemptSampling": true,
     "candidateClaimRequiresPriorImplementationSeal": true,
     "candidateClaimRequiresPreG5SamplerSelectorSeal": true,
+    "candidateInputsValidatedBeforeExclusiveEntropyDraw": true,
+    "candidateClaimMustPublishSeedDerivationRecord": true,
+    "candidateClaimSeedDerivationImmutable": true,
     "candidateClaimActivatesAndConsumesAttempt": true,
     "candidateClaimUnavailableToSamplerAndSelector": true,
     "matchAuthorizationOccursOnlyAfterSuiteSeal": true,
@@ -476,14 +590,17 @@
   "implementation": {
     "protocolTool": {
       "path": "tools/omega_nnue/king_state_confirmation_protocol_v1.py",
-      "bytes": 73316,
-      "sha256": "40eef9fc085930d209cd4afec9db6acfa006b7b721eb0d384e350565e1e96140"
+      "bytes": 95245,
+      "sha256": "d76c20f46e52a970ff8e8171a8af067687737c739138d028750f342152b287d0"
     },
     "samplerSelectorImplementationSealRequiredBeforeAnyG5MatchLaunch": true,
     "samplerSelectorImplementationSealRequiredBeforeAnyG5NominationResultAccess": true,
     "sealedCleanWorkerAcceptsNoClaimOrCandidateInputs": true,
     "samplerSelectorSealMustPinCompleteTransitiveSourceAndRuntimeClosure": true,
     "deterministicCandidateInvarianceProofRequiredBeforeG5Launch": true,
+    "claimWriterMustUsePinnedDrawSeedBundleExactlyOnce": true,
+    "claimWriterMustAuthenticateAllPriorPublishedStageSeeds": true,
+    "claimWriterMustNeverRetryEntropyForConsumedAttempt": true,
     "readinessAndOrchestratorMustBePinnedBeforeCandidateClaim": true,
     "implementationSealRequiredBeforeCandidateClaim": true,
     "implementationSealUnavailableToCandidateAwareMutation": true,
