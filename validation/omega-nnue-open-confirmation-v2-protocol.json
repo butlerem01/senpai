@@ -1,0 +1,1098 @@
+{
+  "schemaVersion": 1,
+  "kind": "omega-nnue-open-confirmation-v2-protocol",
+  "protocolId": "omega-nnue-open-confirmation-v2",
+  "createdUtc": "2026-07-23T17:30:00Z",
+  "status": "frozen replacement before any v1 or v2 candidate claim, pool, suite, match, or result access",
+  "predecessorRetirement": {
+    "predecessorProtocolId": "omega-nnue-open-confirmation-v1",
+    "replacementReason": "v1 random-root fixed-movetime evidence did not by itself establish normal-start actual-clock practical superiority",
+    "historicalCommit": "c7c03b0874df381d32fa9f214111545f0a3fe7fd",
+    "protocolJson": {
+      "bytes": 24451,
+      "sha256": "44c1139307ebce24d9cffa34f2ef5e88267ce06f8524d4bc5474666b15ef2135"
+    },
+    "protocolTool": {
+      "bytes": 95245,
+      "sha256": "d76c20f46e52a970ff8e8171a8af067687737c739138d028750f342152b287d0"
+    },
+    "readiness": {
+      "bytes": 209831,
+      "sha256": "a18378adb2d7ca0a41fbbc7213b346fa72797e07277d18ea6d202700fb585d25"
+    },
+    "orchestrator": {
+      "bytes": 142896,
+      "sha256": "91bdb216e3776e131ed67ada3402fd36d34a913f6e501a207af5fb83f837e7e2"
+    },
+    "implementationSeal": {
+      "bytes": 47055,
+      "sha256": "0bbc647cc6f8c184ad48a05098b957f858f2f1dc1621904052273b26b970e16d"
+    },
+    "implementationSealCreatedUtc": "2026-07-23T17:11:56Z",
+    "preClaim": true,
+    "attemptReservations": 0,
+    "candidateClaims": 0,
+    "attemptsConsumed": 0,
+    "poolsSuitesMatchesOrResults": 0,
+    "alphaSpent": 0,
+    "nextGlobalAttemptIndex": 1,
+    "retirementSeal": "build-king-state-confirmation-v2/predecessor/v1-retirement.seal.json",
+    "retirementSealMustProveV1RootSingleton": true,
+    "retirementContinuouslyRevalidated": true,
+    "v1ImplementationSealMayNotAuthorizeFutureWork": true
+  },
+  "scope": {
+    "generation5Role": "screening and exact candidate nomination only",
+    "confirmationRole": "only this layer may authorize the distribution-explicit clearly-superior claim",
+    "attemptsGlobalAcrossCandidates": true,
+    "development": "safety screening only; never superiority evidence",
+    "formalGates": [
+      "equal-node",
+      "equal-time",
+      "normal-start-clock"
+    ],
+    "claimEstimand": "greater than +15 Elo separately on fresh phase-balanced equal-node roots, fresh phase-balanced fixed-movetime roots, and fresh normal-start-derived 60+1 clock openings"
+  },
+  "informationBoundary": {
+    "protocolFrozenBeforeConfirmationPools": true,
+    "protocolFrozenBeforeConfirmationResults": true,
+    "suiteConstructionIsRulesOnly": true,
+    "candidateIdentityUnavailableToPoolAndSuiteSelection": true,
+    "privateHistoryProjectionPredatesAnyG5MatchLaunch": true,
+    "privateHistoryProjectionPredatesAnyG5NominationResult": true,
+    "privateProjectorAuditContainsSourcePathsIdentitiesAndManifests": true,
+    "publicSelectorCapsuleContainsOnlyProtocolFreezeDigestCountAndOrbitFileIdentity": true,
+    "selectorNeverReceivesPrivateProjectorAudit": true,
+    "selectorRunsInSeparateOsProcess": true,
+    "selectorReceivesOnlyPublicCapsuleOrbitProjectionAndStageSeeds": true,
+    "selectorOsAccessProbeDeniesAllHistoryAndCandidateBearingRoots": true,
+    "selectorWorkspaceInventoryExactBeforeAndAfterSampling": true,
+    "selectorInjectedFilesDirectoriesAndLinksReject": true,
+    "implementationSealPredatesCandidateClaim": true,
+    "candidateClaimPredatesAllAttemptSampling": true,
+    "candidateClaimIdentityUnavailableToSamplerAndSelector": true,
+    "attemptSeedsUnavailableUntilExclusiveCandidateClaim": true,
+    "samplerReceivesOnlySealedStageSeed": true,
+    "samplerNeverReceivesCandidateClaimEntropyOrCommitment": true,
+    "allFourSuitesSealedTogetherBeforeMatchAuthorization": true,
+    "postSelectionFullHistoryAuditIsRejectionOnly": true,
+    "postSelectionCollisionConsumesAttemptWithoutResamplingOrReselection": true,
+    "postSelectionHistoryMembershipIsImmutable": true,
+    "anyLaterHistoryMembershipChangeConsumesAttempt": true,
+    "partialSelectorWorkspaceOrCrashConsumesAttemptWithoutRerun": true,
+    "completeJointSealAndAuditResamplingIsByteIdempotent": true,
+    "v1RetirementSealPredatesV2ImplementationSeal": true,
+    "v2ImplementationSealPredatesAnyG5MatchLaunchOrNominationAccess": true,
+    "matchResultsAccessedByProtocol": 0,
+    "targetFieldsDecodedByProtocol": 0
+  },
+  "namespaces": {
+    "root": "build-king-state-confirmation-v2",
+    "attemptDirectoryFormat": "attempt-{k:06d}",
+    "attemptDirectoryMinimumDigits": 6,
+    "attemptReservationFile": "attempt-reservation.json",
+    "candidateClaimFile": "candidate-claim.json",
+    "attemptClosureFile": "attempt-closure.json",
+    "attemptChildren": [
+      "post-selection-audit",
+      "sealed",
+      "development",
+      "equal-node",
+      "equal-time",
+      "normal-start-clock"
+    ],
+    "privateProjectorAudit": "runtime/private-history-projector/projection.json",
+    "publicSelectorCapsule": "runtime/public-selector-capsule/capsule.json",
+    "publicExcludedOrbitProjection": "runtime/public-selector-capsule/excluded-orbits.txt",
+    "selectorWorkspaceFormat": "runtime/selector-workspaces/attempt-{k:06d}",
+    "selectorWorkspaceExactInventory": {
+      "beforeSampling": [
+        "sampling-intent.json"
+      ],
+      "afterSamplingFiles": [
+        "sampling-intent.json"
+      ],
+      "afterSamplingDirectories": [
+        "sampler",
+        "sealed"
+      ],
+      "samplerFilesPerGate": [
+        "{gate}-rules-only.jsonl",
+        "{gate}-rules-only.jsonl.manifest.json",
+        "{gate}-rules-only.jsonl.complete.seal.json"
+      ],
+      "sealedFilesPerGate": [
+        "{gate}-suite.json"
+      ],
+      "sealedJointFile": "joint-suite.seal.json",
+      "unknownEntriesOrLinksAllowed": 0
+    },
+    "predecessorDirectory": "predecessor",
+    "predecessorRetirementFile": "v1-retirement.seal.json"
+  },
+  "attemptSequence": {
+    "firstAttemptIndex": 1,
+    "maximumAdmissibleAttemptIndex": 377,
+    "maximumAttemptIndexFromFormal512PairFeasibility": 377,
+    "firstRejectedAttemptIndex": 378,
+    "firstRejectedAttemptReason": "statistical-cap-exhausted",
+    "continuationAfterExhaustion": "requires a separately preregistered v3 with larger formal pair caps before any further attempt",
+    "successorProtocolFirstAttemptIndex": 378,
+    "successorMustContinueSameGlobalAlphaAndAttemptChain": true,
+    "successorMayNotResetForProtocolVersionOrCandidate": true,
+    "successorFirstClaimMustAuthenticateAttempt377TerminalClosure": true,
+    "globalAcrossCandidates": true,
+    "noGaps": true,
+    "noReuse": true,
+    "noConcurrentAttempts": true,
+    "previousClosureRequiredAfterAttempt1": true,
+    "candidateClaimPublicationConsumesAttempt": true,
+    "claimedAttemptConsumedByTerminalFailureOrAbort": true,
+    "attemptReservationKind": "omega-nnue-open-confirmation-v2-attempt-reservation",
+    "attemptReservationFieldInventory": [
+      "schemaVersion",
+      "kind",
+      "protocol",
+      "attemptIndex",
+      "predecessorClosure",
+      "createdUtc",
+      "implementationSeal",
+      "predecessorRetirement",
+      "orchestrator",
+      "g5Authorization",
+      "g5Decisions",
+      "g5Lineage",
+      "g5Verifier",
+      "g5Chronology",
+      "requiredG5Decisions",
+      "selectedNetwork",
+      "selectedManifest",
+      "engine",
+      "candidateValidationComplete",
+      "reservationConsumesAttempt",
+      "status"
+    ],
+    "attemptReservationForbiddenFields": [
+      "seedDerivation",
+      "entropyCommitment",
+      "stageSeeds",
+      "rejectionCounters"
+    ],
+    "reservationPublishedUnderExclusiveGlobalAttemptLock": true,
+    "reservationPublishedExclusivelyAfterCandidateValidationBeforeEntropyDraw": true,
+    "reservationCreationConsumesAttempt": true,
+    "reservationContainsNoSeedDerivation": true,
+    "reservationCarriesProtocolIndexUtcImplementationPredecessorRetirementOrchestratorAndFullValidatedG5CandidateEvidence": true,
+    "candidateClaimMustPinReservationIdentity": true,
+    "candidateClaimReservationIdentityField": "attemptReservation",
+    "candidateValidationCompletesBeforeEntropyDraw": true,
+    "exclusiveAtomicClaimOperationRequired": true,
+    "attemptDurablyConsumedBeforeEntropyDraw": true,
+    "entropyDrawsPerAttemptIndex": 1,
+    "noEntropyRerollOrAlternateClaimForSameAttempt": true,
+    "postReservationCrashAbortDrawOrPublicationFailureConsumesAttempt": true,
+    "failedClaimMustCloseConsumedAttemptBeforeNextIndex": true,
+    "samplingFailureAfterClaimClosesAttemptAsSamplingFailure": true,
+    "selectorPartialOutputMayNeverResumeOrRerun": true,
+    "sealedAndPostAuditedSampleRepeatReturnsExistingSealWithoutMutation": true,
+    "candidateClaimPublication": {
+      "platform": "Windows NTFS",
+      "staging": "delete-on-close temporary inode in the canonical attempt directory",
+      "preCommit": "write complete canonical JSON, flush, then fsync the temporary file",
+      "commit": "os.link no-replace hard-link creation at candidate-claim.json",
+      "outcomesAfterAnyCrash": [
+        "canonical final name absent",
+        "canonical final name contains the complete fsynced claim"
+      ],
+      "partialFinalNamePermitted": false,
+      "survivingStagingArtifactPermitted": false
+    }
+  },
+  "claimSeedDerivation": {
+    "algorithmId": "hmac-sha256-int32-rejection-v1",
+    "entropySource": "Python secrets.token_bytes backed by the operating-system CSPRNG",
+    "entropyBytes": 32,
+    "entropyDrawTiming": "after candidate and predecessor validation, inside the same exclusive claim operation, after durable attempt consumption",
+    "entropyDrawCount": "exactly one for each consumed attempt index",
+    "rawEntropyPersistedOrPublished": false,
+    "commitmentAlgorithm": "SHA-256",
+    "commitmentDomainAsciiEscaped": "omega-nnue-confirmation-entropy-commitment-v2\\0",
+    "commitmentMessageEncoding": "domain || protocolId ASCII || NUL || attemptIndex uint64 big-endian || 32-byte entropy",
+    "hmacAlgorithm": "HMAC-SHA256",
+    "hmacKey": "the single 32-byte claim entropy",
+    "hmacDomainAsciiEscaped": "omega-nnue-confirmation-stage-seed-v2\\0",
+    "hmacMessageEncoding": "domain || protocolId ASCII || NUL || attemptIndex uint64 big-endian || NUL || stage ASCII || NUL || rejectionCounter uint32 big-endian",
+    "digestCandidateEncoding": "first four digest bytes as uint32 big-endian",
+    "acceptedSeedDomain": "0 through 2147483647 inclusive (nonnegative signed Int32)",
+    "rejectionRule": "reject candidate > 2147483647 or colliding with any forbidden seed; increment uint32 counter without drawing new entropy",
+    "rejectionCounterStartsAt": 0,
+    "rejectionCounterMaximum": 4294967295,
+    "stageOrder": [
+      "development",
+      "equal-node",
+      "equal-time",
+      "normal-start-clock"
+    ],
+    "forbiddenSeedUnion": [
+      "Generation-5 screening stage seeds 2026072308, 2026072309, 2026072310",
+      "every published stage seed from every prior confirmation attempt or successor protocol",
+      "earlier stage seeds derived for the current attempt"
+    ],
+    "candidateClaimField": "seedDerivation",
+    "publishedFieldInventory": [
+      "algorithmId",
+      "entropyCommitment",
+      "stageSeeds",
+      "rejectionCounters"
+    ],
+    "publishedStageSeedKeys": [
+      "development",
+      "equal-node",
+      "equal-time",
+      "normal-start-clock"
+    ],
+    "publishedRejectionCounterKeys": [
+      "development",
+      "equal-node",
+      "equal-time",
+      "normal-start-clock"
+    ],
+    "candidateClaimPublishesCommitmentAndExactStageSeeds": true,
+    "validatorPinsAlgorithmButNeverPredictsClaimSeedValues": true,
+    "samplerInput": "only the authenticated sealed integer seed for its stage",
+    "samplerForbiddenInputs": [
+      "candidate identity",
+      "candidate claim bytes",
+      "raw entropy",
+      "entropy commitment",
+      "other-stage entropy material"
+    ],
+    "rerollPolicy": "no alternate entropy or seed bundle for the same attempt index under any failure mode",
+    "claimWriterUsesFrozenStdlibCallableIdentities": true,
+    "cryptographicPrimitiveSubstitutionMustAbortConsumedAttempt": true
+  },
+  "attemptClosure": {
+    "reservationIdentityRequired": true,
+    "reservationMayLeadOnlyToExactClaimOrTerminalPrepublicationAbortClosure": true,
+    "successfulCandidateClaimMustPinExactReservationIdentity": true,
+    "candidateClaimRequiredExceptPrepublicationAbort": true,
+    "candidateClaimNullableOnlyWhenOutcome": "aborted",
+    "nullableCandidateClaimReason": "claim-publication-failure",
+    "candidateNetworkIdentitySourceWhenClaimAbsent": "validated attempt reservation",
+    "prepublicationAbortConsumesAttemptAndForbidsRetry": true,
+    "nullableClosureRequiresCanonicalClaimFinalAbsent": true,
+    "nullableClosureRequiresAllClaimStagingAbsent": true,
+    "malformedOrPartialFinalClaimBlocksSuccessor": true,
+    "nextAttemptRequiresAuthenticatedTerminalClosure": true
+  },
+  "alphaSpending": {
+    "familywiseAlphaNumerator": 1,
+    "familywiseAlphaDenominator": 100,
+    "attemptBetaFormula": "beta_k = 1 / (100 * 2^k), k >= 1",
+    "promotionEValueFormula": "E >= 100 * 2^k",
+    "promotionLogThresholdFormula": "log(E) >= log(100) + k * log(2)",
+    "authoritativeComparisonDomain": "natural logarithm",
+    "binary64ThresholdRounding": "conservative upward bound from 80-digit Decimal logarithms",
+    "formal512PairAllWinMaximumLogE": "265.9622317806987",
+    "attempt377IsReachable": true,
+    "attempt378IsUnreachable": true,
+    "allAdmittedAttemptsPassMaximumLogEFeasibility": true,
+    "eProcessImplementationBinding": "tools/omega_nnue/king_state_matches.py::_sequential_gate",
+    "eProcessBetFractions": [
+      {
+        "numerator": 1,
+        "denominator": 128
+      },
+      {
+        "numerator": 1,
+        "denominator": 64
+      },
+      {
+        "numerator": 1,
+        "denominator": 32
+      },
+      {
+        "numerator": 1,
+        "denominator": 16
+      },
+      {
+        "numerator": 1,
+        "denominator": 8
+      },
+      {
+        "numerator": 1,
+        "denominator": 4
+      },
+      {
+        "numerator": 1,
+        "denominator": 2
+      },
+      {
+        "numerator": 3,
+        "denominator": 4
+      }
+    ],
+    "promotionFactorFormula": "1 + (betFraction / nullScore) * (pairScore - nullScore)",
+    "mixtureFormula": "equal-weight log-mean-exp across the eight fixed bet fractions",
+    "pairScoreDomain": "closed interval [0,1]",
+    "allWinsMaximizesEveryPromotionFactor": true,
+    "readinessAndOrchestratorMustAssertExactEProcessBinding": true,
+    "nullScoreFormula": "1 / (1 + 10^(-nullElo/400))",
+    "inspectOnlyAtCompleteFourPhaseBlocks": true,
+    "preMinimumThresholdCrossingsAreForgotten": true,
+    "firstEligibleThresholdCrossingLatches": true,
+    "firstAttempt": {
+      "attemptIndex": 1,
+      "betaNumerator": 1,
+      "betaDenominator": 200,
+      "promotionEValue": 200
+    },
+    "sumIdentity": "sum(k=1..infinity, 1/(100*2^k)) = 0.01",
+    "formalGateAllocation": "the same beta_k applies independently to each formal gate; the claim is their conjunction",
+    "noBonferroniForConjunction": "under the union null, success implies rejection of at least one true component null at beta_k",
+    "futilityEValue": 20,
+    "futilityAnytimePValue": 0.05,
+    "futilityCreatesSuperiorityEvidence": false
+  },
+  "sampler": {
+    "deterministicPrng": "SplitMix64",
+    "trajectoryPairsPerStage": 8192,
+    "independentTrajectoriesPerPair": 2,
+    "workers": 4,
+    "maxPlies": 220,
+    "positionsPerPhaseAndSide": 2,
+    "captureSelectionPercent": 72,
+    "phaseOrder": [
+      "opening",
+      "middlegame",
+      "late",
+      "endgame"
+    ],
+    "sideOrder": [
+      "w",
+      "b"
+    ],
+    "normalStartClock": {
+      "project": "tools/omega_nnue/OmegaPracticalOpeningSampler/OmegaPracticalOpeningSampler.csproj",
+      "source": "tools/omega_nnue/OmegaPracticalOpeningSampler/Program.cs",
+      "deterministicPrng": "SplitMix64",
+      "trajectories": 8192,
+      "workers": 4,
+      "officialInitialOfen": "crnbqkbnrc/pppppppppp/10/10/10/10/10/10/PPPPPPPPPP/CRNBQKBNRC[W/W/w/w] w KQkq - 0 1",
+      "targetPlies": [
+        4,
+        8,
+        12,
+        16
+      ],
+      "rootsPerTargetPly": 128,
+      "roots": 512,
+      "movePolicy": "uniform random permutation; first legal vertically colour-reflected full-move pair",
+      "verticalColourReflection": {
+        "ordinarySquares": "file unchanged; rank r maps to 9-r",
+        "corners": {
+          "w1": "w4",
+          "w4": "w1",
+          "w2": "w3",
+          "w3": "w2"
+        }
+      },
+      "minimumPieces": 37,
+      "endpointMustBeOpeningPhase": true,
+      "candidateInputs": 0,
+      "engineEvaluationInputs": 0,
+      "oneEndpointPerTrajectory": true
+    }
+  },
+  "stages": {
+    "development": {
+      "role": "safety-screen-only",
+      "roots": 64,
+      "rootsPerPhase": 16,
+      "rootsPerPhaseAndSideToMove": 8,
+      "mode": "nodes",
+      "nodesPerMove": 30000,
+      "searchTimeoutMs": 60000,
+      "initialPairBudget": 64,
+      "resumePairBudget": 4,
+      "minimumPairsBeforeDecision": 64,
+      "maximumPairs": 64,
+      "minimumCandidateScore": 0.5,
+      "contributesToSuperiorityClaim": false
+    },
+    "equal-node": {
+      "role": "formal-strength-confirmation",
+      "roots": 512,
+      "rootsPerPhase": 128,
+      "rootsPerPhaseAndSideToMove": 64,
+      "mode": "nodes",
+      "nodesPerMove": 60000,
+      "searchTimeoutMs": 90000,
+      "initialPairBudget": 128,
+      "resumePairBudget": 4,
+      "minimumPairsBeforeDecision": 128,
+      "maximumPairs": 512,
+      "nullElo": 15,
+      "promotionThresholdSource": "attempt alpha-spending log threshold",
+      "futilityEValue": 20,
+      "balancedBlockChecksOnly": true,
+      "contributesToSuperiorityClaim": true
+    },
+    "equal-time": {
+      "role": "formal-practical-strength-confirmation",
+      "roots": 512,
+      "rootsPerPhase": 128,
+      "rootsPerPhaseAndSideToMove": 64,
+      "mode": "moveTime",
+      "moveTimeMs": 1000,
+      "searchTimeoutMs": 5000,
+      "initialPairBudget": 128,
+      "resumePairBudget": 4,
+      "minimumPairsBeforeDecision": 128,
+      "maximumPairs": 512,
+      "nullElo": 15,
+      "promotionThresholdSource": "attempt alpha-spending log threshold",
+      "futilityEValue": 20,
+      "balancedBlockChecksOnly": true,
+      "oneGameAtATime": true,
+      "idleMachineAttestationRequired": true,
+      "contributesToSuperiorityClaim": true
+    },
+    "normal-start-clock": {
+      "role": "formal-normal-start-practical-confirmation",
+      "roots": 512,
+      "rootsPerTargetPly": 128,
+      "targetPlies": [
+        4,
+        8,
+        12,
+        16
+      ],
+      "mode": "clock",
+      "initialTimeMs": 60000,
+      "incrementMs": 1000,
+      "searchTimeoutMs": 65000,
+      "initialPairBudget": 128,
+      "resumePairBudget": 4,
+      "minimumPairsBeforeDecision": 128,
+      "maximumPairs": 512,
+      "nullElo": 15,
+      "promotionThresholdSource": "attempt alpha-spending log threshold",
+      "futilityEValue": 20,
+      "balancedBlockChecksOnly": true,
+      "balancedBlockStrata": [
+        4,
+        8,
+        12,
+        16
+      ],
+      "oneGameAtATime": true,
+      "idleMachineAttestationRequired": true,
+      "zeroTimeForfeitsRequired": true,
+      "contributesToSuperiorityClaim": true
+    }
+  },
+  "pairedSchedule": {
+    "gamesPerRoot": 2,
+    "roles": [
+      {
+        "gameSuffix": "ab",
+        "white": "engineA",
+        "black": "engineB"
+      },
+      {
+        "gameSuffix": "ba",
+        "white": "engineB",
+        "black": "engineA"
+      }
+    ],
+    "engineA": "nnue-candidate",
+    "engineB": "hce-control",
+    "candidatePairScore": "mean of the candidate's two colour-swapped game scores",
+    "balancedPairBlockSize": 4,
+    "onePairFromEachPhasePerBlock": true,
+    "rootSideToMoveConstantWithinBlock": true,
+    "rootSideToMoveAlternatesBetweenBlocks": true,
+    "inverseArrangeForSeededDotNetRandomShuffle": true,
+    "pairBudgetMustBeMultipleOf": 4,
+    "normalStartClockBlock": "one pair from each 4,8,12,16-ply prefix stratum"
+  },
+  "freshness": {
+    "selectedRootOrbitIntersectionMustBeZero": true,
+    "crossStageSelectedRootOrbitsDisjoint": true,
+    "freshRulesOnlyPoolPerStageAndAttempt": true,
+    "normalStartEndpointOrbitsMustBeFresh": true,
+    "normalStartProperPrefixAncestorsMayOverlapHistory": true,
+    "properPrefixOverlapReason": "the official start and ordinary opening ancestors are necessarily shared; only candidate-blind selected endpoints contribute formal evidence",
+    "baseProjectionSourceInventoryIsPrivateFromSelector": true,
+    "baseProjectionBindsOriginalNineGeneration5SamplerArtifactsExactly": true,
+    "baseProjectionRequiresAdditiveG5PreregistrationAndCandidateBlindSuiteSeal": true,
+    "baseProjectionRequiresAdditiveG5AuthorizationEventsAssessmentsDecisionsAndClosureAbsent": true,
+    "baseProjectionBindsPublishedAdditiveG5PreauthorizationState": true,
+    "selectorCapsuleHasNoSourcePathsSourceIdentitiesOrManifests": true,
+    "currentSelectorWorkspaceExcludedFromItsOwnPostSelectionScan": true,
+    "allPriorSelectorWorkspacesIncludedInLaterScans": true,
+    "postSelectionAuditMayAcceptOrAbortButNeverRerank": true,
+    "postSelectionAuditRequiresCanonicalCompatibilityPositionHistoryProjectionAndManifest": true,
+    "everyCanonicalCompatibilityPositionHistoryOrbitMustAppearInExcludedOrbitProjection": true,
+    "collisionAction": "abort and consume k without resampling or reselection",
+    "historyMembershipChangeAfterAuditAction": "invalidate and consume k, whether colliding or noncolliding",
+    "excludedUnion": [
+      "all frozen NNUE training, validation, held-out, screening, and confirmation history",
+      "the complete Generation-5 decision corpus and source pool",
+      "all Generation-5 raw match sampler pools and sealed suites",
+      "all played Generation-5 match event, PV, and final positions",
+      "all additive Generation-5 compatibility raw events, replay evidence, PVs, assessments, decisions, and final positions",
+      "all prior open-confirmation pools, suites, events, PVs, and final positions"
+    ],
+    "futureTrainingMustExcludeAllConfirmationPositionArtifacts": true
+  },
+  "nomination": {
+    "candidateClaimPublishedBeforeAnyAttemptSampling": true,
+    "candidateClaimRequiresPriorImplementationSeal": true,
+    "candidateClaimRequiresPreG5PrivateProjectionAndImplementationSeal": true,
+    "candidateInputsValidatedBeforeExclusiveEntropyDraw": true,
+    "candidateClaimMustPublishSeedDerivationRecord": true,
+    "candidateClaimSeedDerivationImmutable": true,
+    "candidateClaimActivatesAndConsumesAttempt": true,
+    "candidateClaimUnavailableToSamplerAndSelector": true,
+    "matchAuthorizationOccursOnlyAfterSuiteSeal": true,
+    "exactExecutableIdentityRequired": true,
+    "exactNetworkIdentityRequired": true,
+    "exactManifestAndScreeningLineageRequired": true,
+    "candidateMustEqualSuccessfulScreenNominee": true,
+    "nominationAuthorityIsAdditiveGeneration5CompatibilityClosure": true,
+    "originalGeneration5ProfileFreezeToolsAndNineSamplerArtifactsRemainImmutableAncestors": true,
+    "compatibilityPreauthorizationPredatesPrivateProjection": true,
+    "privateProjectionPredatesImplementationSeal": true,
+    "compatibilityAuthorizationAndFirstLaunchPostdateImplementationSeal": true,
+    "compatibilityClosurePostdatesAllThreeSuccessfulDecisions": true,
+    "candidateClaimPostdatesCompatibilityClosure": true,
+    "compatibilityNamespaceInventoryBoundIntoClaimChronology": true,
+    "compatibilityClosureBoundPositionHistoryProjectionAndManifestRequired": true,
+    "g5LineageRequiredIdentities": [
+      "compatibility template, protocol, readiness, matches, preregistration, preauthorization, suite seal, core seal, closure, position-history projection, and position-history manifest",
+      "offline report and selected manifest",
+      "original profile, final freeze, match protocol, readiness, core, and orchestrator",
+      "all nine original development, equal-node, and equal-time sampler source/manifest/completion artifacts"
+    ],
+    "runnerUpFallback": false,
+    "sameExecutableForCandidateAndControl": true,
+    "sameNomineeRequiredAtAllFourStages": true,
+    "candidateUseOmegaNNUE": true,
+    "candidateAssetHashMustEqualNominatedNetwork": true,
+    "controlUseOmegaNNUE": false,
+    "controlOmegaNNUEFile": "<empty>",
+    "controlExternalAssets": [],
+    "candidateIdentityMayDifferBetweenAttempts": true,
+    "attemptIndexNeverResetsForANewCandidate": true
+  },
+  "engineConfiguration": {
+    "commonEngineOptions": {
+      "Threads": "1",
+      "Hash": "128",
+      "Ponder": "false",
+      "OwnBook": "false",
+      "UCI_Chess960": "false",
+      "UCI_Variant": "omega"
+    },
+    "commonCommandLineArguments": [],
+    "candidateAndControlWorkingDirectoryMustBeIdentical": true,
+    "workingDirectoryMustBeCanonicalExecutableParent": true,
+    "fullEngineSpecsMustBeIdenticalExcept": [
+      "engineId",
+      "UseOmegaNNUE",
+      "OmegaNNUEFile",
+      "ExternalAssets",
+      "OmegaNnueActiveVerified",
+      "StartupDiagnostics"
+    ],
+    "candidate": {
+      "UseOmegaNNUE": "true",
+      "OmegaNNUEFile": "exact nominated-network canonical path",
+      "externalAssetsMustBeExactSingleton": true,
+      "externalAssetSingletonMustEqualNominatedNetworkIdentity": true,
+      "OmegaNnueActiveVerified": true,
+      "startupDiagnosticsRequireExactNetworkLoadedRecord": true,
+      "finalStartupDiagnostic": "info string Omega NNUE evaluation active"
+    },
+    "control": {
+      "UseOmegaNNUE": "false",
+      "OmegaNNUEFile": "<empty>",
+      "emptyOptionTransmittedExplicitly": true,
+      "ExternalAssets": [],
+      "OmegaNnueActiveVerified": false,
+      "startupDiagnosticsForbidLoadedOrActive": true,
+      "finalStartupDiagnostic": "info string Omega NNUE disabled; handcrafted evaluation active"
+    },
+    "runRecordActivationAttestationRequired": true,
+    "perGameActivationDiagnosticsAvailableFromPinnedHarness": false,
+    "runRecordAttestationAuthorizesIdenticalSealedFreshLaunches": true,
+    "freshLaunchStartupFailureMustBeProtocolFailure": true,
+    "anySpecAssetOrDiagnosticMismatchIsSafetyFailure": true
+  },
+  "execution": {
+    "gateOrder": [
+      "development",
+      "equal-node",
+      "equal-time",
+      "normal-start-clock"
+    ],
+    "freshProcessPerGame": true,
+    "oneGameAtATime": true,
+    "maximumConcurrentGames": 1,
+    "repeats": 1,
+    "maxPlies": 300,
+    "absoluteMaxPlies": 400,
+    "stopGraceMs": 2000,
+    "safetyFields": [
+      "illegalMoves",
+      "illegalPvs",
+      "protocolFailures",
+      "timeForfeits",
+      "abandonedAttempts"
+    ],
+    "zeroSafetyFailuresRequired": true,
+    "appendOnlyIntentCompletionAssessmentChain": true,
+    "assessmentRequiredBetweenLaunches": true,
+    "eventLogMustBeAppendOnly": true,
+    "terminalDecisionBlocksRetry": true,
+    "equalTimeRequiresEqualNodePromotion": true,
+    "equalTimeIdleAttestationMustPostdateEqualNodePromotion": true,
+    "equalTimeAuditRequiresSerializedNonoverlappingGameIntervals": true,
+    "normalStartClockRequiresEqualTimePromotion": true,
+    "normalStartClockIdleAttestationMustPostdateEqualTimePromotion": true,
+    "normalStartClockAuditRequiresExactClockCommandsDeltasAndSerializedIntervals": true,
+    "rawEmitterSchemaAuthenticationRequiredForEveryGate": true,
+    "rawEmitterColorTokens": [
+      "white",
+      "black"
+    ],
+    "rawEmitterColorTokenComparison": "exact lowercase, case-sensitive",
+    "assessmentColorAdapter": {
+      "transformVersion": "omega-match-color-white-black-to-w-b-v1",
+      "white": "w",
+      "black": "b",
+      "onlyFieldAllowedToChange": "Color on ply records",
+      "rawAndDerivedDigestsRequired": true,
+      "rawEvidenceRetained": true
+    },
+    "rawEmitterSuccessfulPlyContract": {
+      "bestMove": "canonical Omega coordinate move and equal to Search.BestMove",
+      "san": "one nonempty unpadded printable-ASCII token without whitespace or controls",
+      "postOfenRequired": true,
+      "processExited": false,
+      "deadlineExceeded": false,
+      "pvValidationRequired": true,
+      "gameResultIllegalPvsEqualsCountOfFalsePvValidation": true
+    },
+    "rawEmitterSearchContract": {
+      "commandMustExactlyMatchSealedNodesMovetimeOrClockMode": true,
+      "wallTimeFiniteAndNonnegative": true,
+      "infoRawOutputAndStandardErrorTypedLists": true,
+      "successfulSearchBestMoveRequired": true
+    },
+    "managedRulesReplay": {
+      "contract": "ChessLib legal transcript replay",
+      "allSuccessfulPliesReplayedFromAuthenticatedPreOfen": true,
+      "replaySuccessfulPlyCountMustEqualScheduleAuthentication": true,
+      "everyPostOfenMustEqualManagedReplay": true,
+      "helperBundleSha256": "1c0ab2019a473f63dad90c92351cfdea569fd0048c60da329eaaf62c15f03dab",
+      "rulesBytes": 248832,
+      "rulesSha256": "16a01414c9f486561aac0b48cebb7c485621d804a73c00803ec0aff55f572f4c",
+      "rulesMustBeByteEqualFrozenOmegaMatchChessLib": true,
+      "dotnetHostMustEqualAuthorizedFrozenHost": true,
+      "fabricatedPostOfenRejects": true
+    },
+    "assessmentTerminalAdapter": {
+      "transformVersion": "omega-match-process-exit-terminal-error-v1",
+      "acceptedRawShape": "terminal failed-search ply with absent/null Error, Search.ProcessExited true, absent/null PostOfen, and decisive safety termination",
+      "derivedError": "Authenticated OmegaMatch process exit (derived for frozen assessor compatibility).",
+      "onlyFieldAllowedToChange": "Error on authenticated process-exit terminal ply",
+      "rawAndDerivedDigestsRequired": true,
+      "rawEvidenceRetained": true
+    },
+    "assessmentViews": {
+      "preparedCompatibilityViewChangedFields": [
+        "Color",
+        "Error"
+      ],
+      "unauthorizedFieldsChanged": 0,
+      "frozenCoreInput": "color-and-terminal-derived compatibility events",
+      "normalStartPracticalInput": "authenticated raw events",
+      "rulesReplayAlwaysUsesAuthenticatedRawEvents": true
+    },
+    "everyStartMustMatchExactSealedOpeningAndSchedule": true,
+    "everyResultAndPlyMustLinkToItsExactStart": true,
+    "resultPlyCoverageMustBeExact": true,
+    "terminalFailedPlyRequiresNonemptyErrorOrAuthenticatedProcessExitedTrue": true,
+    "terminalFailedPlyRequiresAbsentPostOfenAndDecisiveSafetyTermination": true,
+    "runEngineInventoryRequiresExactlyTwoUniqueObjectEntries": true,
+    "runEngineEffectiveOptionsMustMatchExactly": true,
+    "candidateExternalAssetMustBeExactPathBoundSingleton": true,
+    "candidateAndControlExecutableWorkingDirectoryAndFileIdentityMustMatch": true,
+    "candidateStartupDiagnosticsMustBindLoadedNetworkAndFinalActiveState": true,
+    "controlStartupDiagnosticsMustForbidLoadedOrActiveNnueAndEndHandcrafted": true
+  },
+  "promotionRule": {
+    "developmentPassRequired": true,
+    "equalNodePromotionRequired": true,
+    "equalTimePromotionRequired": true,
+    "normalStartClockPromotionRequired": true,
+    "allFormalGatesUseAttemptBeta": true,
+    "allFormalGatesMustPromoteInSameAttempt": true,
+    "zeroSafetyFailuresRequired": true,
+    "maximumPairsWithoutSignal": "inconclusive",
+    "failedAttemptMayNotBeRetried": true,
+    "nextAttemptUsesNextGlobalIndex": true,
+    "programStopsAfterFirstConfirmedSuccess": true,
+    "programStopsAfterAttempt377WithoutSuccess": true,
+    "attempt378AndBeyondRejectedAsStatisticalCapExhausted": true,
+    "generation5ScreeningAloneIsNeverClearlySuperior": true
+  },
+  "g5Screening": {
+    "role": "original experiment is immutable screening ancestry; only the additive compatibility closure may nominate",
+    "programPromotionEvidence": false,
+    "requiredDecisions": {
+      "development": "pass",
+      "equal-node": "promote",
+      "equal-time": "promote"
+    },
+    "zeroSafetyFailuresRequired": true,
+    "identities": {
+      "preregistrationTemplate": {
+        "path": "validation/omega-nnue-king-state-v5-preregistration.template.json",
+        "bytes": 40603,
+        "sha256": "a75e3bbd0845756b3594f051fa609092cb4f5eea0a2c62a30aeacb321d87c684"
+      },
+      "matchProtocol": {
+        "path": "validation/omega-nnue-king-state-v5-match-protocol.json",
+        "bytes": 11307,
+        "sha256": "af22fe96f2e85b1a079473854c77f953f075017a9ff70ab41408c66720f9a2b4"
+      },
+      "matchProtocolTool": {
+        "path": "tools/omega_nnue/king_state_match_protocol_generation5.py",
+        "bytes": 56249,
+        "sha256": "c4aad8c459263764fc71aba0648b25f453b8e522a75cc790779f6d80a37c71b2"
+      },
+      "matchReadinessTool": {
+        "path": "tools/omega_nnue/king_state_match_readiness_generation5.py",
+        "bytes": 365185,
+        "sha256": "798642025d2be85d5e99171ebbf6dc404abb139340c5772e0f5ab662daf76667"
+      },
+      "matchOrchestrator": {
+        "path": "tools/omega_nnue/king_state_matches_generation5.py",
+        "bytes": 120782,
+        "sha256": "6765bc5adbb24b4ba9c3557db84565c0417869c997cb0311558996a723bc4f1f"
+      },
+      "frozenScreeningEngine": {
+        "path": "tools/omega_nnue/frozen_runtime/king-state-v5/engine/senpai.exe",
+        "bytes": 624128,
+        "sha256": "a7a3e905c1f44cc32eba622615e6f0d29d5b236735de623ca87d42ef9116b1de"
+      }
+    },
+    "originalAuthority": {
+      "immutable": true,
+      "namespace": "build-king-state-v5/matches",
+      "identities": {
+        "profile": {
+          "path": "validation/omega-nnue-king-state-v5-preregistration.json",
+          "bytes": 41620,
+          "sha256": "60f48b19902b62bea88bd4877d55f798e0b2d6c6751f8acd59cb8522a3fdd5ab"
+        },
+        "finalFreeze": {
+          "path": "validation/omega-nnue-king-state-v5-freeze.seal.json",
+          "bytes": 12914,
+          "sha256": "03ff3fefc9ef4eff553f9aebdaed4f5827eeff29ef613b22ecd5b613f1a435a1"
+        },
+        "matchProtocol": {
+          "path": "validation/omega-nnue-king-state-v5-match-protocol.json",
+          "bytes": 11307,
+          "sha256": "af22fe96f2e85b1a079473854c77f953f075017a9ff70ab41408c66720f9a2b4"
+        },
+        "matchReadiness": {
+          "path": "tools/omega_nnue/king_state_match_readiness_generation5.py",
+          "bytes": 365185,
+          "sha256": "798642025d2be85d5e99171ebbf6dc404abb139340c5772e0f5ab662daf76667"
+        },
+        "matchCore": {
+          "path": "tools/omega_nnue/king_state_matches.py",
+          "bytes": 138593,
+          "sha256": "c8e9d45452716f468023b7af1607e735a269e131c95bce510dd25849f76d9601"
+        },
+        "matchOrchestrator": {
+          "path": "tools/omega_nnue/king_state_matches_generation5.py",
+          "bytes": 120782,
+          "sha256": "6765bc5adbb24b4ba9c3557db84565c0417869c997cb0311558996a723bc4f1f"
+        }
+      },
+      "samplerArtifacts": {
+        "development": {
+          "source": {
+            "path": "build-king-state-v5/matches/sampler/king-state-v5-development-rules-only.jsonl",
+            "bytes": 135499112,
+            "sha256": "a276f7cc959320da02ec43e42d200524b19ab51bbcc1144a1d208832dfb5bfbf"
+          },
+          "manifest": {
+            "path": "build-king-state-v5/matches/sampler/king-state-v5-development-rules-only.jsonl.manifest.json",
+            "bytes": 2462,
+            "sha256": "74d8c50a08a1ecf798e063a9467fb7229a9153130456e8ffe1bd786f6e291d16"
+          },
+          "completionSeal": {
+            "path": "build-king-state-v5/matches/sampler/king-state-v5-development-rules-only.jsonl.complete.seal.json",
+            "bytes": 1550,
+            "sha256": "2f19e160725165740037a04e1196708087f18b7971f9dc6e434ab5945849751e"
+          }
+        },
+        "equal-node": {
+          "source": {
+            "path": "build-king-state-v5/matches/sampler/king-state-v5-equal-node-rules-only.jsonl",
+            "bytes": 135394413,
+            "sha256": "0c6edb414689b6bb1b7c045caff35c1ac354263b5f72c97400e962247fc36e18"
+          },
+          "manifest": {
+            "path": "build-king-state-v5/matches/sampler/king-state-v5-equal-node-rules-only.jsonl.manifest.json",
+            "bytes": 2462,
+            "sha256": "a3469e21fc1a63e7b17554e2b71aa18986a39a7c6022ef83471082f42c9e1b01"
+          },
+          "completionSeal": {
+            "path": "build-king-state-v5/matches/sampler/king-state-v5-equal-node-rules-only.jsonl.complete.seal.json",
+            "bytes": 1548,
+            "sha256": "504443fa480a31dd67e5f35c75ecbbe95ed1c450105613900822db93a4978b63"
+          }
+        },
+        "equal-time": {
+          "source": {
+            "path": "build-king-state-v5/matches/sampler/king-state-v5-equal-time-rules-only.jsonl",
+            "bytes": 135415304,
+            "sha256": "5e17b517e37b2fd8e576fa65d842c5069cc920b9354b7b794b33af1e9e2f4aaa"
+          },
+          "manifest": {
+            "path": "build-king-state-v5/matches/sampler/king-state-v5-equal-time-rules-only.jsonl.manifest.json",
+            "bytes": 2461,
+            "sha256": "1ddf6376188690c91998c168452fe00c9517ea0c1926ef20720249754252e360"
+          },
+          "completionSeal": {
+            "path": "build-king-state-v5/matches/sampler/king-state-v5-equal-time-rules-only.jsonl.complete.seal.json",
+            "bytes": 1548,
+            "sha256": "98e1989ea8614f6298bb68ced781158f037158712b55b6f54418e26360b1f906"
+          }
+        }
+      }
+    },
+    "compatibilityAuthority": {
+      "compatibilityId": "king-state-v5-color-compat-v2",
+      "namespace": "build-king-state-v5/matches-color-compat-v2",
+      "positionHistoryProjection": "build-king-state-v5/matches-color-compat-v2/position-history.jsonl",
+      "positionHistoryManifest": "build-king-state-v5/matches-color-compat-v2/position-history.manifest.json",
+      "preauthorizationMustPrecedeBaseProjection": true,
+      "authorizationAndFirstLaunchMustPostdateImplementationSeal": true,
+      "closureMustPostdateAllThreeSuccessfulDecisions": true,
+      "freshIsolatedVerificationRequiredAtNomination": true,
+      "identities": {
+        "template": {
+          "path": "validation/omega-nnue-king-state-v5-color-compat-preregistration.template.json",
+          "bytes": 8168,
+          "sha256": "0dacf0853a37d959e24c05567a974a8d85311fc1709502f1b5fb6c346b396219"
+        },
+        "protocol": {
+          "path": "validation/omega-nnue-king-state-v5-color-compat-protocol.json",
+          "bytes": 9543,
+          "sha256": "756dcbb817faa205f51073273b1749001f3acac4321b7d2c5cc9c4e35807bca4"
+        },
+        "readiness": {
+          "path": "tools/omega_nnue/king_state_match_readiness_generation5_compat_v2.py",
+          "bytes": 123792,
+          "sha256": "fca7346bd95bc312c4832af354e9db4abd427013dcc791cfe5c43083fa4e132a"
+        },
+        "matches": {
+          "path": "tools/omega_nnue/king_state_matches_generation5_compat_v2.py",
+          "bytes": 202522,
+          "sha256": "3f99f67c09d9203e5358fe9fde380e9a05be47823cf658e9484427ac7ad74ef2"
+        }
+      },
+      "requiredClosure": {
+        "clearlySuperior": true,
+        "development": "pass",
+        "equal-node": "promote",
+        "equal-time": "promote",
+        "originalArtifactsRewritten": 0
+      }
+    }
+  },
+  "sharedRuntime": {
+    "dotnetRuntimeVersion": "10.0.9",
+    "dotnetRuntimeBundleSha256": "0ce194480dfb9a58a59c79bf94f19cb2eb571635a00547094a9c8ff28bb5f8f8",
+    "omegaMatchBundleSha256": "d3e0ebde20db71be98fc8844b053927e220f8433ed4f0897b5013a2680009874",
+    "rootSamplerBundleSha256": "6c7f6c0f263488ad5f9af28791899a83d34de8fd9fd874dad0c0bfd68e79196b",
+    "prefixReplayBundleSha256": "1c0ab2019a473f63dad90c92351cfdea569fd0048c60da329eaaf62c15f03dab",
+    "prefixReplayRulesByteEqualOmegaMatch": true,
+    "identities": {
+      "sharedMatchCore": {
+        "path": "tools/omega_nnue/king_state_matches.py",
+        "bytes": 138593,
+        "sha256": "c8e9d45452716f468023b7af1607e735a269e131c95bce510dd25849f76d9601"
+      },
+      "omegaRulesModule": {
+        "path": "tools/omega_nnue/omega_nnue.py",
+        "bytes": 53900,
+        "sha256": "efc55715895f32e948db35428372393c711f701f2e84c69256bdf689065422aa"
+      },
+      "screenSelectionModule": {
+        "path": "tools/omega_nnue/select_screen.py",
+        "bytes": 39442,
+        "sha256": "304172e583b4c963718191017b4f8d2426aea325dd42337c197496ee738677ee"
+      },
+      "dotnetRuntimeTool": {
+        "path": "tools/omega_nnue/king_state_dotnet_runtime_generation5.py",
+        "bytes": 12825,
+        "sha256": "7c33e9f22cd6f77498caa7fa481abaf5f72ec1b805fac6a979739237a08524cb"
+      },
+      "dotnetHost": {
+        "path": "tools/omega_nnue/frozen_runtime/king-state-v5/dotnet-runtime/dotnet.exe",
+        "bytes": 167248,
+        "sha256": "a5ccdc3a41d5e5c6014ff64509aed176db39f4f14caffff3dd1997f8907e94d7"
+      },
+      "dotnetRuntimeManifest": {
+        "path": "tools/omega_nnue/frozen_runtime/king-state-v5/dotnet-runtime.manifest.json",
+        "bytes": 33633,
+        "sha256": "c8543f22f4b353ee461f2e417c3d06ea2f05de2622fab49b789923f9944e00ee"
+      },
+      "omegaMatchAssembly": {
+        "path": "tools/omega_nnue/frozen_runtime/king-state-v5/omegamatch/OmegaMatch.dll",
+        "bytes": 166400,
+        "sha256": "c51e4733c888bec97f5b1582379e16ecefe4c74537a8fabd2b0fcafd88ef2e6d"
+      },
+      "omegaMatchAppHost": {
+        "path": "tools/omega_nnue/frozen_runtime/king-state-v5/omegamatch/OmegaMatch.exe",
+        "bytes": 162304,
+        "sha256": "996a6ea879736906a7706f3ada189677034585e9b91d33bbc95e7e420ecec9f5"
+      },
+      "omegaMatchRulesAssembly": {
+        "path": "tools/omega_nnue/frozen_runtime/king-state-v5/omegamatch/ChessLib.dll",
+        "bytes": 248832,
+        "sha256": "16a01414c9f486561aac0b48cebb7c485621d804a73c00803ec0aff55f572f4c"
+      },
+      "rootSamplerAssembly": {
+        "path": "tools/omega_nnue/frozen_runtime/king-state-v5/root-sampler/OmegaRootSampler.dll",
+        "bytes": 57856,
+        "sha256": "c10e9c3404f9bae9b1841bb0c5ed306ef9a984dfd9c627cf25f4e3aab40a276e"
+      },
+      "rootSamplerAppHost": {
+        "path": "tools/omega_nnue/frozen_runtime/king-state-v5/root-sampler/OmegaRootSampler.exe",
+        "bytes": 162304,
+        "sha256": "f899efa67be2d008b8acde057a1a98a10f0ee23d7bb263b05caa3ab3b4cf2f4e"
+      },
+      "rootSamplerRulesAssembly": {
+        "path": "tools/omega_nnue/frozen_runtime/king-state-v5/root-sampler/ChessLib.dll",
+        "bytes": 248832,
+        "sha256": "16a01414c9f486561aac0b48cebb7c485621d804a73c00803ec0aff55f572f4c"
+      },
+      "prefixReplayRulesAssembly": {
+        "path": "tools/omega_nnue/frozen_runtime/king-state-v5-color-compat-v2/opening-replay/ChessLib.dll",
+        "bytes": 248832,
+        "sha256": "16a01414c9f486561aac0b48cebb7c485621d804a73c00803ec0aff55f572f4c"
+      },
+      "prefixReplayRulesSymbols": {
+        "path": "tools/omega_nnue/frozen_runtime/king-state-v5-color-compat-v2/opening-replay/ChessLib.pdb",
+        "bytes": 78904,
+        "sha256": "c27b5a5134d57c81f0f2f7c8fbb818716157c24a1dbb5ab34074157b250e236b"
+      },
+      "prefixReplayJsonAssembly": {
+        "path": "tools/omega_nnue/frozen_runtime/king-state-v5-color-compat-v2/opening-replay/Newtonsoft.Json.dll",
+        "bytes": 723368,
+        "sha256": "a28c251dfe36d881e9e2462e171441b8b0ec156fe3f452602c9149b1b9efe05b"
+      },
+      "prefixReplayDeps": {
+        "path": "tools/omega_nnue/frozen_runtime/king-state-v5-color-compat-v2/opening-replay/OmegaOpeningPrefixReplay.deps.json",
+        "bytes": 1608,
+        "sha256": "9ade5beb57416eca211de58010fa81edd07948faed701de366e262f61aae4fc3"
+      },
+      "prefixReplayAssembly": {
+        "path": "tools/omega_nnue/frozen_runtime/king-state-v5-color-compat-v2/opening-replay/OmegaOpeningPrefixReplay.dll",
+        "bytes": 54272,
+        "sha256": "b7b4205d6be985489aebe5d1f7c2728ddd6fdac7ffbe59fe8da63bfa2bc71495"
+      },
+      "prefixReplayAppHost": {
+        "path": "tools/omega_nnue/frozen_runtime/king-state-v5-color-compat-v2/opening-replay/OmegaOpeningPrefixReplay.exe",
+        "bytes": 162816,
+        "sha256": "9980f4812dae96a62086a454676dfb96ef89f9942c684bc415be054da0f57f20"
+      },
+      "prefixReplayRuntimeConfig": {
+        "path": "tools/omega_nnue/frozen_runtime/king-state-v5-color-compat-v2/opening-replay/OmegaOpeningPrefixReplay.runtimeconfig.json",
+        "bytes": 342,
+        "sha256": "c230a317a54dd960bcbeb5f347f52e18dc665a26f7efda2159fced9a5ac7e097"
+      },
+      "prefixReplayPortsAssembly": {
+        "path": "tools/omega_nnue/frozen_runtime/king-state-v5-color-compat-v2/opening-replay/System.IO.Ports.dll",
+        "bytes": 37648,
+        "sha256": "2767e21f384cca9004b1266ec4b71d3b8a76898594382c377c726c780aa34508"
+      }
+    }
+  },
+  "implementation": {
+    "protocolTool": {
+      "path": "tools/omega_nnue/king_state_confirmation_protocol_v2.py",
+      "bytes": 126759,
+      "sha256": "5509ee3a7525e5bef28f79be2930ae6a9b05197fe3cfbd319c143af3f0439a79"
+    },
+    "v1RetirementSealRequiredBeforeImplementationSeal": true,
+    "v1RetirementContinuouslyRevalidated": true,
+    "privateProjectionAndImplementationSealRequiredBeforeAnyG5MatchLaunch": true,
+    "privateProjectionAndImplementationSealRequiredBeforeAnyG5NominationResultAccess": true,
+    "sealedCleanWorkerAcceptsNoClaimOrCandidateInputs": true,
+    "sealedCleanWorkerAcceptsNoPrivateHistoryProjection": true,
+    "sealedCleanWorkerInputs": [
+      "public selector capsule",
+      "public canonical excluded-orbit list",
+      "claim-derived stage seeds without claim identity",
+      "dedicated selector output workspace"
+    ],
+    "selectorCapsuleRejectsCandidateFieldsHiddenPathsAndUnknownKeys": true,
+    "selectorWorkspaceRejectsEveryUnknownEntryAndLink": true,
+    "selectorCrashOrPartialOutputPublishesSamplingFailureClosure": true,
+    "selectorCompleteRepeatIsReadOnlyAndIdempotent": true,
+    "postSelectionAuditPublishesBeforeCollisionAbort": true,
+    "postSelectionAuditNeverTriggersSelectorRerun": true,
+    "samplerSelectorSealMustPinCompleteTransitiveSourceAndRuntimeClosure": true,
+    "exactGeneration5PrefixReplayBundleRequired": true,
+    "prefixReplayRulesMustByteMatchFrozenOmegaMatchChessLib": true,
+    "deterministicCandidateInvarianceProofRequiredBeforeG5Launch": true,
+    "claimWriterMustUsePinnedDrawSeedBundleExactlyOnce": true,
+    "claimWriterMustAuthenticateAllPriorPublishedStageSeeds": true,
+    "claimWriterMustNeverRetryEntropyForConsumedAttempt": true,
+    "readinessAndOrchestratorMustBePinnedBeforeCandidateClaim": true,
+    "implementationSealRequiredBeforeCandidateClaim": true,
+    "implementationSealUnavailableToCandidateAwareMutation": true,
+    "plannedReadinessPath": "tools/omega_nnue/king_state_confirmation_readiness_v2.py",
+    "plannedOrchestratorPath": "tools/omega_nnue/king_state_confirmation_matches_v2.py",
+    "plannedPracticalModulePath": "tools/omega_nnue/king_state_confirmation_practical_v2.py",
+    "plannedPracticalSamplerProject": "tools/omega_nnue/OmegaPracticalOpeningSampler/OmegaPracticalOpeningSampler.csproj",
+    "plannedPracticalSamplerSource": "tools/omega_nnue/OmegaPracticalOpeningSampler/Program.cs",
+    "subprocessEnvironment": {
+      "policyVersion": 1,
+      "construction": "new empty mapping populated only with the listed keys",
+      "allowedKeys": [
+        "SystemRoot",
+        "WINDIR",
+        "TEMP",
+        "TMP",
+        "DOTNET_CLI_TELEMETRY_OPTOUT",
+        "DOTNET_NOLOGO",
+        "DOTNET_MULTILEVEL_LOOKUP",
+        "DOTNET_ROOT",
+        "DOTNET_ROOT_X64",
+        "DOTNET_ROLL_FORWARD",
+        "DOTNET_EnableDiagnostics",
+        "PYTHONNOUSERSITE"
+      ],
+      "inheritedParentKeys": [],
+      "systemRootSource": "Win32 GetWindowsDirectoryW; no environment lookup",
+      "temporaryDirectorySource": "authenticated global-operation-lock parent",
+      "dotnetRuntimeSource": "authenticated frozen-runtime directory",
+      "allOtherParentVariablesRemoved": true,
+      "candidateClaimNetworkScoreResultTargetOrSecretVariablesAccepted": 0
+    },
+    "sharedG5PinnedFilesMayNotBeModified": true
+  }
+}

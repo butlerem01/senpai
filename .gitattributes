@@ -6,6 +6,7 @@
 /validation/omega-nnue-king-state-v4-*.json text eol=lf
 /validation/omega-nnue-king-state-v5-*.json text eol=lf
 /validation/omega-nnue-open-confirmation-v1-*.json text eol=lf
+/validation/omega-nnue-open-confirmation-v2-*.json text eol=lf
 /src/omega_nnue.cpp text eol=lf
 /src/omega_nnue.hpp text eol=lf
 /tests/omega_nnue.cpp text eol=lf
