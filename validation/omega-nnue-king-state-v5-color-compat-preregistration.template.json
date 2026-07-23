@@ -1,0 +1,168 @@
+{
+  "schemaVersion": 1,
+  "kind": "omega-nnue-king-state-v5-color-compat-preregistration-template",
+  "compatibilityId": "king-state-v5-color-compat-v2",
+  "status": "additive compatibility policy frozen before any Generation-5 match launch",
+  "purpose": "Preserve the immutable Generation-5 experiment while adapting OmegaMatch ply Color tokens and terminal process-exit records in separately hashed evidence, replaying every successful move with the exact G5 ChessLib, sealing malformed or absent launch growth as terminal safety failures, and publishing closure-bound authenticated reached-position and symmetry-orbit history under an exact post-authorization global namespace inventory.",
+  "immutableGeneration5Authority": {
+    "profile": {
+      "path": "validation/omega-nnue-king-state-v5-preregistration.json",
+      "bytes": 41620,
+      "sha256": "60f48b19902b62bea88bd4877d55f798e0b2d6c6751f8acd59cb8522a3fdd5ab"
+    },
+    "finalFreeze": {
+      "path": "validation/omega-nnue-king-state-v5-freeze.seal.json",
+      "bytes": 12914,
+      "sha256": "03ff3fefc9ef4eff553f9aebdaed4f5827eeff29ef613b22ecd5b613f1a435a1"
+    },
+    "matchProtocol": {
+      "path": "validation/omega-nnue-king-state-v5-match-protocol.json",
+      "bytes": 11307,
+      "sha256": "af22fe96f2e85b1a079473854c77f953f075017a9ff70ab41408c66720f9a2b4"
+    },
+    "matchReadinessSource": {
+      "path": "tools/omega_nnue/king_state_match_readiness_generation5.py",
+      "bytes": 365185,
+      "sha256": "798642025d2be85d5e99171ebbf6dc404abb139340c5772e0f5ab662daf76667"
+    },
+    "matchCoreSource": {
+      "path": "tools/omega_nnue/king_state_matches.py",
+      "bytes": 138593,
+      "sha256": "c8e9d45452716f468023b7af1607e735a269e131c95bce510dd25849f76d9601"
+    },
+    "matchOrchestratorSource": {
+      "path": "tools/omega_nnue/king_state_matches_generation5.py",
+      "bytes": 120782,
+      "sha256": "6765bc5adbb24b4ba9c3557db84565c0417869c997cb0311558996a723bc4f1f"
+    }
+  },
+  "frozenSamplerPools": {
+    "development": {
+      "source": {
+        "path": "build-king-state-v5/matches/sampler/king-state-v5-development-rules-only.jsonl",
+        "bytes": 135499112,
+        "sha256": "a276f7cc959320da02ec43e42d200524b19ab51bbcc1144a1d208832dfb5bfbf"
+      },
+      "manifest": {
+        "path": "build-king-state-v5/matches/sampler/king-state-v5-development-rules-only.jsonl.manifest.json",
+        "bytes": 2462,
+        "sha256": "74d8c50a08a1ecf798e063a9467fb7229a9153130456e8ffe1bd786f6e291d16"
+      },
+      "completionSeal": {
+        "path": "build-king-state-v5/matches/sampler/king-state-v5-development-rules-only.jsonl.complete.seal.json",
+        "bytes": 1550,
+        "sha256": "2f19e160725165740037a04e1196708087f18b7971f9dc6e434ab5945849751e"
+      }
+    },
+    "equal-node": {
+      "source": {
+        "path": "build-king-state-v5/matches/sampler/king-state-v5-equal-node-rules-only.jsonl",
+        "bytes": 135394413,
+        "sha256": "0c6edb414689b6bb1b7c045caff35c1ac354263b5f72c97400e962247fc36e18"
+      },
+      "manifest": {
+        "path": "build-king-state-v5/matches/sampler/king-state-v5-equal-node-rules-only.jsonl.manifest.json",
+        "bytes": 2462,
+        "sha256": "a3469e21fc1a63e7b17554e2b71aa18986a39a7c6022ef83471082f42c9e1b01"
+      },
+      "completionSeal": {
+        "path": "build-king-state-v5/matches/sampler/king-state-v5-equal-node-rules-only.jsonl.complete.seal.json",
+        "bytes": 1548,
+        "sha256": "504443fa480a31dd67e5f35c75ecbbe95ed1c450105613900822db93a4978b63"
+      }
+    },
+    "equal-time": {
+      "source": {
+        "path": "build-king-state-v5/matches/sampler/king-state-v5-equal-time-rules-only.jsonl",
+        "bytes": 135415304,
+        "sha256": "5e17b517e37b2fd8e576fa65d842c5069cc920b9354b7b794b33af1e9e2f4aaa"
+      },
+      "manifest": {
+        "path": "build-king-state-v5/matches/sampler/king-state-v5-equal-time-rules-only.jsonl.manifest.json",
+        "bytes": 2461,
+        "sha256": "1ddf6376188690c91998c168452fe00c9517ea0c1926ef20720249754252e360"
+      },
+      "completionSeal": {
+        "path": "build-king-state-v5/matches/sampler/king-state-v5-equal-time-rules-only.jsonl.complete.seal.json",
+        "bytes": 1548,
+        "sha256": "98e1989ea8614f6298bb68ced781158f037158712b55b6f54418e26360b1f906"
+      }
+    }
+  },
+  "frozenForbiddenBoundary": {
+    "manifest": {
+      "path": "build-msvc/data-generation/omega-decision-v2/forbidden-positions.jsonl.manifest.json",
+      "bytes": 12170,
+      "sha256": "8795d5b4a1476d0a0c39c7aadefa9609338ffff9cacf23c7e136d10e654a110e"
+    },
+    "catalog": {
+      "path": "build-msvc/data-generation/omega-decision-v2/forbidden-positions.jsonl",
+      "bytes": 559160534,
+      "sha256": "80e63d110b4d745fbd0e77e72f2b799288d1fd3fc5051069746b387a39be17f0"
+    }
+  },
+  "prelaunchZeroState": {
+    "originalMatchRoot": "build-king-state-v5/matches",
+    "onlyAllowedOriginalDirectory": "build-king-state-v5/matches/sampler",
+    "onlyAllowedOriginalFiles": "exactly the nine frozen sampler identities above",
+    "originalSuitesEventsResultsClaimsClosuresAbsent": true,
+    "compatibilityNamespaceAbsentBeforePublication": true,
+    "idleProcessSnapshotRequired": true,
+    "idleProcessNames": ["dotnet", "dotnet.exe", "omegamatch", "omegamatch.exe", "senpai", "senpai.exe"],
+    "idleSnapshotMustPrecedeAllGeneration5Launches": true
+  },
+  "adapterPolicy": {
+    "manifestPathCompatibility": "a frozen repository-relative identity and the same canonical absolute file are equivalent only when resolved path, byte count, and SHA-256 all match",
+    "acceptedRawTokens": ["white", "black"],
+    "derivedTokens": ["w", "b"],
+    "mapping": {"white": "w", "black": "b"},
+    "scope": "ply.Color only",
+    "otherFieldsChanged": 0,
+    "rawEventsImmutable": true,
+    "rawPrefixIdentityRetained": true,
+    "malformedOrOtherColorRejects": true,
+    "derivedEvidenceMustBeExclusive": true,
+    "terminalProcessExitCompatibility": {
+      "acceptedRawShape": "one authenticated terminal failed-search ply with absent/null Error, Search.ProcessExited true, and absent/null PostOfen",
+      "derivedError": "Authenticated OmegaMatch process exit (derived for frozen assessor compatibility).",
+      "scope": "terminal ply.Error only",
+      "nonErrorFieldsChanged": 0,
+      "transformCountMustEqualAuthenticatedRawSchedule": true
+    }
+  },
+  "rulesReplay": {
+    "protocolBindingRequired": true,
+    "exactGeneration5ChessLibSha256": "16a01414c9f486561aac0b48cebb7c485621d804a73c00803ec0aff55f572f4c",
+    "runtimeBundleSha256": "1c0ab2019a473f63dad90c92351cfdea569fd0048c60da329eaaf62c15f03dab",
+    "reproducibleFullInventorySha256": "d8704a21d5ed7cae06e91f11de2e08bf266443d740f9efb1fa6c19d7f06474e8",
+    "immutablePerAssessmentRawPrefixRequired": true,
+    "successfulPlyTranscriptParityRequired": true,
+    "zeroSuccessfulPlyAttemptsRequireInitialStateReplay": true
+  },
+  "teacherQuiescence": {
+    "prelabelFreeze": {
+      "path": "build-msvc/data-generation/omega-decision-v2/prelabel-freeze.seal.json",
+      "bytes": 11380,
+      "sha256": "0e1878cbb2eea867d1f53dd39ea64e39dbcfabbc7bcc871457b06ddc0c1100c9"
+    },
+    "requiredCompletedStages": ["shallow", "deep"],
+    "activeLedgerClaimsMustBeAbsent": true,
+    "selectedChildrenAndLabelsMustBeFinalSealed": true,
+    "knownTeacherCommandLinesMustBeAbsent": true,
+    "completionSealsMakeSubsequentTeacherInvocationReturnBeforeEngineSpawn": true
+  },
+  "informationBoundary": {
+    "suiteConstructionCandidateBlind": true,
+    "targetFieldsDecodedByCompatibilityLayer": 0,
+    "matchResultsAccessedBeforeAuthorization": 0,
+    "originalArtifactsRewritten": 0,
+    "originalNamespaceOutputsCreated": 0
+  },
+  "promotionRule": {
+    "development": "all 64 pairs complete, zero safety failures, candidate score at least 0.5",
+    "equalNode": "promotion against +15 Elo null at anytime p at most 0.01",
+    "equalTime": "promotion against +15 Elo null at anytime p at most 0.01 under serialized idle-machine execution",
+    "clearlySuperior": "development pass plus promotion in both equal-node and equal-time with zero safety failures",
+    "runnerUpFallback": false
+  }
+}

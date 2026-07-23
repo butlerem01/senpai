@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 1,
+  "kind": "omega-nnue-king-state-v5-color-compat-protocol",
+  "compatibilityId": "king-state-v5-color-compat-v2",
+  "status": "additive compatibility protocol; original Generation-5 bytes and namespace remain immutable",
+  "template": {
+    "path": "validation/omega-nnue-king-state-v5-color-compat-preregistration.template.json",
+    "bytes": 8168,
+    "sha256": "0dacf0853a37d959e24c05567a974a8d85311fc1709502f1b5fb6c346b396219"
+  },
+  "tools": {
+    "readiness": {
+      "path": "tools/omega_nnue/king_state_match_readiness_generation5_compat_v2.py",
+      "bytes": 123792,
+      "sha256": "fca7346bd95bc312c4832af354e9db4abd427013dcc791cfe5c43083fa4e132a"
+    },
+    "matches": {
+      "path": "tools/omega_nnue/king_state_matches_generation5_compat_v2.py",
+      "bytes": 202522,
+      "sha256": "3f99f67c09d9203e5358fe9fde380e9a05be47823cf658e9484427ac7ad74ef2"
+    }
+  },
+  "namespaces": {
+    "root": "build-king-state-v5/matches-color-compat-v2",
+    "preregistration": "build-king-state-v5/matches-color-compat-v2/preregistration.json",
+    "sealed": "build-king-state-v5/matches-color-compat-v2/sealed",
+    "suiteSeal": "build-king-state-v5/matches-color-compat-v2/sealed/suite-seal.json",
+    "preauthorizationState": "build-king-state-v5/matches-color-compat-v2/sealed/preauthorization-state.json",
+    "authorization": "build-king-state-v5/matches-color-compat-v2/sealed/match-authorization.json",
+    "coreSeal": "build-king-state-v5/matches-color-compat-v2/sealed/core-match-seal.json",
+    "development": "build-king-state-v5/matches-color-compat-v2/development",
+    "equalNode": "build-king-state-v5/matches-color-compat-v2/equal-node",
+    "equalTime": "build-king-state-v5/matches-color-compat-v2/equal-time",
+    "evidence": "build-king-state-v5/matches-color-compat-v2/evidence",
+    "decisions": "build-king-state-v5/matches-color-compat-v2/decisions",
+    "historyProjection": "build-king-state-v5/matches-color-compat-v2/position-history.jsonl",
+    "historyManifest": "build-king-state-v5/matches-color-compat-v2/position-history.manifest.json",
+    "closure": "build-king-state-v5/matches-color-compat-v2/closure.json"
+  },
+  "execution": {
+    "gateOrder": ["development", "equal-node", "equal-time"],
+    "initialPairBudget": {"development": 64, "equal-node": 128, "equal-time": 128},
+    "resumePairBudget": {"development": 4, "equal-node": 4, "equal-time": 4},
+    "freshProcessPerGame": true,
+    "oneGameAtATime": true,
+    "maximumConcurrentGames": 1,
+    "idleSnapshotBeforePreregistration": true,
+    "idleSnapshotBeforeEveryLaunch": true,
+    "appendOnlyRawEvents": true,
+    "assessmentBetweenLaunches": true,
+    "terminalDecisionBlocksRetry": true,
+    "preauthorizationStateRequiredBeforeAuthorization": true,
+    "pendingIntentMayOnlyResolveToCompletionOrTerminalAbort": true,
+    "partialJsonTailRetainedAndTerminallyAborted": true,
+    "abortDecisionRecoveryRequired": true,
+    "launchOnlyThrough": "tools/omega_nnue/king_state_matches_generation5_compat_v2.py"
+  },
+  "adapter": {
+    "acceptedRawTokens": ["white", "black"],
+    "derivedTokens": ["w", "b"],
+    "mapping": {"white": "w", "black": "b"},
+    "recordType": "ply",
+    "field": "Color",
+    "otherFieldsChanged": 0,
+    "rawEventsImmutable": true,
+    "rawPrefixIdentityRetained": true,
+    "terminalProcessExitCompatibility": {
+      "acceptedRawShape": "authenticated terminal failed-search ply with absent/null Error, Search.ProcessExited true, and absent/null PostOfen",
+      "derivedError": "Authenticated OmegaMatch process exit (derived for frozen assessor compatibility).",
+      "nonErrorFieldsChanged": 0,
+      "transformCountMustEqualAuthenticatedRawSchedule": true
+    }
+  },
+  "rulesReplay": {
+    "source": {
+      "path": "tools/omega_nnue/OmegaOpeningPrefixReplay/Program.cs",
+      "bytes": 35802,
+      "sha256": "1d340f2dd2699531889b9b1d28fc50e062f6eace6b85d53951b07591de8e60f8"
+    },
+    "project": {
+      "path": "tools/omega_nnue/OmegaOpeningPrefixReplay/OmegaOpeningPrefixReplayG5Compat.csproj",
+      "bytes": 1156,
+      "sha256": "73c94a12b2932728b30e73c79b8b3ce9e9c6c103478a0a9c231b3b609a4454c1"
+    },
+    "runtimeBundle": {
+      "root": "tools/omega_nnue/frozen_runtime/king-state-v5-color-compat-v2/opening-replay",
+      "assemblyRelativePath": "OmegaOpeningPrefixReplay.dll",
+      "appHostRelativePath": "OmegaOpeningPrefixReplay.exe",
+      "sha256": "1c0ab2019a473f63dad90c92351cfdea569fd0048c60da329eaaf62c15f03dab",
+      "files": [
+        {"relativePath": "ChessLib.dll", "bytes": 248832, "sha256": "16a01414c9f486561aac0b48cebb7c485621d804a73c00803ec0aff55f572f4c"},
+        {"relativePath": "Newtonsoft.Json.dll", "bytes": 723368, "sha256": "a28c251dfe36d881e9e2462e171441b8b0ec156fe3f452602c9149b1b9efe05b"},
+        {"relativePath": "OmegaOpeningPrefixReplay.deps.json", "bytes": 1608, "sha256": "9ade5beb57416eca211de58010fa81edd07948faed701de366e262f61aae4fc3"},
+        {"relativePath": "OmegaOpeningPrefixReplay.dll", "bytes": 54272, "sha256": "b7b4205d6be985489aebe5d1f7c2728ddd6fdac7ffbe59fe8da63bfa2bc71495"},
+        {"relativePath": "OmegaOpeningPrefixReplay.exe", "bytes": 162816, "sha256": "9980f4812dae96a62086a454676dfb96ef89f9942c684bc415be054da0f57f20"},
+        {"relativePath": "OmegaOpeningPrefixReplay.runtimeconfig.json", "bytes": 342, "sha256": "c230a317a54dd960bcbeb5f347f52e18dc665a26f7efda2159fced9a5ac7e097"},
+        {"relativePath": "System.IO.Ports.dll", "bytes": 37648, "sha256": "2767e21f384cca9004b1266ec4b71d3b8a76898594382c377c726c780aa34508"}
+      ]
+    },
+    "reproducibleBuild": {
+      "sdkVersion": "10.0.301",
+      "hostRuntimeVersion": "10.0.9",
+      "configuration": "Release",
+      "sdkHost": {"path": "C:/Users/whate/.dotnet/dotnet.exe", "bytes": 167248, "sha256": "a5ccdc3a41d5e5c6014ff64509aed176db39f4f14caffff3dd1997f8907e94d7"},
+      "sdkEntrypoint": {"path": "C:/Users/whate/.dotnet/sdk/10.0.301/dotnet.dll", "bytes": 3462992, "sha256": "822219f6e964ad49e34657b67d0d4413a382716f3a00d6ce0ddf9d8ecb201895"},
+      "hostFxr": {"path": "C:/Users/whate/.dotnet/host/fxr/10.0.9/hostfxr.dll", "bytes": 379728, "sha256": "b41af3ca044a75a77f3bf7883ec586a63e8bd25e74106b21d08131488141581b"},
+      "coreClr": {"path": "C:/Users/whate/.dotnet/shared/Microsoft.NETCore.App/10.0.9/coreclr.dll", "bytes": 4609872, "sha256": "331c37f79cce19b37e74ee1adf8a78d741484f8adc1ce46c45cd6ad94d8022b4"},
+      "buildArguments": ["build", "tools/omega_nnue/OmegaOpeningPrefixReplay/OmegaOpeningPrefixReplayG5Compat.csproj", "-c", "Release", "-o", "<OUTPUT_ROOT>", "--nologo", "-v:minimal", "/p:RestoreIgnoreFailedSources=true"],
+      "cleanRootsBeforeBuild": true,
+      "canonicalRoot": "tools/omega_nnue/frozen_runtime/king-state-v5-color-compat-v2/opening-replay",
+      "independentRoot": "build-omega-opening-prefix-replay-g5-repro-1",
+      "builds": [
+        {"ordinal": 1, "outputRoot": "tools/omega_nnue/frozen_runtime/king-state-v5-color-compat-v2/opening-replay", "exitCode": 0, "warnings": 0, "errors": 0},
+        {"ordinal": 2, "outputRoot": "build-omega-opening-prefix-replay-g5-repro-1", "exitCode": 0, "warnings": 0, "errors": 0}
+      ],
+      "fullInventorySha256": "d8704a21d5ed7cae06e91f11de2e08bf266443d740f9efb1fa6c19d7f06474e8",
+      "byteIdentical": true,
+      "files": [
+        {"relativePath": "ChessLib.dll", "bytes": 248832, "sha256": "16a01414c9f486561aac0b48cebb7c485621d804a73c00803ec0aff55f572f4c"},
+        {"relativePath": "ChessLib.pdb", "bytes": 78904, "sha256": "c27b5a5134d57c81f0f2f7c8fbb818716157c24a1dbb5ab34074157b250e236b"},
+        {"relativePath": "Newtonsoft.Json.dll", "bytes": 723368, "sha256": "a28c251dfe36d881e9e2462e171441b8b0ec156fe3f452602c9149b1b9efe05b"},
+        {"relativePath": "OmegaOpeningPrefixReplay.deps.json", "bytes": 1608, "sha256": "9ade5beb57416eca211de58010fa81edd07948faed701de366e262f61aae4fc3"},
+        {"relativePath": "OmegaOpeningPrefixReplay.dll", "bytes": 54272, "sha256": "b7b4205d6be985489aebe5d1f7c2728ddd6fdac7ffbe59fe8da63bfa2bc71495"},
+        {"relativePath": "OmegaOpeningPrefixReplay.exe", "bytes": 162816, "sha256": "9980f4812dae96a62086a454676dfb96ef89f9942c684bc415be054da0f57f20"},
+        {"relativePath": "OmegaOpeningPrefixReplay.runtimeconfig.json", "bytes": 342, "sha256": "c230a317a54dd960bcbeb5f347f52e18dc665a26f7efda2159fced9a5ac7e097"},
+        {"relativePath": "System.IO.Ports.dll", "bytes": 37648, "sha256": "2767e21f384cca9004b1266ec4b71d3b8a76898594382c377c726c780aa34508"}
+      ]
+    }
+  },
+  "authority": {
+    "originalProfilePath": "validation/omega-nnue-king-state-v5-preregistration.json",
+    "originalFreezePath": "validation/omega-nnue-king-state-v5-freeze.seal.json",
+    "originalProtocolPath": "validation/omega-nnue-king-state-v5-match-protocol.json",
+    "originalMatchRoot": "build-king-state-v5/matches",
+    "immutablePinsComeFromTemplate": true,
+    "allThreeSamplerTriplesRequired": true,
+    "canonicalRelativeAbsoluteEquivalenceRequiresSamePathBytesSha256": true
+  },
+  "publication": {
+    "exclusiveCreateOnly": true,
+    "preauthorizationStatePublishedBeforeAuthorization": true,
+    "rawAndDerivedEvidenceBothRequired": true,
+    "assessmentBindsAdapterEvidence": true,
+    "normalDecisionBindsAssessment": true,
+    "abortDecisionBindsAbortCompletion": true,
+    "postAuthorizationExactGlobalInventoryRequired": true,
+    "closureBindsAuthenticatedPositionHistory": true,
+    "closureBindsAllTerminalDecisions": true,
+    "originalFilesOrDirectoriesMayNeverBeCreatedOrModified": true
+  }
+}

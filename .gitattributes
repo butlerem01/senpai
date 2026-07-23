@@ -16,3 +16,4 @@
 /tools/omega_nnue/frozen_runtime/king-state-v3/** -text -diff !eol
 /tools/omega_nnue/frozen_runtime/king-state-v4/** -text -diff !eol
 /tools/omega_nnue/frozen_runtime/king-state-v5/** -text -diff !eol
+/tools/omega_nnue/frozen_runtime/king-state-v5-color-compat-v2/** -text -diff !eol
