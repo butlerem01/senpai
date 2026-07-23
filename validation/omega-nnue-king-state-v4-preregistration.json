@@ -1,0 +1,797 @@
+{
+  "activationControlDevelopmentGrid": {
+    "activationSettings": {
+      "penaltyWeight": 32.0,
+      "source": "exact values supplied by the frozen development grid",
+      "targetActiveFraction": 0.62,
+      "temperature": 16.0
+    },
+    "allowedInformation": "development-grid aggregate loss and target-opaque deployment health only; no generation-3 corpus replay is permitted in generation-4 training and generation-3 split-2 remains unread",
+    "calibrationEvidence": {
+      "heldOutTargetsAccessed": false,
+      "secondSeedDenseActiveFraction": 0.705515,
+      "secondSeedPassed": true,
+      "secondSeedValidationCpMae": 196.079,
+      "secondSeedValidationHuber": 2.520386
+    },
+    "copyRule": "Final preregistration pins the exact grid-seal identity; penaltyWeight 32.0, targetActiveFraction 0.62, and temperature 16.0 may not be rounded, changed, or selected from generation-4 results.",
+    "mayUseGeneration4Targets": false,
+    "mustBeSealedBeforeGeneration4PrimaryTraining": true,
+    "namespace": "build-msvc/king-state-v4-development",
+    "seal": {
+      "bytes": 8960,
+      "path": "build-msvc/king-state-v4-development/selection.seal.json",
+      "sha256": "80f3ad2f245f261f8a43730f7fd965bdb0a45e337cf7ee1a1dcaa2fa838bba64"
+    },
+    "selectionRuleMustBeFrozenInsideGrid": true,
+    "status": "sealed-before-primary-training"
+  },
+  "candidateMatrix": {
+    "allCandidatesStartPredictionIdenticalToMappedK2": true,
+    "allCandidatesUseSameCorpusAndComponentSplit": true,
+    "candidates": [
+      {
+        "architectureId": 4,
+        "conditionedUpdate": {
+          "A": "frozen target-blind geometry basis derived with the domain-separated factor-basis seed and held fixed for all epochs",
+          "DInitialValue": 0,
+          "epochZeroMaterializationByteIdenticalToMappedK2Rows": true,
+          "fixedRemainder": "exact mapped K2 conditioned row",
+          "formula": "W[k,f,:] = K2-mapped[k,f,:] + sum_r A[k,r] * D[r,f,:]"
+        },
+        "export": "ordinary materialized architecture-4 network; no A or D tensors in deployed payload",
+        "id": "G4A",
+        "interactionRows": "all 64 compact features are zero-initialized ordinary independently trainable rows",
+        "name": "architecture-4-rank-4-ranking-025",
+        "rank": 4,
+        "siblingRankingLossWeight": 0.25
+      },
+      {
+        "architectureId": 4,
+        "conditionedUpdate": {
+          "A": "frozen target-blind geometry basis derived with the domain-separated factor-basis seed and held fixed for all epochs",
+          "DInitialValue": 0,
+          "epochZeroMaterializationByteIdenticalToMappedK2Rows": true,
+          "fixedRemainder": "exact mapped K2 conditioned row",
+          "formula": "W[k,f,:] = K2-mapped[k,f,:] + sum_r A[k,r] * D[r,f,:]"
+        },
+        "export": "ordinary materialized architecture-4 network; no A or D tensors in deployed payload",
+        "id": "G4B",
+        "interactionRows": "all 64 compact features are zero-initialized ordinary independently trainable rows",
+        "name": "architecture-4-rank-4-ranking-050",
+        "rank": 4,
+        "siblingRankingLossWeight": 0.5
+      },
+      {
+        "architectureId": 4,
+        "conditionedUpdate": "exactly G4B except rank is 8",
+        "export": "ordinary materialized architecture-4 network; no A or D tensors in deployed payload",
+        "id": "G4C",
+        "interactionRows": "exactly G4B",
+        "name": "architecture-4-rank-8-ranking-050",
+        "rank": 8,
+        "siblingRankingLossWeight": 0.5
+      }
+    ],
+    "commonTraining": {
+      "activationSettings": "exactly activationControlDevelopmentGrid.activationSettings",
+      "activationStatisticsUseSplit": 0,
+      "adamBeta1": 0.9,
+      "adamBeta2": 0.999,
+      "adamEpsilon": 1e-08,
+      "batchSize": 256,
+      "cpNormalizer": 100,
+      "denseBiasLearningRateScale": 0.1,
+      "denseWeightLearningRateScale": 0.01,
+      "epochs": 48,
+      "huberDeltaNormalized": 2,
+      "learningRate": 0.003,
+      "optimizer": "Adam",
+      "outputLearningRateScale": 0.25,
+      "pointwiseTarget": "clamp(deepScoreCpChildStm - pinnedStaticHceCpChildStm, -2000, 2000)",
+      "qatEpochs": 12,
+      "qatEpochsInclusive": [
+        37,
+        48
+      ],
+      "qatGlobalLearningRateScale": 0.1,
+      "rankingObjective": "exactly top-level rankingObjective",
+      "targetResidualClipCpInclusive": [
+        -2000,
+        2000
+      ],
+      "trainingMayDecodeHeldOutTargets": false
+    },
+    "executionOrder": [
+      "G4A",
+      "G4B",
+      "G4C"
+    ],
+    "generation3ReplayRows": 0,
+    "intermediateCandidateResultsMayStopLaterCandidates": false,
+    "maximumTrainedCandidates": 3
+  },
+  "createdUtc": "2026-07-23T08:15:04.219053Z",
+  "deploymentCompatibility": {
+    "allExportsAreOrdinaryMaterializedRuntimeTables": true,
+    "architecture3": {
+      "architectureId": 3,
+      "featureRows": 48376,
+      "fileBytes": 12392940,
+      "semantics": "king-state-residual"
+    },
+    "architecture4": {
+      "architecture3Rows": 48376,
+      "architectureId": 4,
+      "cppIdentifier": "Architecture_Omega_Interaction_Residual",
+      "featureRows": 48440,
+      "fileBytes": 12409324,
+      "interactionRows": 64,
+      "payloadBytes": 12409252,
+      "pythonIdentifier": "ARCHITECTURE_OMEGA_INTERACTION_RESIDUAL",
+      "rawResidualClampCpInclusive": [
+        -600,
+        600
+      ],
+      "semantics": "omega-interaction-residual"
+    },
+    "commonDimensions": {
+      "accumulatorSize": 128,
+      "activationMaximum": 127,
+      "denseInputSize": 256,
+      "hiddenDivisor": 64,
+      "hiddenSize": 32,
+      "outputDivisor": 64,
+      "pieceCount": 8,
+      "squareCount": 104
+    },
+    "containerMagic": "OMNNUE1",
+    "formatVersion": 1,
+    "latentLowRankFactorsAreNeverDeployed": true,
+    "runtimeSourceChangesAfterFinalFreeze": false
+  },
+  "deploymentHealthGate": {
+    "deadDenseUnitsMayExceedI0": false,
+    "denseActiveFractionRangeInclusive": [
+      0.2,
+      0.75
+    ],
+    "maximumAbsoluteCorrectionCp": 2500,
+    "maximumDeadDenseUnits": 8,
+    "maximumMeanFloatQuantizationPenaltyCp": 2,
+    "maximumSaturatedDenseUnits": 0,
+    "maximumSingleFloatQuantizationPenaltyCp": 10,
+    "metricSubject": "deployment-equivalent float checkpoint reconstructed from the exported quantized network",
+    "requireDeploymentFloatParameterRoundTripExact": true,
+    "requireDeploymentFloatRequantizationByteIdentical": true,
+    "requireExpectedFileSize": true,
+    "requireFinitePredictions": true,
+    "requireRoundTripHash": true,
+    "thresholdsChangedFromGeneration3": false,
+    "wholeCorpusExactPythonCppIntegerAgreement": true,
+    "wholeCorpusMigrationParityForI0": true
+  },
+  "finalFreezeIdentities": {
+    "baseTrainerSource": {
+      "bytes": 124508,
+      "path": "tools/omega_nnue/train.py",
+      "sha256": "ac64a0941c176c0d0b2a9024e31955739635d4e958d5f9fda06394d239e3f1a3"
+    },
+    "bindingRule": "the adjacent final-freeze seal pins this completed preregistration itself; every identity below is embedded in the completed preregistration and reverified by prelabel-freeze before any teacher search",
+    "chessLibAssembly": {
+      "bytes": 248832,
+      "path": "tools/omega_nnue/frozen_runtime/king-state-v4/decision-sampler/ChessLib.dll",
+      "sha256": "16a01414c9f486561aac0b48cebb7c485621d804a73c00803ec0aff55f572f4c"
+    },
+    "children": {
+      "bytes": 149850504,
+      "path": "build-msvc/data-generation/omega-decision-v1/children.jsonl",
+      "sha256": "ff30ab9d9cc1a435f4a01f860d9cca39c73c80d65bd805f3c7a6fe036d95db2c"
+    },
+    "childrenManifest": {
+      "bytes": 2528,
+      "path": "build-msvc/data-generation/omega-decision-v1/children.jsonl.manifest.json",
+      "sha256": "53e813ac12d6007beddc3f2ad27d2c662231491540a967603dcd841c8cdc3e68"
+    },
+    "cppStaticAndNnueEvaluator": {
+      "bytes": 978944,
+      "path": "tools/omega_nnue/frozen_runtime/king-state-v4/evaluator/omega_nnue.exe",
+      "sha256": "271a7ef64c41e3ae79068b06ad51c9b4ba387d5ff03c101ece9dbf2a7de1ff3b"
+    },
+    "decisionSamplerAssembly": {
+      "bytes": 55808,
+      "path": "tools/omega_nnue/frozen_runtime/king-state-v4/decision-sampler/OmegaDecisionSampler.dll",
+      "sha256": "9bcb6c0adaeac372c5976225ec2bd12ecb995a0188656e469fdfd86f9bf89ff7"
+    },
+    "decisionTeacherSource": {
+      "bytes": 202231,
+      "path": "tools/omega_nnue/omega_decision_teacher.py",
+      "sha256": "292633cf7627fbc4b39eb3ce6acb46a9720ebfca00c2264c8402c553da968e3c"
+    },
+    "deepHceV2Source": {
+      "bytes": 148725,
+      "path": "tools/omega_nnue/deep_hce_v2.py",
+      "sha256": "9e9911b0a56191e5209d6276c004cf36a94fe1530eb915baf1ad5a72d32f7702"
+    },
+    "dotnetRuntimeHostExecutable": {
+      "bytes": 167248,
+      "path": "tools/omega_nnue/frozen_runtime/king-state-v4/dotnet-runtime/dotnet.exe",
+      "sha256": "a5ccdc3a41d5e5c6014ff64509aed176db39f4f14caffff3dd1997f8907e94d7"
+    },
+    "dotnetRuntimeManifest": {
+      "bytes": 33633,
+      "path": "tools/omega_nnue/frozen_runtime/king-state-v4/dotnet-runtime.manifest.json",
+      "sha256": "7a47faa8842486d6c74989ff64a639df2fe288705c00e830b7f9831f9c1dc8fe"
+    },
+    "dotnetRuntimeToolSource": {
+      "bytes": 12825,
+      "path": "tools/omega_nnue/king_state_dotnet_runtime_generation4.py",
+      "sha256": "134518ad7e65d7bd28ba1aac9bc856018f8984da3f66f615e436baa310412a61"
+    },
+    "finalFreezeBuilderSource": {
+      "bytes": 13969,
+      "path": "tools/omega_nnue/king_state_generation4_freeze.py",
+      "sha256": "5014eb27deddbd1d059451d250163c63c50b7c4a312f03a3c9500fdcf468a0b6"
+    },
+    "forbiddenPositionCatalogManifests": [
+      {
+        "bytes": 4992,
+        "path": "build-msvc/data-generation/omega-decision-v1/forbidden-positions.jsonl.manifest.json",
+        "sha256": "51d149ef342384bb2843b1060c29d2e77554fb362811fddad4483d093c349b8e"
+      }
+    ],
+    "mappedK2Initializer": {
+      "bytes": 12392940,
+      "path": "build-msvc/king-state-v2/K2.nnue",
+      "sha256": "74cfefdad87ce4e620597f1153bf03aa88b301cf66b2c959700b07e85acafe33"
+    },
+    "mappedK2InitializerManifest": {
+      "bytes": 116217,
+      "path": "build-msvc/king-state-v2/K2.manifest.json",
+      "sha256": "48e0666d6a86bc253d435ee0b42908667dfb200d3cfc27bcbef9dbeced677b99"
+    },
+    "matchCoreSource": {
+      "bytes": 138593,
+      "path": "tools/omega_nnue/king_state_matches.py",
+      "sha256": "c8e9d45452716f468023b7af1607e735a269e131c95bce510dd25849f76d9601"
+    },
+    "matchOrchestrator": {
+      "bytes": 120782,
+      "path": "tools/omega_nnue/king_state_matches_generation4.py",
+      "sha256": "a460d366c7e9c30a42a432bffc17a6e26d7ac2fcb0c3db2cffeddc2d839c4ed5"
+    },
+    "matchProtocol": {
+      "bytes": 11021,
+      "path": "validation/omega-nnue-king-state-v4-match-protocol.json",
+      "sha256": "0345a6025b0c39d418297f1d7605d39a2b9cb7dd6c095e98b53c8c68cf7deb20"
+    },
+    "matchProtocolTool": {
+      "bytes": 54673,
+      "path": "tools/omega_nnue/king_state_match_protocol_generation4.py",
+      "sha256": "0287b816eda86e7cf0b748eec7d128b73ea292f67b76289a1678f83053500a9b"
+    },
+    "matchReadinessTool": {
+      "bytes": 255435,
+      "path": "tools/omega_nnue/king_state_match_readiness_generation4.py",
+      "sha256": "b1a801bb3d5c58bf65681e2a31c4632888ed02c409867809a155967879dc68c5"
+    },
+    "networkFormatPythonSource": {
+      "bytes": 53900,
+      "path": "tools/omega_nnue/omega_nnue.py",
+      "sha256": "efc55715895f32e948db35428372393c711f701f2e84c69256bdf689065422aa"
+    },
+    "networkRuntimeCppSource": {
+      "bytes": 33673,
+      "path": "src/omega_nnue.cpp",
+      "sha256": "2ae510936cc5c88cc52f9ee455afb260d04a94760a7d9594d7fd43311f3b158d"
+    },
+    "networkRuntimeHeaderSource": {
+      "bytes": 9050,
+      "path": "src/omega_nnue.hpp",
+      "sha256": "82fec1fb5289b5cccb4e46994d2331f327da195eef3c67dbbfdf0e6e4abda9ed"
+    },
+    "preregistrationValidatorSource": {
+      "bytes": 77007,
+      "path": "tools/omega_nnue/validate_king_state_v4_preregistration.py",
+      "sha256": "1ad18b1d3b9d4443ff933779aad4442d170fc0880a6b2353b0d274752479e52d"
+    },
+    "priorProjectionSource": {
+      "bytes": 72396,
+      "path": "tools/omega_nnue/king_state_generation4_prior_projection.py",
+      "sha256": "59196d784defe54d3ae031d3d7f637d96adc8bf9f048038f340acbc0b851e24d"
+    },
+    "pythonRuntimeManifest": {
+      "bytes": 4029,
+      "path": "validation/omega-nnue-king-state-v4-python-runtime.json",
+      "sha256": "b664c3b4028e770be72117f01c056a6569f3b771df3492248c3714553843dcac"
+    },
+    "pythonRuntimeToolSource": {
+      "bytes": 13853,
+      "path": "tools/omega_nnue/king_state_generation4_runtime.py",
+      "sha256": "90ccbe722de1343343134bfc5606a0a10afac2a20cf875e41964f87a397703d1"
+    },
+    "rootSamplerAssembly": {
+      "bytes": 57344,
+      "path": "tools/omega_nnue/frozen_runtime/king-state-v4/root-sampler/OmegaRootSampler.dll",
+      "sha256": "4c8e42d59930325ff452c7c381d43245fe7457b9dd28a383bab92b9444b2f1fc"
+    },
+    "roots": {
+      "bytes": 4814846,
+      "path": "build-msvc/data-generation/omega-decision-v1/roots.jsonl",
+      "sha256": "3c7f2dfd453d0f0e9fbadb9deda0a916fd415150796866c2aec82835ea74c240"
+    },
+    "rootsManifest": {
+      "bytes": 12282,
+      "path": "build-msvc/data-generation/omega-decision-v1/roots.jsonl.manifest.json",
+      "sha256": "dc256d902df855a70e4308741e878d972c64d4bc9a887e3d2d4b342957099586"
+    },
+    "selectScreenSource": {
+      "bytes": 39442,
+      "path": "tools/omega_nnue/select_screen.py",
+      "sha256": "304172e583b4c963718191017b4f8d2426aea325dd42337c197496ee738677ee"
+    },
+    "sourceEvents": {
+      "bytes": 92477081,
+      "path": "build-msvc/data-generation/omega-decision-v1/source/events.jsonl",
+      "sha256": "d13b23a3376085f8ffb29015d0ae14082205cf057cc905dd33b550a3ffcf50e4"
+    },
+    "sourceMatchConfig": {
+      "bytes": 1821,
+      "path": "build-msvc/data-generation/omega-decision-v1/source/source-match.json",
+      "sha256": "2abfcbf9b6a34ad05ee872b28ef924c501c47c61f5f9cf9592fa98db03dd0354"
+    },
+    "sourceMatchHarnessAssembly": {
+      "bytes": 166400,
+      "path": "tools/omega_nnue/frozen_runtime/king-state-v4/omegamatch/OmegaMatch.dll",
+      "sha256": "c51e4733c888bec97f5b1582379e16ecefe4c74537a8fabd2b0fcafd88ef2e6d"
+    },
+    "sourceOpeningBuilderSource": {
+      "bytes": 55033,
+      "path": "tools/omega_nnue/king_state_generation4_source.py",
+      "sha256": "d61fe8c3fbca4a34fcff55611c6aee6c394e1f4c34529426bdb8d71334c5821a"
+    },
+    "sourceOpeningSuite": {
+      "bytes": 1477311,
+      "path": "build-msvc/data-generation/omega-decision-v1/source/openings.json",
+      "sha256": "422d1e7f77ebb45be550bb59a08ce35db50430a5fcd26182a507bf5ae4e8216f"
+    },
+    "sourceRootPool": {
+      "bytes": 135436321,
+      "path": "build-msvc/data-generation/omega-decision-v1/source/rules-only-pool.jsonl",
+      "sha256": "5ecd1b3fb9269ff2c857da970ea9e99b19668ee602f12016c052a2f950d3fde9"
+    },
+    "sourceRootPoolManifest": {
+      "bytes": 2458,
+      "path": "build-msvc/data-generation/omega-decision-v1/source/rules-only-pool.jsonl.manifest.json",
+      "sha256": "9c85475265b4b47d69cefc373091ba3b41a8ecc38acfb6824a93b51dd73e94a7"
+    },
+    "sourceRootPoolSeal": {
+      "bytes": 1542,
+      "path": "build-msvc/data-generation/omega-decision-v1/source/rules-only-pool.jsonl.complete.seal.json",
+      "sha256": "cd38b08cd699c96e0e39e21751a5b82568f4e26fa3dc5374dcff7e52dc8f483b"
+    },
+    "teacherEngineExecutable": {
+      "bytes": 624128,
+      "path": "tools/omega_nnue/frozen_runtime/king-state-v4/engine/senpai.exe",
+      "sha256": "a7a3e905c1f44cc32eba622615e6f0d29d5b236735de623ca87d42ef9116b1de"
+    },
+    "trainerSource": {
+      "bytes": 225278,
+      "path": "tools/omega_nnue/king_state_train_generation4.py",
+      "sha256": "69b3c0fdc642df069615cc0f1728ee7289eba56daf0248f4c868d22fdab80539"
+    }
+  },
+  "freshDecisionCorpus": {
+    "artifactPolicy": {
+      "everyArtifactHasANoClobberManifest": true,
+      "finalStageSealIsThePublicationCommitPoint": true,
+      "manifestsPinPathBytesSha256RowCountAndProducerIdentity": true,
+      "publishedDatasetsUseAtomicNonReplacingRename": true,
+      "resultLedgersAreAppendOnlyAndFsynced": true
+    },
+    "artifacts": [
+      "roots.jsonl",
+      "children.jsonl",
+      "shallow-results.jsonl",
+      "selected-children.jsonl",
+      "deep-results.jsonl",
+      "decision-labels.jsonl"
+    ],
+    "deepSelection": {
+      "hardNegativeRule": "one deterministic sibling sampled from shallow ranks 4 through 12 inclusive using siblingExploration seed; if fewer than twelve exist use every available rank in that interval; if the interval is empty reject the root",
+      "principalVariationChildIncludedWhenAvailable": true,
+      "selectedChildrenPerRoot": 4,
+      "selectionUsesDeepTargets": false,
+      "selectionUsesGameOutcome": false,
+      "seriousCandidateRule": "best shallow-ranked distinct legal children until the principal-variation child plus serious set contains three children",
+      "seriousCandidates": 3
+    },
+    "deepTeacher": {
+      "acceptExactCpOnly": true,
+      "appendOnlyFsyncedLedger": true,
+      "fixedNodesPerSelectedChild": 50000,
+      "preLabelSealRequired": true,
+      "rejectBoundScores": true,
+      "rejectMateScores": true,
+      "rejectShortNodeSearches": true,
+      "wholeRootRejectedIfAnySelectedChildIsMissingOrInvalid": true
+    },
+    "leakageComponent": {
+      "crossComponentConservativeOrbitCollisions": 0,
+      "crossComponentExactOfenCollisions": 0,
+      "mustUnify": [
+        "all selected siblings from one root",
+        "all ancestors and descendants from one source trajectory",
+        "all roots from one source game",
+        "all exact transpositions",
+        "all conservative Omega symmetry-orbit equivalents"
+      ],
+      "unit": "global decision component id"
+    },
+    "legalChildExpansion": {
+      "childIdentityCollisionPolicy": "abort",
+      "enumerateEveryLegalChildExactlyOnce": true,
+      "legalityMustMatchPinnedChessLib": true,
+      "missingOrExtraChildPolicy": "abort"
+    },
+    "rootQuota": {
+      "completeRoots": 4096,
+      "completeRootsPerPhase": 1024,
+      "maximumCandidateRoots": 5120,
+      "phasesInFrozenOrder": [
+        "opening",
+        "middlegame",
+        "late",
+        "endgame"
+      ],
+      "reserveFraction": 0.2,
+      "reserveRootsPerPhase": 256
+    },
+    "shallowScreen": {
+      "acceptExactCpOnly": true,
+      "appendOnlyFsyncedLedger": true,
+      "fixedNodesPerChild": 2000,
+      "preLabelSealRequired": true,
+      "rejectBoundScores": true,
+      "rejectMateScores": true,
+      "rejectShortNodeSearches": true
+    },
+    "source": {
+      "atMostOneRootPerOpeningSourceGroup": true,
+      "choiceProbe": {
+        "absoluteMaximumPliesPerGame": 1,
+        "colorSwappedGamesPerOpening": 2,
+        "completeAbBaPairRequiredForEveryAcceptedOpening": true,
+        "exactlyOnePlyRequiredForEveryAcceptedGame": true,
+        "fixedNodesPerMove": 2000,
+        "sameFrozenHceBinaryForBothEngineIds": true,
+        "sourceOpeningSuiteAndHarnessBundleHashesMustMatchRunRecord": true
+      },
+      "colorSwappedGamesFromOneOpeningAreOneSourceGroup": true,
+      "duplicateExactOrOrbitPositionsAcrossDifferentSourceGroups": "abort",
+      "duplicatesInsideOneOpeningGroupAreDeterministicallyCollapsed": true,
+      "freshRunRequired": true,
+      "hceOnly": true,
+      "requiredDataProfile": "omega-decision-v1",
+      "requiredEngineSha256MustBeExplicit": true,
+      "requiredRunSeed": 2026072201,
+      "rootSelectionMayReadTargetsOrScores": false,
+      "rootSelectionUsesSeed": 2026072202,
+      "rulesOnlyOpeningPool": {
+        "atMostOneOpeningPerTrajectoryPair": true,
+        "captureSelectionPercent": 72,
+        "crossPairDuplicateExclusion": {
+          "mustBeRecomputedFromPinnedRawPool": true,
+          "policy": "exclude-all-copies-before-pair-assignment"
+        },
+        "generatorSeed": 2026072201,
+        "independentTrajectoriesPerPair": 2,
+        "maximumPliesPerTrajectory": 220,
+        "positionsRetainedPerPhaseAndSide": 2,
+        "selectedOpeningContract": {
+          "initialOfensCanonicalAndUnique": true,
+          "movesExactlyEmpty": true,
+          "trajectoryPairTagsUnique": true
+        },
+        "selectedOpeningsPerPhaseAndSide": 800,
+        "selectionReadsEvaluationTargetsOrScores": false,
+        "trajectoryPairs": 8192,
+        "workers": 4
+      },
+      "sourceGameIsAnIndivisibleLeakageComponent": true,
+      "sourceGamesMustBeAbsentFromEveryPriorNnueCorpus": true
+    },
+    "split": {
+      "collisionPolicy": "abort",
+      "componentAndSplitMapFrozenBeforeFirstTeacherSearch": true,
+      "everyPhaseMustBeNonemptyInEverySplit": true,
+      "finalizerMustReuseExactPreLabelMap": true,
+      "heldOutPercent": 10,
+      "namesInFrozenOrder": [
+        "train",
+        "validation",
+        "heldOut"
+      ],
+      "routeWholeSourceGameTogether": true,
+      "seed": 2026072204,
+      "trainPercent": 80,
+      "unit": "whole global decision component id",
+      "validationPercent": 10
+    },
+    "teacherEngine": {
+      "HashMiB": 128,
+      "OmegaNNUEFile": "<empty>",
+      "OwnBook": false,
+      "Ponder": false,
+      "Threads": 1,
+      "UCI_Variant": "omega",
+      "UseOmegaNNUE": false,
+      "sameFrozenHceExecutableForEverySearch": true
+    },
+    "teacherSearchRuntime": {
+      "clearHashBeforeEveryChild": true,
+      "onePersistentUciProcessPerWorker": true,
+      "restartWorkerProcessAfterAnyProtocolOrSearchError": true,
+      "uciNewGameBeforeEveryChild": true,
+      "workerCountAndSessionPolicyPinnedInEveryLedgerLock": true,
+      "workers": 4
+    }
+  },
+  "generation3Closure": {
+    "bytes": 24919,
+    "path": "validation/omega-nnue-king-state-v3-closure.json",
+    "sha256": "a9876f77975fe60c1b7de779e09ba27e93be9980254c6f41b05cbb7786429e81"
+  },
+  "healthFirstCheckpointSelection": {
+    "candidateCheckpointEligibleEpochs": "QAT epochs 37 through 48 only",
+    "candidateWithNoHealthPassingCheckpoint": "ineligible",
+    "healthMayReadTargetFields": false,
+    "healthThresholds": "exactly deploymentHealthGate",
+    "lowerValidationLossMayOverrideFailedHealth": false,
+    "runEveryEpochThrough48": true,
+    "step1": "export and reconstruct the deployment-equivalent checkpoint, then evaluate every deployment-health check using target-opaque feature rows",
+    "step2": "discard the checkpoint before validation target access unless every deployment-health check passes",
+    "step3": "among health-passing checkpoints only, compute the frozen common split-1 metric and retain the lowest loss; exact ties retain the earliest epoch"
+  },
+  "immutability": {
+    "activationPenaltyStrengthsMayBeChosenAfterGeneration4TargetsExist": false,
+    "activationPenaltyStrengthsMustComeOnlyFromFrozenDevelopmentGrid": true,
+    "candidateArchitectureAndRankMatrixMayChangeAfterTemplate": false,
+    "dataNamespacesSeedsQuotasAndAbortGatesMayChangeAfterTemplate": false,
+    "deploymentHealthThresholdsMayChangeAfterTemplate": false,
+    "failedGenerationRequiresSeparateFreshProfileNamespacesAndSeeds": true,
+    "finalFreezeMustPinEveryPlaceholderAndImplementationIdentity": true,
+    "finalFreezeRequiredBeforeAnyGeneration4TeacherLabel": true,
+    "runnerUpFallbackAfterHeldOutOrMatchAccess": false,
+    "thisTemplateIsAnExecutablePreregistration": false
+  },
+  "informationBoundary": {
+    "allowedGeneration3Evidence": [
+      "aggregate split-1 validation metrics",
+      "aggregate deployment-health metrics",
+      "target-opaque feature metadata",
+      "candidate artifact identities and failure status"
+    ],
+    "generation3HeldOutMetricsAvailableToThisDesign": false,
+    "generation3HeldOutTargetsAvailableToThisDesign": false,
+    "generation3MatchResultsAvailableToThisDesign": false,
+    "generation4HeldOutTargetsAvailableAtFinalFreeze": false,
+    "generation4TeacherTargetsAvailableAtFinalFreeze": false,
+    "generation4ValidationTargetsAvailableAtFinalFreeze": false,
+    "heldOutTargetsMaySelectRecipe": false,
+    "matchResultsMaySelectRecipe": false
+  },
+  "initializer": {
+    "architecture4Migration": {
+      "copyAll48376Architecture3RowsExactly": true,
+      "epochZeroPredictionsMustMatchK2ExactlyOnWholeFeatureCorpus": true,
+      "initializeAll64InteractionRowsToZero": true,
+      "migrationRoundTripAndPythonCppParityRequired": true
+    },
+    "generation3CandidateWeightsMayInitializeGeneration4": false,
+    "generation3CorpusReplayRows": 0,
+    "id": "K2-mapped",
+    "optimizerMomentsReset": true,
+    "resolutionMustBePinnedBeforeAnyGeneration4TeacherLabel": true,
+    "source": "the exact generation-2 K2 validation-selected quantized network, deterministically mapped into architecture 4"
+  },
+  "kind": "omega-nnue-king-state-v4-preregistration",
+  "namespaces": {
+    "candidateBundles": {
+      "G4A": "build-msvc/king-state-v4/G4A.bundle",
+      "G4B": "build-msvc/king-state-v4/G4B.bundle",
+      "G4C": "build-msvc/king-state-v4/G4C.bundle"
+    },
+    "dataProfile": "omega-decision-v1",
+    "dataRoot": "build-msvc/data-generation/omega-decision-v1",
+    "developmentGridRoot": "build-msvc/king-state-v4-development",
+    "finalFreezeSeal": "validation/omega-nnue-king-state-v4-freeze.seal.json",
+    "finalPreregistration": "validation/omega-nnue-king-state-v4-preregistration.json",
+    "matchRoot": "build-king-state-v4/matches",
+    "matchStages": {
+      "development": "build-king-state-v4/matches/development",
+      "equalNode": "build-king-state-v4/matches/equal-node",
+      "equalTime": "build-king-state-v4/matches/equal-time"
+    },
+    "offlineAccessClaim": "build-msvc/king-state-v4/offline/access-claim.json",
+    "offlineReport": "build-msvc/king-state-v4/offline/report.json",
+    "offlineRoot": "build-msvc/king-state-v4/offline",
+    "preLabelSeal": "build-msvc/data-generation/omega-decision-v1/prelabel-freeze.seal.json",
+    "robustnessBundle": "build-msvc/king-state-v4/robustness.bundle",
+    "robustnessClaim": "build-msvc/king-state-v4/.robustness.training.claim.json",
+    "robustnessFailure": "build-msvc/king-state-v4/robustness.failure.json",
+    "robustnessSeal": "build-msvc/king-state-v4/robustness.seal.json",
+    "selectionSeal": "build-msvc/king-state-v4/validation-selection.seal.json",
+    "trainingRoot": "build-msvc/king-state-v4"
+  },
+  "postSelection": {
+    "matches": {
+      "development": "paired fixed-root safety gate",
+      "equalNode": "paired sequential strength gate",
+      "equalTime": "paired serialized practical-strength gate",
+      "formalPromotionRuleMustBePinnedBeforeMatchLaunch": true,
+      "matchSeed": 2026072208,
+      "rootAndSourceGameDisjointFromTrainValidationHeldOut": true,
+      "zeroIllegalMovesPvsProtocolFailuresTimeForfeitsOrAbandonedAttempts": true
+    },
+    "oneTimeHeldOut": {
+      "accessClaim": "build-msvc/king-state-v4/offline/access-claim.json",
+      "accessClaimMustBeAtomicallyPublishedBeforeTargetDecode": true,
+      "bootstrapMetric": "phase-macro group-balanced Huber loss",
+      "bootstrapOneSidedConfidenceLevel": 0.95,
+      "bootstrapQuantile": 0.05,
+      "bootstrapQuantileMethod": "linear",
+      "bootstrapReplicates": 10000,
+      "bootstrapResamplingUnit": "whole four-child root",
+      "bootstrapRng": "NumPy Generator PCG64",
+      "bootstrapSeed": 2026072207,
+      "bootstrapStatistic": "(I0 phase-macro group-balanced Huber - candidate) / I0",
+      "bootstrapStratification": "phase in frozen opening,middlegame,late,endgame order",
+      "lowerConfidenceBoundMustBePositive": true,
+      "maximumAnyPhaseCpMaeRegressionVersusI0": 5,
+      "minimumPhaseMacroCpMaeImprovementVersusI0": 2,
+      "minimumRelativeHuberImprovementAgainstI0": 0.01,
+      "minimumRelativeHuberImprovementAgainstZeroResidual": 0.01,
+      "onlySelectedPrimaryNetworkIsEvaluated": true,
+      "passedRobustnessSealRequired": true,
+      "report": "build-msvc/king-state-v4/offline/report.json",
+      "resumePolicy": "reuse the canonical immutable access claim after interruption; never publish a second claim",
+      "robustnessNetworkHeldOutTargetEvaluations": 0,
+      "runnerUpFallback": false,
+      "runnerUpNetworkHeldOutTargetEvaluations": 0,
+      "selectedCandidateOnly": true
+    },
+    "robustness": {
+      "commonValidationGate": "strictly lower phase-macro group-balanced quantized residual Huber loss than both I0 and zero residual",
+      "factorBasis": "exact selected-candidate factor-basis bytes already sealed in the pre-target training plan",
+      "initializer": "mapped K2 architecture-4 migration I0",
+      "mayReplaceSelectedPrimary": false,
+      "mustPassDeploymentHealth": true,
+      "outputs": {
+        "bundle": "build-msvc/king-state-v4/robustness.bundle",
+        "claim": "build-msvc/king-state-v4/.robustness.training.claim.json",
+        "failure": "build-msvc/king-state-v4/robustness.failure.json",
+        "seal": "build-msvc/king-state-v4/robustness.seal.json"
+      },
+      "publication": "exclusive no-clobber files and atomically renamed complete bundle; interrupted claim or committed artifacts are preserved",
+      "requiredBeforeHeldOut": true,
+      "runAll48EpochsWithIdenticalHealthFirstCheckpointing": true,
+      "selectedValidationWinnerRecipeOnly": true,
+      "trainingSeedBase": 2026072206,
+      "trainingSeedDerivation": "SHA-256 of UTF-8 '<base-seed>|<purpose>|<candidate-id>|<rank>'; first eight digest bytes interpreted as unsigned little-endian",
+      "trainingSeedPurpose": "robustness-training"
+    }
+  },
+  "preLabelAbortGates": {
+    "auditMoment": "after target-opaque root and child freeze, before the first shallow or deep teacher search",
+    "enforcement": {
+      "finalPreregistrationAndFreezeSealReverifiedBeforeEveryTeacherProcessStarts": true,
+      "preLabelFreezeSealIdentityIncludedInEveryShallowAndDeepLock": true,
+      "preLabelFreezeSealMustExistBeforeRunShallow": true
+    },
+    "failureAction": {
+      "abortBeforeTeacherSearch": true,
+      "mayChangeAnySeedInsideThisProfile": false,
+      "mayChangeQuotaInsideThisProfile": false,
+      "mayInspectTargetsToRepairFailure": false,
+      "requiredFallback": "new profile id, namespaces, seeds, data freeze, and candidate freeze"
+    },
+    "requiredChecks": {
+      "childIdCollisions": 0,
+      "crossSplitComponentCollisions": 0,
+      "crossSplitConservativeOrbitCollisions": 0,
+      "crossSplitExactPositionCollisions": 0,
+      "crossSplitSourceGameCollisions": 0,
+      "duplicateRootIds": 0,
+      "everyPhaseNonemptyInEverySplit": true,
+      "invalidSixFieldOfens": 0,
+      "legalExpansionCompleteAgainstPinnedManifest": true,
+      "phaseQuotaAndReserveInventoryExactlyMatchesPreregistration": true,
+      "priorExactPositionCollisions": 0,
+      "priorOfflineOrMatchRootOrbitCollisions": 0,
+      "priorSourceGameIdCollisions": 0,
+      "priorSourceInputSha256Collisions": 0,
+      "priorSourceRunIdCollisions": 0,
+      "sourceRunIsFreshAndHceOnly": true,
+      "targetOrScoreFieldsDecoded": 0,
+      "targetOrScoreFieldsEmitted": 0
+    },
+    "requiredPinnedIdentities": [
+      "source telemetry",
+      "source input",
+      "root sampler",
+      "sibling selector",
+      "ChessLib legality implementation",
+      "frozen HCE teacher executable",
+      "network-format implementation",
+      "trainer implementation",
+      "frozen Python and NumPy runtime manifest",
+      "this final preregistration and validator"
+    ],
+    "requiredTargetOpaqueInputs": {
+      "componentSplitMap": "computed from the complete target-opaque root and legal-child inventory before any search",
+      "finalFreezeSeal": "pins the final preregistration, validator, implementations, source telemetry, roots, children, teacher, and trainer",
+      "priorForbiddenPositionCatalogManifests": "one or more explicit catalog manifests; catalogs may contain only recognized source identifiers and exact/conservative position signatures and may not contain target, score, result, or outcome fields"
+    }
+  },
+  "profileId": "king-state-v4-omega-decision-v1",
+  "purpose": "Train three deployment-materialized architecture-4 candidates on a fresh Omega decision corpus, compare preregistered low-rank and sibling-ranking weights, select health-first on validation, and authorize held-out or match access only after one candidate passes every unchanged safety and validation gate.",
+  "rankingObjective": {
+    "cpNormalizer": 100,
+    "decisionGroup": "exactly four siblings from one root, kept together in every optimizer batch",
+    "gapIgnoreBelowCp": 20,
+    "huberDeltaNormalized": 2,
+    "loss": "Huber regression of student root-preference gap against capped teacher root-side gap",
+    "normalization": "mean eligible best-versus-child pairs inside each root, then mean eligible roots inside the complete-root batch, then multiply by the candidate siblingRankingLossWeight",
+    "pairConstruction": "teacher-best child versus each non-best sibling whose uncapped teacher root-side gap is at least 20 cp",
+    "rootWithNoEligiblePair": "contributes pointwise loss but zero ranking loss",
+    "staticHcePolicy": {
+      "computeLazilyWithPinnedCppEvaluatorMode": "--evaluate-handcrafted-stream",
+      "heldOutRowsMayNeverBeJsonDecodedDuringTrainingOrSelection": true,
+      "labelsDoNotEmbedStaticHce": true,
+      "trainingSplitMayBeDecodedDuringTraining": true,
+      "validationStaticHceMayBeComputedOnlyAfterAHealthPassingCheckpoint": true
+    },
+    "studentChildScorePerspective": "side to move in the child OFEN",
+    "studentChildTotalCp": "pinned static HCE child-side score plus NNUE residual prediction",
+    "studentRootPreferenceGap": "studentChildTotalCp(other) minus studentChildTotalCp(best), equal to rootScore(best) minus rootScore(other)",
+    "teacherGapCapCp": 600,
+    "teacherScorePerspective": "root side to move"
+  },
+  "schemaVersion": 1,
+  "seeds": {
+    "candidateTrainingSeedPurpose": "candidate-training",
+    "componentSplit": 2026072204,
+    "developmentGridSeedPurpose": "activation-development-grid",
+    "domainSeparation": "SHA-256 of UTF-8 '<base-seed>|<purpose>|<candidate-id>|<rank>'; first eight digest bytes interpreted as unsigned little-endian",
+    "factorBasisSeedPurpose": "factor-basis",
+    "match": 2026072208,
+    "offlineBootstrap": 2026072207,
+    "robustnessTrainingSeedPurpose": "robustness-training",
+    "rootSample": 2026072202,
+    "siblingExploration": 2026072203,
+    "source": 2026072201,
+    "teacher": 2026072205,
+    "training": 2026072206
+  },
+  "status": "target-blind-generation-4-design-frozen-before-teacher-labels",
+  "validationSelection": {
+    "commonMetric": "phase-macro group-balanced quantized residual Huber loss on split 1",
+    "eligibility": {
+      "maximumAnyPhaseCpMaeRegressionVersusI0": 5,
+      "minimumRelativeHuberImprovementOverI0": 0.005,
+      "mustHaveLowerHuberLossThanZeroResidual": true,
+      "mustLowerPhaseMacroCpMaeVersusI0": true,
+      "mustPassEveryDeploymentHealthGate": true
+    },
+    "ifNoneEligible": "close generation without robustness, held-out, or match access",
+    "tiePriority": [
+      "G4B",
+      "G4C",
+      "G4A"
+    ],
+    "tieRelativeLoss": 0.0025,
+    "validationMaySelectActivationPenaltyStrength": false,
+    "winner": "eligible candidate with the lowest common validation loss"
+  }
+}

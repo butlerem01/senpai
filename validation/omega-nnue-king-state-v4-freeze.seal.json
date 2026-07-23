@@ -1,0 +1,235 @@
+{
+  "createdUtc": "2026-07-23T08:15:04.219053Z",
+  "declaration": {
+    "generation4HeldOutTargetsDecoded": 0,
+    "generation4TeacherTargetsDecoded": 0,
+    "generation4ValidationTargetsDecoded": 0,
+    "teacherSearchesPresentAtFreeze": false
+  },
+  "finalFreezeIdentities": {
+    "baseTrainerSource": {
+      "bytes": 124508,
+      "path": "tools/omega_nnue/train.py",
+      "sha256": "ac64a0941c176c0d0b2a9024e31955739635d4e958d5f9fda06394d239e3f1a3"
+    },
+    "bindingRule": "the adjacent final-freeze seal pins this completed preregistration itself; every identity below is embedded in the completed preregistration and reverified by prelabel-freeze before any teacher search",
+    "chessLibAssembly": {
+      "bytes": 248832,
+      "path": "tools/omega_nnue/frozen_runtime/king-state-v4/decision-sampler/ChessLib.dll",
+      "sha256": "16a01414c9f486561aac0b48cebb7c485621d804a73c00803ec0aff55f572f4c"
+    },
+    "children": {
+      "bytes": 149850504,
+      "path": "build-msvc/data-generation/omega-decision-v1/children.jsonl",
+      "sha256": "ff30ab9d9cc1a435f4a01f860d9cca39c73c80d65bd805f3c7a6fe036d95db2c"
+    },
+    "childrenManifest": {
+      "bytes": 2528,
+      "path": "build-msvc/data-generation/omega-decision-v1/children.jsonl.manifest.json",
+      "sha256": "53e813ac12d6007beddc3f2ad27d2c662231491540a967603dcd841c8cdc3e68"
+    },
+    "cppStaticAndNnueEvaluator": {
+      "bytes": 978944,
+      "path": "tools/omega_nnue/frozen_runtime/king-state-v4/evaluator/omega_nnue.exe",
+      "sha256": "271a7ef64c41e3ae79068b06ad51c9b4ba387d5ff03c101ece9dbf2a7de1ff3b"
+    },
+    "decisionSamplerAssembly": {
+      "bytes": 55808,
+      "path": "tools/omega_nnue/frozen_runtime/king-state-v4/decision-sampler/OmegaDecisionSampler.dll",
+      "sha256": "9bcb6c0adaeac372c5976225ec2bd12ecb995a0188656e469fdfd86f9bf89ff7"
+    },
+    "decisionTeacherSource": {
+      "bytes": 202231,
+      "path": "tools/omega_nnue/omega_decision_teacher.py",
+      "sha256": "292633cf7627fbc4b39eb3ce6acb46a9720ebfca00c2264c8402c553da968e3c"
+    },
+    "deepHceV2Source": {
+      "bytes": 148725,
+      "path": "tools/omega_nnue/deep_hce_v2.py",
+      "sha256": "9e9911b0a56191e5209d6276c004cf36a94fe1530eb915baf1ad5a72d32f7702"
+    },
+    "dotnetRuntimeHostExecutable": {
+      "bytes": 167248,
+      "path": "tools/omega_nnue/frozen_runtime/king-state-v4/dotnet-runtime/dotnet.exe",
+      "sha256": "a5ccdc3a41d5e5c6014ff64509aed176db39f4f14caffff3dd1997f8907e94d7"
+    },
+    "dotnetRuntimeManifest": {
+      "bytes": 33633,
+      "path": "tools/omega_nnue/frozen_runtime/king-state-v4/dotnet-runtime.manifest.json",
+      "sha256": "7a47faa8842486d6c74989ff64a639df2fe288705c00e830b7f9831f9c1dc8fe"
+    },
+    "dotnetRuntimeToolSource": {
+      "bytes": 12825,
+      "path": "tools/omega_nnue/king_state_dotnet_runtime_generation4.py",
+      "sha256": "134518ad7e65d7bd28ba1aac9bc856018f8984da3f66f615e436baa310412a61"
+    },
+    "finalFreezeBuilderSource": {
+      "bytes": 13969,
+      "path": "tools/omega_nnue/king_state_generation4_freeze.py",
+      "sha256": "5014eb27deddbd1d059451d250163c63c50b7c4a312f03a3c9500fdcf468a0b6"
+    },
+    "forbiddenPositionCatalogManifests": [
+      {
+        "bytes": 4992,
+        "path": "build-msvc/data-generation/omega-decision-v1/forbidden-positions.jsonl.manifest.json",
+        "sha256": "51d149ef342384bb2843b1060c29d2e77554fb362811fddad4483d093c349b8e"
+      }
+    ],
+    "mappedK2Initializer": {
+      "bytes": 12392940,
+      "path": "build-msvc/king-state-v2/K2.nnue",
+      "sha256": "74cfefdad87ce4e620597f1153bf03aa88b301cf66b2c959700b07e85acafe33"
+    },
+    "mappedK2InitializerManifest": {
+      "bytes": 116217,
+      "path": "build-msvc/king-state-v2/K2.manifest.json",
+      "sha256": "48e0666d6a86bc253d435ee0b42908667dfb200d3cfc27bcbef9dbeced677b99"
+    },
+    "matchCoreSource": {
+      "bytes": 138593,
+      "path": "tools/omega_nnue/king_state_matches.py",
+      "sha256": "c8e9d45452716f468023b7af1607e735a269e131c95bce510dd25849f76d9601"
+    },
+    "matchOrchestrator": {
+      "bytes": 120782,
+      "path": "tools/omega_nnue/king_state_matches_generation4.py",
+      "sha256": "a460d366c7e9c30a42a432bffc17a6e26d7ac2fcb0c3db2cffeddc2d839c4ed5"
+    },
+    "matchProtocol": {
+      "bytes": 11021,
+      "path": "validation/omega-nnue-king-state-v4-match-protocol.json",
+      "sha256": "0345a6025b0c39d418297f1d7605d39a2b9cb7dd6c095e98b53c8c68cf7deb20"
+    },
+    "matchProtocolTool": {
+      "bytes": 54673,
+      "path": "tools/omega_nnue/king_state_match_protocol_generation4.py",
+      "sha256": "0287b816eda86e7cf0b748eec7d128b73ea292f67b76289a1678f83053500a9b"
+    },
+    "matchReadinessTool": {
+      "bytes": 255435,
+      "path": "tools/omega_nnue/king_state_match_readiness_generation4.py",
+      "sha256": "b1a801bb3d5c58bf65681e2a31c4632888ed02c409867809a155967879dc68c5"
+    },
+    "networkFormatPythonSource": {
+      "bytes": 53900,
+      "path": "tools/omega_nnue/omega_nnue.py",
+      "sha256": "efc55715895f32e948db35428372393c711f701f2e84c69256bdf689065422aa"
+    },
+    "networkRuntimeCppSource": {
+      "bytes": 33673,
+      "path": "src/omega_nnue.cpp",
+      "sha256": "2ae510936cc5c88cc52f9ee455afb260d04a94760a7d9594d7fd43311f3b158d"
+    },
+    "networkRuntimeHeaderSource": {
+      "bytes": 9050,
+      "path": "src/omega_nnue.hpp",
+      "sha256": "82fec1fb5289b5cccb4e46994d2331f327da195eef3c67dbbfdf0e6e4abda9ed"
+    },
+    "preregistrationValidatorSource": {
+      "bytes": 77007,
+      "path": "tools/omega_nnue/validate_king_state_v4_preregistration.py",
+      "sha256": "1ad18b1d3b9d4443ff933779aad4442d170fc0880a6b2353b0d274752479e52d"
+    },
+    "priorProjectionSource": {
+      "bytes": 72396,
+      "path": "tools/omega_nnue/king_state_generation4_prior_projection.py",
+      "sha256": "59196d784defe54d3ae031d3d7f637d96adc8bf9f048038f340acbc0b851e24d"
+    },
+    "pythonRuntimeManifest": {
+      "bytes": 4029,
+      "path": "validation/omega-nnue-king-state-v4-python-runtime.json",
+      "sha256": "b664c3b4028e770be72117f01c056a6569f3b771df3492248c3714553843dcac"
+    },
+    "pythonRuntimeToolSource": {
+      "bytes": 13853,
+      "path": "tools/omega_nnue/king_state_generation4_runtime.py",
+      "sha256": "90ccbe722de1343343134bfc5606a0a10afac2a20cf875e41964f87a397703d1"
+    },
+    "rootSamplerAssembly": {
+      "bytes": 57344,
+      "path": "tools/omega_nnue/frozen_runtime/king-state-v4/root-sampler/OmegaRootSampler.dll",
+      "sha256": "4c8e42d59930325ff452c7c381d43245fe7457b9dd28a383bab92b9444b2f1fc"
+    },
+    "roots": {
+      "bytes": 4814846,
+      "path": "build-msvc/data-generation/omega-decision-v1/roots.jsonl",
+      "sha256": "3c7f2dfd453d0f0e9fbadb9deda0a916fd415150796866c2aec82835ea74c240"
+    },
+    "rootsManifest": {
+      "bytes": 12282,
+      "path": "build-msvc/data-generation/omega-decision-v1/roots.jsonl.manifest.json",
+      "sha256": "dc256d902df855a70e4308741e878d972c64d4bc9a887e3d2d4b342957099586"
+    },
+    "selectScreenSource": {
+      "bytes": 39442,
+      "path": "tools/omega_nnue/select_screen.py",
+      "sha256": "304172e583b4c963718191017b4f8d2426aea325dd42337c197496ee738677ee"
+    },
+    "sourceEvents": {
+      "bytes": 92477081,
+      "path": "build-msvc/data-generation/omega-decision-v1/source/events.jsonl",
+      "sha256": "d13b23a3376085f8ffb29015d0ae14082205cf057cc905dd33b550a3ffcf50e4"
+    },
+    "sourceMatchConfig": {
+      "bytes": 1821,
+      "path": "build-msvc/data-generation/omega-decision-v1/source/source-match.json",
+      "sha256": "2abfcbf9b6a34ad05ee872b28ef924c501c47c61f5f9cf9592fa98db03dd0354"
+    },
+    "sourceMatchHarnessAssembly": {
+      "bytes": 166400,
+      "path": "tools/omega_nnue/frozen_runtime/king-state-v4/omegamatch/OmegaMatch.dll",
+      "sha256": "c51e4733c888bec97f5b1582379e16ecefe4c74537a8fabd2b0fcafd88ef2e6d"
+    },
+    "sourceOpeningBuilderSource": {
+      "bytes": 55033,
+      "path": "tools/omega_nnue/king_state_generation4_source.py",
+      "sha256": "d61fe8c3fbca4a34fcff55611c6aee6c394e1f4c34529426bdb8d71334c5821a"
+    },
+    "sourceOpeningSuite": {
+      "bytes": 1477311,
+      "path": "build-msvc/data-generation/omega-decision-v1/source/openings.json",
+      "sha256": "422d1e7f77ebb45be550bb59a08ce35db50430a5fcd26182a507bf5ae4e8216f"
+    },
+    "sourceRootPool": {
+      "bytes": 135436321,
+      "path": "build-msvc/data-generation/omega-decision-v1/source/rules-only-pool.jsonl",
+      "sha256": "5ecd1b3fb9269ff2c857da970ea9e99b19668ee602f12016c052a2f950d3fde9"
+    },
+    "sourceRootPoolManifest": {
+      "bytes": 2458,
+      "path": "build-msvc/data-generation/omega-decision-v1/source/rules-only-pool.jsonl.manifest.json",
+      "sha256": "9c85475265b4b47d69cefc373091ba3b41a8ecc38acfb6824a93b51dd73e94a7"
+    },
+    "sourceRootPoolSeal": {
+      "bytes": 1542,
+      "path": "build-msvc/data-generation/omega-decision-v1/source/rules-only-pool.jsonl.complete.seal.json",
+      "sha256": "cd38b08cd699c96e0e39e21751a5b82568f4e26fa3dc5374dcff7e52dc8f483b"
+    },
+    "teacherEngineExecutable": {
+      "bytes": 624128,
+      "path": "tools/omega_nnue/frozen_runtime/king-state-v4/engine/senpai.exe",
+      "sha256": "a7a3e905c1f44cc32eba622615e6f0d29d5b236735de623ca87d42ef9116b1de"
+    },
+    "trainerSource": {
+      "bytes": 225278,
+      "path": "tools/omega_nnue/king_state_train_generation4.py",
+      "sha256": "69b3c0fdc642df069615cc0f1728ee7289eba56daf0248f4c868d22fdab80539"
+    }
+  },
+  "finalFreezeIdentitiesSha256": "ff5824bb726cc3de984f82ccdada87e944ee243003fd2a0ae76aceac37f69cb9",
+  "finalStageSeal": true,
+  "kind": "omega-nnue-king-state-v4-final-freeze-seal",
+  "preregistration": {
+    "bytes": 35341,
+    "path": "C:\\Users\\whate\\Documents\\Codex\\2026-07-11\\let-s-adapt-some-engines-and\\senpai-omega-nnue\\validation\\omega-nnue-king-state-v4-preregistration.json",
+    "sha256": "44018932e37839ba61b0a0dda4ca11b89de6bf609070d53a8b96e80b46801b5f"
+  },
+  "profileId": "king-state-v4-omega-decision-v1",
+  "schemaVersion": 1,
+  "status": "target-blind-generation-4-design-frozen-before-teacher-labels",
+  "validator": {
+    "bytes": 77007,
+    "path": "C:\\Users\\whate\\Documents\\Codex\\2026-07-11\\let-s-adapt-some-engines-and\\senpai-omega-nnue\\tools\\omega_nnue\\validate_king_state_v4_preregistration.py",
+    "sha256": "1ad18b1d3b9d4443ff933779aad4442d170fc0880a6b2353b0d274752479e52d"
+  }
+}
