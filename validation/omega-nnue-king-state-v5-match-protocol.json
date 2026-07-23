@@ -1,0 +1,298 @@
+{
+  "schemaVersion": 1,
+  "kind": "omega-nnue-king-state-v5-match-protocol",
+  "profileId": "king-state-v5-omega-decision-v2",
+  "status": "target-blind protocol frozen before any generation-5 held-out access",
+  "authority": {
+    "preregistrationTemplate": "validation/omega-nnue-king-state-v5-preregistration.template.json",
+    "finalPreregistration": "validation/omega-nnue-king-state-v5-preregistration.json",
+    "requiredPostSelectionDeclaration": {
+      "rootAndSourceGameDisjointFromTrainValidationHeldOut": true,
+      "matchSeed": 2026072308,
+      "development": "paired fixed-root safety gate",
+      "equalNode": "paired sequential strength gate",
+      "equalTime": "paired serialized practical-strength gate",
+      "zeroIllegalMovesPvsProtocolFailuresTimeForfeitsOrAbandonedAttempts": true,
+      "formalPromotionRuleMustBePinnedBeforeMatchLaunch": true
+    }
+  },
+  "informationBoundary": {
+    "createdBeforeHeldOutAccess": true,
+    "targetFieldsDecodedByProtocol": 0,
+    "matchResultsAccessedByProtocol": 0,
+    "suiteConstructionIsRulesOnly": true,
+    "candidateIdentityUnavailableToSuiteSelection": true,
+    "allSuitesSealedBeforeMatchAuthorization": true
+  },
+  "runtimeProvenance": {
+    "sourceMatchFramework": ".NET 10.0.9",
+    "sourceMatchDotnetRuntimeBundleSha256": "0ce194480dfb9a58a59c79bf94f19cb2eb571635a00547094a9c8ff28bb5f8f8",
+    "sourceMatchMustUseFrozenDotnetBundle": true,
+    "sourceMatchCompletionSealIdentityField": "sourceMatchCompletionSeal",
+    "sourceMatchCompletionSealRequired": true,
+    "sourceMatchCompletionSealRequiresExitCodeZero": true,
+    "sourceMatchCompletionSealRequiresResumeUsedFalse": true,
+    "sourceMatchCompletionSealRequiresFinalStageSealTrue": true,
+    "sourceMatchCompletionSealMustAuthenticateFrozenDotnetBundle": true,
+    "futureSamplerAndMatchLaunchesRequireFrozenDotnetBundle": true
+  },
+  "namespaces": {
+    "root": "build-king-state-v5/matches",
+    "sampler": "build-king-state-v5/matches/sampler",
+    "sealed": "build-king-state-v5/matches/sealed",
+    "suiteSeal": "build-king-state-v5/matches/sealed/suite-seal.json",
+    "authorization": "build-king-state-v5/matches/sealed/match-authorization.json",
+    "coreSeal": "build-king-state-v5/matches/sealed/core-match-seal.json",
+    "development": "build-king-state-v5/matches/development",
+    "equalNode": "build-king-state-v5/matches/equal-node",
+    "equalTime": "build-king-state-v5/matches/equal-time"
+  },
+  "runtime": {
+    "sameExecutableForCandidateAndControl": true,
+    "dotnetRuntimeVersion": "10.0.9",
+    "dotnetHost": {
+      "path": "tools/omega_nnue/frozen_runtime/king-state-v5/dotnet-runtime/dotnet.exe",
+      "bytes": 167248,
+      "sha256": "a5ccdc3a41d5e5c6014ff64509aed176db39f4f14caffff3dd1997f8907e94d7"
+    },
+    "dotnetRuntimeManifest": {
+      "path": "tools/omega_nnue/frozen_runtime/king-state-v5/dotnet-runtime.manifest.json",
+      "bytes": 33633,
+      "sha256": "c8543f22f4b353ee461f2e417c3d06ea2f05de2622fab49b789923f9944e00ee"
+    },
+    "dotnetRuntimeTool": {
+      "path": "tools/omega_nnue/king_state_dotnet_runtime_generation5.py",
+      "bytes": 12825,
+      "sha256": "7c33e9f22cd6f77498caa7fa481abaf5f72ec1b805fac6a979739237a08524cb"
+    },
+    "dotnetRuntimeBundleSha256": "0ce194480dfb9a58a59c79bf94f19cb2eb571635a00547094a9c8ff28bb5f8f8",
+    "matchCoreSource": {
+      "path": "tools/omega_nnue/king_state_matches.py",
+      "bytes": 138593,
+      "sha256": "c8e9d45452716f468023b7af1607e735a269e131c95bce510dd25849f76d9601"
+    },
+    "engine": {
+      "path": "tools/omega_nnue/frozen_runtime/king-state-v5/engine/senpai.exe",
+      "bytes": 624128,
+      "sha256": "a7a3e905c1f44cc32eba622615e6f0d29d5b236735de623ca87d42ef9116b1de"
+    },
+    "omegaMatchAssembly": {
+      "path": "tools/omega_nnue/frozen_runtime/king-state-v5/omegamatch/OmegaMatch.dll",
+      "bytes": 166400,
+      "sha256": "c51e4733c888bec97f5b1582379e16ecefe4c74537a8fabd2b0fcafd88ef2e6d"
+    },
+    "omegaMatchAppHost": {
+      "path": "tools/omega_nnue/frozen_runtime/king-state-v5/omegamatch/OmegaMatch.exe",
+      "bytes": 162304,
+      "sha256": "996a6ea879736906a7706f3ada189677034585e9b91d33bbc95e7e420ecec9f5"
+    },
+    "omegaMatchBundleSha256": "d3e0ebde20db71be98fc8844b053927e220f8433ed4f0897b5013a2680009874",
+    "rootSamplerAssembly": {
+      "path": "tools/omega_nnue/frozen_runtime/king-state-v5/root-sampler/OmegaRootSampler.dll",
+      "bytes": 57856,
+      "sha256": "c10e9c3404f9bae9b1841bb0c5ed306ef9a984dfd9c627cf25f4e3aab40a276e"
+    },
+    "rootSamplerAppHost": {
+      "path": "tools/omega_nnue/frozen_runtime/king-state-v5/root-sampler/OmegaRootSampler.exe",
+      "bytes": 162304,
+      "sha256": "f899efa67be2d008b8acde057a1a98a10f0ee23d7bb263b05caa3ab3b4cf2f4e"
+    },
+    "rootSamplerBundleSha256": "6c7f6c0f263488ad5f9af28791899a83d34de8fd9fd874dad0c0bfd68e79196b",
+    "rootSamplerRulesAssembly": {
+      "path": "tools/omega_nnue/frozen_runtime/king-state-v5/root-sampler/ChessLib.dll",
+      "bytes": 248832,
+      "sha256": "16a01414c9f486561aac0b48cebb7c485621d804a73c00803ec0aff55f572f4c"
+    },
+    "commonEngineOptions": {
+      "Threads": "1",
+      "Hash": "128",
+      "Ponder": "false",
+      "OwnBook": "false",
+      "UCI_Chess960": "false",
+      "UCI_Variant": "omega"
+    },
+    "candidate": {
+      "UseOmegaNNUE": "true",
+      "OmegaNNUEFile": "exact selected-primary network path and SHA-256 from the passed one-time offline report",
+      "startupDiagnosticsRequireLoadedRecord": true,
+      "finalStartupDiagnostic": "info string Omega NNUE evaluation active",
+      "externalAssetMustEqualSelectedNetworkSha256": true
+    },
+    "control": {
+      "UseOmegaNNUE": "false",
+      "OmegaNNUEFile": "<empty>",
+      "emptyOptionTransmittedExplicitly": true,
+      "externalAssets": [],
+      "finalStartupDiagnostic": "info string Omega NNUE disabled; handcrafted evaluation active"
+    }
+  },
+  "suiteGeneration": {
+    "baseSeed": 2026072308,
+    "stageSeedDerivation": "baseSeed + zero-based stage ordinal in development,equal-node,equal-time order",
+    "stageSeeds": {
+      "development": 2026072308,
+      "equal-node": 2026072309,
+      "equal-time": 2026072310
+    },
+    "deterministicPrng": "SplitMix64",
+    "trajectoryPairsPerStage": 8192,
+    "independentTrajectoriesPerPair": 2,
+    "workers": 4,
+    "maxPlies": 220,
+    "positionsPerPhaseAndSide": 2,
+    "captureSelectionPercent": 72,
+    "phaseOrder": [
+      "opening",
+      "middlegame",
+      "late",
+      "endgame"
+    ],
+    "sideOrder": [
+      "w",
+      "b"
+    ],
+    "forbiddenOrbitPolicy": "exclude every symmetry-orbit signature occurring in any final-freeze target-opaque forbidden-position catalog",
+    "crossSuitePolicy": "all selected root symmetry-orbit signatures are mutually disjoint",
+    "selectionOrder": "SHA-256 king-state-match-root-v1 rank within exact phase/side buckets",
+    "candidateBlind": true
+  },
+  "pairedSchedule": {
+    "gamesPerRoot": 2,
+    "roles": [
+      {
+        "gameSuffix": "ab",
+        "white": "engineA",
+        "black": "engineB"
+      },
+      {
+        "gameSuffix": "ba",
+        "white": "engineB",
+        "black": "engineA"
+      }
+    ],
+    "engineA": "nnue-candidate",
+    "engineB": "hce-control",
+    "candidatePairScore": "mean of the candidate's two colour-swapped game scores",
+    "balancedPairBlockSize": 4,
+    "onePairFromEachPhasePerBlock": true,
+    "rootSideToMoveConstantWithinBlock": true,
+    "rootSideToMoveAlternatesBetweenBlocks": true,
+    "inverseArrangeForSeededDotNetRandomShuffle": true,
+    "pairBudgetMustBeMultipleOf": 4
+  },
+  "stages": {
+    "development": {
+      "roots": 64,
+      "rootsPerPhase": 16,
+      "rootsPerPhaseAndSideToMove": 8,
+      "mode": "nodes",
+      "nodesPerMove": 30000,
+      "searchTimeoutMs": 60000,
+      "initialPairBudget": 64,
+      "resumePairBudget": 4,
+      "maximumPairs": 64,
+      "minimumCandidateScore": 0.5,
+      "decision": "pass only after all 64 complete pairs, no in-progress attempt, zero safety failures, and candidateScore >= 0.5"
+    },
+    "equal-node": {
+      "roots": 512,
+      "rootsPerPhase": 128,
+      "rootsPerPhaseAndSideToMove": 64,
+      "mode": "nodes",
+      "nodesPerMove": 60000,
+      "searchTimeoutMs": 90000,
+      "initialPairBudget": 128,
+      "resumePairBudget": 4,
+      "minimumPairsBeforeDecision": 128,
+      "maximumPairs": 512,
+      "nullElo": 15,
+      "promotionEValue": 100,
+      "futilityEValue": 20,
+      "promotionAnytimePValueAtMost": 0.01,
+      "futilityAnytimePValueAtMost": 0.05,
+      "balancedBlockChecksOnly": true
+    },
+    "equal-time": {
+      "roots": 512,
+      "rootsPerPhase": 128,
+      "rootsPerPhaseAndSideToMove": 64,
+      "mode": "moveTime",
+      "moveTimeMs": 1000,
+      "searchTimeoutMs": 5000,
+      "initialPairBudget": 128,
+      "resumePairBudget": 4,
+      "minimumPairsBeforeDecision": 128,
+      "maximumPairs": 512,
+      "nullElo": 15,
+      "promotionEValue": 100,
+      "futilityEValue": 20,
+      "promotionAnytimePValueAtMost": 0.01,
+      "futilityAnytimePValueAtMost": 0.05,
+      "balancedBlockChecksOnly": true,
+      "oneGameAtATime": true,
+      "idleMachineAttestationRequired": true
+    }
+  },
+  "sequentialTest": {
+    "method": "mixture e-process over bounded paired scores",
+    "nullElo": 15,
+    "nullScoreFormula": "1 / (1 + 10^(-nullElo/400))",
+    "betFractions": [
+      0.0078125,
+      0.015625,
+      0.03125,
+      0.0625,
+      0.125,
+      0.25,
+      0.5,
+      0.75
+    ],
+    "promotionEValue": 100,
+    "futilityEValue": 20,
+    "minimumPairs": 128,
+    "maximumPairs": 512,
+    "inspectOnlyAtCompleteFourPhaseBlocks": true,
+    "preMinimumThresholdCrossingsAreForgotten": true,
+    "firstEligibleThresholdCrossingLatches": true,
+    "maximumPairsWithoutSignal": "inconclusive",
+    "promotionRequiredAtBothEqualNodeAndEqualTime": true
+  },
+  "execution": {
+    "gateOrder": [
+      "development",
+      "equal-node",
+      "equal-time"
+    ],
+    "freshProcessPerGame": true,
+    "oneGameAtATime": true,
+    "maximumConcurrentGames": 1,
+    "repeats": 1,
+    "maxPlies": 300,
+    "absoluteMaxPlies": 400,
+    "stopGraceMs": 2000,
+    "zeroSafetyFailuresRequired": true,
+    "safetyFields": [
+      "illegalMoves",
+      "illegalPvs",
+      "protocolFailures",
+      "timeForfeits",
+      "abandonedAttempts"
+    ],
+    "launchOnlyThroughOrchestrator": true,
+    "appendOnlyIntentCompletionAssessmentChain": true,
+    "assessmentRequiredBetweenLaunches": true,
+    "resumeRequiresExactLatestNonterminalCheckpoint": true,
+    "eventLogMustBeAppendOnly": true,
+    "terminalDecisionBlocksRetry": true,
+    "failedOrInconclusiveStageAuthorizesSuccessor": false,
+    "equalTimeIdleAttestationMustPostdateEqualNodePromotion": true,
+    "equalTimeAuditRequiresSerializedNonoverlappingGameIntervals": true,
+    "rehashEngineNetworkSuiteConfigHarnessAndAuthorizationBeforeAndAfterLaunch": true
+  },
+  "promotionRule": {
+    "clearlySuperior": "development pass followed by promotion against +15 Elo null at anytime p <= 0.01 in both equal-node and equal-time, with zero safety failures",
+    "runnerUpFallback": false,
+    "retrySameGenerationAfterTerminalFailure": false,
+    "nextActionAfterFailure": "close this generation and create a fresh preregistered generation"
+  }
+}

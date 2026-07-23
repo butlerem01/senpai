@@ -172,7 +172,15 @@ static async Task<PairResult> GeneratePair(int pair, Options options)
             var chosen = ChooseMove(moves, ref rng, options.CapturePercent);
             if (chosen.Coordinate.Length == 5)
                 promotionSelections[chosen.Coordinate[4].ToString()]++;
-            await game.DoMove(chosen.Coordinate, checkEndGame: false);
+            var parentOfen = game.GetFenString();
+            try {
+                await game.DoMove(chosen.Coordinate, checkEndGame: false);
+            } catch (Exception error) {
+                throw new InvalidOperationException(
+                    $"Random trajectory failed at pair={pair + 1}, flavor={flavor}, " +
+                    $"ply={ply}, move={chosen.Coordinate}, parentOfen={parentOfen}",
+                    error);
+            }
             maxPlyReached = Math.Max(maxPlyReached, ply + 1);
         }
         if (ended) terminalTrajectories++;
@@ -227,6 +235,12 @@ static List<LegalMove> LegalMoves(Game game)
         if (piece == null || piece.Color != game.ToMove) continue;
         foreach (var target in game.GetAvailableSquares(square)) {
             if (target.Notation.Equals(square.Notation, StringComparison.OrdinalIgnoreCase))
+                continue;
+            // Game.GetAvailableSquares is designed for normal adjudicated play:
+            // the game ends at checkmate before a later turn can ever capture a
+            // king.  Rules-only trajectories intentionally call DoMove with
+            // checkEndGame:false, so enforce that terminal boundary here.
+            if (target.Piece?.Type == Piece.Pieces.King)
                 continue;
             var capture = target.Piece != null && target.Piece.Color != piece.Color;
             var coordinate =

@@ -1,0 +1,315 @@
+{
+  "abortReason": "insufficient-rules-feasible-root-slack",
+  "absenceEvidence": {
+    "existingArtifactCount": 0,
+    "matchSamplerDirectoryEmpty": true,
+    "prohibitedArtifactPaths": [
+      "build-msvc/data-generation/omega-decision-v1/component-splits.jsonl",
+      "build-msvc/data-generation/omega-decision-v1/component-splits.jsonl.manifest.json",
+      "build-msvc/data-generation/omega-decision-v1/prelabel-freeze.seal.json",
+      "build-msvc/data-generation/omega-decision-v1/shallow-results.jsonl",
+      "build-msvc/data-generation/omega-decision-v1/shallow-results.jsonl.lock.json",
+      "build-msvc/data-generation/omega-decision-v1/shallow-results.jsonl.active.claim.json",
+      "build-msvc/data-generation/omega-decision-v1/shallow-results.jsonl.manifest.json",
+      "build-msvc/data-generation/omega-decision-v1/shallow-results.jsonl.complete.manifest.json",
+      "build-msvc/data-generation/omega-decision-v1/selected-children.jsonl",
+      "build-msvc/data-generation/omega-decision-v1/selected-children.jsonl.lock.json",
+      "build-msvc/data-generation/omega-decision-v1/selected-children.jsonl.active.claim.json",
+      "build-msvc/data-generation/omega-decision-v1/selected-children.jsonl.manifest.json",
+      "build-msvc/data-generation/omega-decision-v1/selected-children.jsonl.complete.manifest.json",
+      "build-msvc/data-generation/omega-decision-v1/deep-results.jsonl",
+      "build-msvc/data-generation/omega-decision-v1/deep-results.jsonl.lock.json",
+      "build-msvc/data-generation/omega-decision-v1/deep-results.jsonl.active.claim.json",
+      "build-msvc/data-generation/omega-decision-v1/deep-results.jsonl.manifest.json",
+      "build-msvc/data-generation/omega-decision-v1/deep-results.jsonl.complete.manifest.json",
+      "build-msvc/data-generation/omega-decision-v1/decision-labels.jsonl",
+      "build-msvc/data-generation/omega-decision-v1/decision-labels.jsonl.lock.json",
+      "build-msvc/data-generation/omega-decision-v1/decision-labels.jsonl.active.claim.json",
+      "build-msvc/data-generation/omega-decision-v1/decision-labels.jsonl.manifest.json",
+      "build-msvc/data-generation/omega-decision-v1/decision-labels.jsonl.complete.manifest.json",
+      "build-msvc/king-state-v4/training-plan.json",
+      "build-msvc/king-state-v4/validation-selection.seal.json",
+      "build-msvc/king-state-v4/robustness.bundle",
+      "build-msvc/king-state-v4/.robustness.training.claim.json",
+      "build-msvc/king-state-v4/robustness.failure.json",
+      "build-msvc/king-state-v4/robustness.seal.json",
+      "build-msvc/king-state-v4/offline",
+      "build-msvc/king-state-v4/G4A.bundle",
+      "build-msvc/king-state-v4/.G4A.training.claim.json",
+      "build-msvc/king-state-v4/G4A.failure.json",
+      "build-msvc/king-state-v4/G4B.bundle",
+      "build-msvc/king-state-v4/.G4B.training.claim.json",
+      "build-msvc/king-state-v4/G4B.failure.json",
+      "build-msvc/king-state-v4/G4C.bundle",
+      "build-msvc/king-state-v4/.G4C.training.claim.json",
+      "build-msvc/king-state-v4/G4C.failure.json",
+      "build-king-state-v4/matches/sealed",
+      "build-king-state-v4/matches/development",
+      "build-king-state-v4/matches/equal-node",
+      "build-king-state-v4/matches/equal-time"
+    ]
+  },
+  "createdUtc": "2026-07-23T09:51:02.323863Z",
+  "finalStageSeal": true,
+  "identities": {
+    "children": {
+      "bytes": 149850504,
+      "path": "build-msvc/data-generation/omega-decision-v1/children.jsonl",
+      "sha256": "ff30ab9d9cc1a435f4a01f860d9cca39c73c80d65bd805f3c7a6fe036d95db2c"
+    },
+    "childrenManifest": {
+      "bytes": 2528,
+      "path": "build-msvc/data-generation/omega-decision-v1/children.jsonl.manifest.json",
+      "sha256": "53e813ac12d6007beddc3f2ad27d2c662231491540a967603dcd841c8cdc3e68"
+    },
+    "finalFreezeSeal": {
+      "bytes": 10362,
+      "path": "validation/omega-nnue-king-state-v4-freeze.seal.json",
+      "sha256": "b7f5ebcb67afba13731a1a614f74e3b5f2beab4afcbc8dd94255a7698c10a7a7"
+    },
+    "finalPreregistration": {
+      "bytes": 35341,
+      "path": "validation/omega-nnue-king-state-v4-preregistration.json",
+      "sha256": "44018932e37839ba61b0a0dda4ca11b89de6bf609070d53a8b96e80b46801b5f"
+    },
+    "forbiddenPositionCatalog": {
+      "bytes": 225914010,
+      "path": "build-msvc/data-generation/omega-decision-v1/forbidden-positions.jsonl",
+      "sha256": "37bfc5f2f51738deaf35d9a1b28d0f7d8801731b35f6e3f308de543c2ef9bd09"
+    },
+    "forbiddenPositionCatalogManifest": {
+      "bytes": 4992,
+      "path": "build-msvc/data-generation/omega-decision-v1/forbidden-positions.jsonl.manifest.json",
+      "sha256": "51d149ef342384bb2843b1060c29d2e77554fb362811fddad4483d093c349b8e"
+    },
+    "roots": {
+      "bytes": 4814846,
+      "path": "build-msvc/data-generation/omega-decision-v1/roots.jsonl",
+      "sha256": "3c7f2dfd453d0f0e9fbadb9deda0a916fd415150796866c2aec82835ea74c240"
+    },
+    "rootsManifest": {
+      "bytes": 12282,
+      "path": "build-msvc/data-generation/omega-decision-v1/roots.jsonl.manifest.json",
+      "sha256": "dc256d902df855a70e4308741e878d972c64d4bc9a887e3d2d4b342957099586"
+    },
+    "samplerCompletionSeal": {
+      "bytes": 1816,
+      "path": "build-msvc/data-generation/omega-decision-v1/children.jsonl.complete.seal.json",
+      "sha256": "c98b3350a45173ee5166fa4e716bc833e08858f99746f9ae2f90320baeb24696"
+    },
+    "sourceEvents": {
+      "bytes": 92477081,
+      "path": "build-msvc/data-generation/omega-decision-v1/source/events.jsonl",
+      "sha256": "d13b23a3376085f8ffb29015d0ae14082205cf057cc905dd33b550a3ffcf50e4"
+    },
+    "sourceMatchConfig": {
+      "bytes": 1821,
+      "path": "build-msvc/data-generation/omega-decision-v1/source/source-match.json",
+      "sha256": "2abfcbf9b6a34ad05ee872b28ef924c501c47c61f5f9cf9592fa98db03dd0354"
+    },
+    "sourceOpeningSuite": {
+      "bytes": 1477311,
+      "path": "build-msvc/data-generation/omega-decision-v1/source/openings.json",
+      "sha256": "422d1e7f77ebb45be550bb59a08ce35db50430a5fcd26182a507bf5ae4e8216f"
+    },
+    "sourceRootPool": {
+      "bytes": 135436321,
+      "path": "build-msvc/data-generation/omega-decision-v1/source/rules-only-pool.jsonl",
+      "sha256": "5ecd1b3fb9269ff2c857da970ea9e99b19668ee602f12016c052a2f950d3fde9"
+    },
+    "sourceRootPoolManifest": {
+      "bytes": 2458,
+      "path": "build-msvc/data-generation/omega-decision-v1/source/rules-only-pool.jsonl.manifest.json",
+      "sha256": "9c85475265b4b47d69cefc373091ba3b41a8ecc38acfb6824a93b51dd73e94a7"
+    },
+    "sourceRootPoolSeal": {
+      "bytes": 1542,
+      "path": "build-msvc/data-generation/omega-decision-v1/source/rules-only-pool.jsonl.complete.seal.json",
+      "sha256": "cd38b08cd699c96e0e39e21751a5b82568f4e26fa3dc5374dcff7e52dc8f483b"
+    }
+  },
+  "kind": "omega-nnue-king-state-v4-target-opaque-structural-abort",
+  "producer": {
+    "bytes": 42170,
+    "path": "tools/omega_nnue/king_state_generation4_abort.py",
+    "sha256": "4994ef1f7586655082f02e4a0c9e98b2f5cfa834bf32502b282a0c7220f1f65a"
+  },
+  "profileId": "king-state-v4-omega-decision-v1",
+  "schemaVersion": 1,
+  "status": "closed-before-prelabel-or-teacher-search",
+  "structuralEvidence": {
+    "childCount": 183881,
+    "childCountHistogram": {
+      "1": 8,
+      "10": 37,
+      "11": 37,
+      "12": 45,
+      "13": 39,
+      "14": 47,
+      "15": 54,
+      "16": 69,
+      "17": 65,
+      "18": 67,
+      "19": 61,
+      "2": 20,
+      "20": 66,
+      "21": 64,
+      "22": 57,
+      "23": 58,
+      "24": 68,
+      "25": 61,
+      "26": 59,
+      "27": 69,
+      "28": 89,
+      "29": 87,
+      "3": 38,
+      "30": 69,
+      "31": 76,
+      "32": 77,
+      "33": 80,
+      "34": 105,
+      "35": 109,
+      "36": 101,
+      "37": 126,
+      "38": 137,
+      "39": 154,
+      "4": 60,
+      "40": 132,
+      "41": 172,
+      "42": 144,
+      "43": 152,
+      "44": 150,
+      "45": 140,
+      "46": 136,
+      "47": 143,
+      "48": 125,
+      "49": 143,
+      "5": 63,
+      "50": 122,
+      "51": 96,
+      "52": 93,
+      "53": 92,
+      "54": 64,
+      "55": 75,
+      "56": 63,
+      "57": 53,
+      "58": 58,
+      "59": 32,
+      "6": 75,
+      "60": 34,
+      "61": 28,
+      "62": 27,
+      "63": 34,
+      "64": 17,
+      "65": 11,
+      "66": 15,
+      "67": 14,
+      "68": 3,
+      "69": 11,
+      "7": 62,
+      "70": 11,
+      "71": 8,
+      "72": 3,
+      "73": 5,
+      "74": 7,
+      "75": 4,
+      "76": 1,
+      "77": 2,
+      "78": 2,
+      "79": 3,
+      "8": 77,
+      "80": 1,
+      "81": 3,
+      "83": 1,
+      "84": 1,
+      "86": 1,
+      "9": 52
+    },
+    "duplicateChildMoves": 0,
+    "guaranteedEligibleRoots": 4994,
+    "minimumLegalChildrenForGuaranteedSelection": 5,
+    "phaseSideEvidence": {
+      "endgame/b": {
+        "childCount": 13117,
+        "duplicateChildMoves": 0,
+        "guaranteedEligibleRoots": 611,
+        "minimumChildCount": 1,
+        "rootCount": 640,
+        "shortfallToDeepQuota": 29,
+        "sourcePvMissing": 0
+      },
+      "endgame/w": {
+        "childCount": 13370,
+        "duplicateChildMoves": 0,
+        "guaranteedEligibleRoots": 617,
+        "minimumChildCount": 1,
+        "rootCount": 640,
+        "shortfallToDeepQuota": 23,
+        "sourcePvMissing": 0
+      },
+      "late/b": {
+        "childCount": 20549,
+        "duplicateChildMoves": 0,
+        "guaranteedEligibleRoots": 630,
+        "minimumChildCount": 1,
+        "rootCount": 640,
+        "shortfallToDeepQuota": 10,
+        "sourcePvMissing": 0
+      },
+      "late/w": {
+        "childCount": 20928,
+        "duplicateChildMoves": 0,
+        "guaranteedEligibleRoots": 635,
+        "minimumChildCount": 2,
+        "rootCount": 640,
+        "shortfallToDeepQuota": 5,
+        "sourcePvMissing": 0
+      },
+      "middlegame/b": {
+        "childCount": 27921,
+        "duplicateChildMoves": 0,
+        "guaranteedEligibleRoots": 623,
+        "minimumChildCount": 1,
+        "rootCount": 640,
+        "shortfallToDeepQuota": 17,
+        "sourcePvMissing": 0
+      },
+      "middlegame/w": {
+        "childCount": 27827,
+        "duplicateChildMoves": 0,
+        "guaranteedEligibleRoots": 624,
+        "minimumChildCount": 1,
+        "rootCount": 640,
+        "shortfallToDeepQuota": 16,
+        "sourcePvMissing": 0
+      },
+      "opening/b": {
+        "childCount": 30019,
+        "duplicateChildMoves": 0,
+        "guaranteedEligibleRoots": 625,
+        "minimumChildCount": 1,
+        "rootCount": 640,
+        "shortfallToDeepQuota": 15,
+        "sourcePvMissing": 0
+      },
+      "opening/w": {
+        "childCount": 30150,
+        "duplicateChildMoves": 0,
+        "guaranteedEligibleRoots": 629,
+        "minimumChildCount": 1,
+        "rootCount": 640,
+        "shortfallToDeepQuota": 11,
+        "sourcePvMissing": 0
+      }
+    },
+    "proof": {
+      "conclusion": "all 5,120 roots would be required, but only 4,994 are guaranteed eligible; abort before prelabel or teacher search",
+      "eligibilityRule": "at least five distinct legal child moves and exactly one child matching rootPvMove",
+      "quotaRule": "640 deep-candidate roots are required independently in each phase/side bucket; cross-bucket borrowing is forbidden"
+    },
+    "rootCount": 5120,
+    "shortfallToDeepQuota": 126,
+    "sourcePvMissing": 0,
+    "targetOrScoreFieldsDecoded": 0
+  }
+}

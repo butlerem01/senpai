@@ -4,6 +4,7 @@
 /tools/omega_nnue/** text=auto eol=lf
 /validation/omega-nnue-king-state-v3-*.json text eol=lf
 /validation/omega-nnue-king-state-v4-*.json text eol=lf
+/validation/omega-nnue-king-state-v5-*.json text eol=lf
 /src/omega_nnue.cpp text eol=lf
 /src/omega_nnue.hpp text eol=lf
 /tests/omega_nnue.cpp text eol=lf
@@ -13,3 +14,4 @@
 # The frozen runtime is an opaque byte archive, including text sidecars.
 /tools/omega_nnue/frozen_runtime/king-state-v3/** -text -diff !eol
 /tools/omega_nnue/frozen_runtime/king-state-v4/** -text -diff !eol
+/tools/omega_nnue/frozen_runtime/king-state-v5/** -text -diff !eol
