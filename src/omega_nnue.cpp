@@ -12,6 +12,16 @@
 #include <string>
 #include <vector>
 
+#if !defined(OMEGA_NNUE_FORCE_SCALAR) \
+ && (defined(_M_X64) \
+ || (defined(_M_IX86_FP) && _M_IX86_FP >= 2) \
+ || defined(__SSE2__))
+#define OMEGA_NNUE_HAS_SSE2 1
+#include <emmintrin.h>
+#else
+#define OMEGA_NNUE_HAS_SSE2 0
+#endif
+
 #include "bit.hpp"
 #include "common.hpp"
 #include "omega_eval.hpp"
@@ -142,6 +152,64 @@ int clipped_activation(std::int64_t value) {
 std::int64_t divide_round(std::int64_t value, std::int64_t divisor) {
    if (value >= 0) return (value + divisor / 2) / divisor;
    return -((-value + divisor / 2) / divisor);
+}
+
+// Exact signed-int8 by unsigned-int8 dot product used by the dense layer.
+// A complete 256-lane row is bounded by 256 * 128 * 127, so every partial
+// sum fits comfortably in int32.  The caller still adds the arbitrary int32
+// bias in int64, preserving the OMNNUE1 scalar semantics for every valid file.
+std::int32_t dense_dot(
+   const std::int8_t * weights,
+   const std::uint8_t * input,
+   std::size_t size
+) {
+   static_assert(
+      format::Dense_Input_Size <= 256U
+      && format::Activation_Max <= 127U,
+      "dense_dot int32 partial-sum bound changed"
+   );
+   std::size_t i = 0U;
+   std::int32_t sum = 0;
+
+#if OMEGA_NNUE_HAS_SSE2
+   const __m128i zero = _mm_setzero_si128();
+   __m128i lanes = zero;
+
+   for (; i + 16U <= size; i += 16U) {
+      const __m128i packed_weights = _mm_loadu_si128(
+         reinterpret_cast<const __m128i *>(weights + i)
+      );
+      const __m128i packed_input = _mm_loadu_si128(
+         reinterpret_cast<const __m128i *>(input + i)
+      );
+      const __m128i signs = _mm_cmpgt_epi8(zero, packed_weights);
+
+      const __m128i weights_low = _mm_unpacklo_epi8(
+         packed_weights, signs
+      );
+      const __m128i weights_high = _mm_unpackhi_epi8(
+         packed_weights, signs
+      );
+      const __m128i input_low = _mm_unpacklo_epi8(packed_input, zero);
+      const __m128i input_high = _mm_unpackhi_epi8(packed_input, zero);
+
+      lanes = _mm_add_epi32(
+         lanes, _mm_madd_epi16(weights_low, input_low)
+      );
+      lanes = _mm_add_epi32(
+         lanes, _mm_madd_epi16(weights_high, input_high)
+      );
+   }
+
+   alignas(16) std::int32_t partial[4];
+   _mm_store_si128(reinterpret_cast<__m128i *>(partial), lanes);
+   sum = partial[0] + partial[1] + partial[2] + partial[3];
+#endif
+
+   for (; i < size; ++i) {
+      sum += std::int32_t(weights[i]) * std::int32_t(input[i]);
+   }
+   return sum;
 }
 
 using Leaper_Distance_Row = std::array<
@@ -1477,11 +1545,10 @@ bool Runtime_Network::evaluate_impl(
    for (std::size_t j = 0; j < format::Hidden_Size; ++j) {
       std::int64_t sum = network->hidden_bias[j];
       const std::size_t offset = j * format::Dense_Input_Size;
-
-      for (std::size_t i = 0; i < format::Dense_Input_Size; ++i) {
-         sum += std::int64_t(network->hidden_weights[offset + i])
-              * std::int64_t(input[i]);
-      }
+      sum += dense_dot(
+         network->hidden_weights.data() + offset,
+         input.data(), format::Dense_Input_Size
+      );
 
       hidden[j] = static_cast<std::uint8_t>(clipped_activation(
          divide_round(sum, format::Hidden_Divisor)

@@ -9,7 +9,7 @@ The v0 milestone includes:
 
 - a fixed Omega-specific feature and binary-format contract;
 - a checksummed, all-or-nothing runtime loader;
-- scalar integer inference in native Omega search;
+- exact integer inference with an SSE2 dense kernel and scalar fallback;
 - UCI options for loading and enabling a network;
 - an independent NumPy trainer, quantizer, exporter, and inference checker;
 - deterministic C++ and UCI regression coverage; and
@@ -37,8 +37,11 @@ The full-refresh implementation remains the oracle and production fallback.
 Targeted tests request both paths, compare every accumulator lane before dense
 inference, and use the full accumulator if a diagnostic mismatch is ever
 observed. The `OMNNUE1` file format, architecture-4 feature map, quantized
-inference, and predictions are unchanged; SIMD remains future performance
-work.
+inference, and predictions are unchanged. On x86-64 the signed-int8 by
+unsigned-int8 dense products use an exact SSE2 kernel; other targets, and
+diagnostic builds with `OMEGA_NNUE_FORCE_SCALAR`, use the bit-identical scalar
+path. Bias arithmetic remains int64, so even an extreme valid int32 network
+bias retains the original inference semantics.
 
 ## Network
 
