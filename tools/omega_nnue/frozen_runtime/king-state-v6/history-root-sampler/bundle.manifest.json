@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "kind": "omega-g6-history-root-sampler-bundle",
+  "profileId": "king-state-v6-move-decision-v1",
+  "status": "frozen-reviewed-history-root-sampler",
+  "buildInformationalVersion": "1.0.0+omega-g6-history-root-sampler-v1",
+  "samplerAssembly": {
+    "relativePath": "OmegaHistoryRootSamplerG6.dll",
+    "bytes": 110592,
+    "sha256": "ae182dfcd3b33a0996481f4ed887c06dec4508a6584d15cb0cefe47012029499"
+  },
+  "samplerDepsJson": {
+    "relativePath": "OmegaHistoryRootSamplerG6.deps.json",
+    "bytes": 1527,
+    "sha256": "7d8ef239efc3d76ed83ad79fe38d02028ed58584e869ff8796ea04561cad930b"
+  },
+  "samplerRuntimeConfig": {
+    "relativePath": "OmegaHistoryRootSamplerG6.runtimeconfig.json",
+    "bytes": 342,
+    "sha256": "c230a317a54dd960bcbeb5f347f52e18dc665a26f7efda2159fced9a5ac7e097"
+  },
+  "chessLibAssembly": {
+    "relativePath": "ChessLib.dll",
+    "bytes": 248832,
+    "sha256": "16a01414c9f486561aac0b48cebb7c485621d804a73c00803ec0aff55f572f4c"
+  },
+  "newtonsoftJsonAssembly": {
+    "relativePath": "Newtonsoft.Json.dll",
+    "bytes": 723368,
+    "sha256": "a28c251dfe36d881e9e2462e171441b8b0ec156fe3f452602c9149b1b9efe05b"
+  },
+  "systemIoPortsAssembly": {
+    "relativePath": "System.IO.Ports.dll",
+    "bytes": 37648,
+    "sha256": "2767e21f384cca9004b1266ec4b71d3b8a76898594382c377c726c780aa34508"
+  },
+  "samplerRunner": {
+    "relativePath": "../../king-state-v5/dotnet-runtime/dotnet.exe",
+    "bytes": 167248,
+    "sha256": "a5ccdc3a41d5e5c6014ff64509aed176db39f4f14caffff3dd1997f8907e94d7"
+  },
+  "samplerRuntimeManifest": {
+    "relativePath": "runtime.manifest.json",
+    "bytes": 1516,
+    "sha256": "9315148a3c860c77ca46ef639bb957e9ea2b0d2fc2f3fcb3734e37961628b77a"
+  },
+  "applicationFileCount": 6,
+  "finalStageSeal": true
+}

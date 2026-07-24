@@ -19,6 +19,19 @@ internal static class Program
         "omega-g6-terminal-preclassification-transcript-v1";
     private const string ExpectedChessLibSha256 =
         "16a01414c9f486561aac0b48cebb7c485621d804a73c00803ec0aff55f572f4c";
+    private const string ExpectedNewtonsoftJsonSha256 =
+        "a28c251dfe36d881e9e2462e171441b8b0ec156fe3f452602c9149b1b9efe05b";
+    private const string ExpectedSystemIoPortsSha256 =
+        "2767e21f384cca9004b1266ec4b71d3b8a76898594382c377c726c780aa34508";
+    private const string ExpectedDotnetHostSha256 =
+        "a5ccdc3a41d5e5c6014ff64509aed176db39f4f14caffff3dd1997f8907e94d7";
+    private const string ExpectedRuntimeManifestSha256 =
+        "c8543f22f4b353ee461f2e417c3d06ea2f05de2622fab49b789923f9944e00ee";
+    private const string ExpectedRuntimeBundleSha256 =
+        "0ce194480dfb9a58a59c79bf94f19cb2eb571635a00547094a9c8ff28bb5f8f8";
+    private const string ExpectedRuntimeManifestKind =
+        "omega-nnue-king-state-v5-dotnet-runtime-bundle";
+    private const string ExpectedRuntimeVersion = "10.0.9";
     private const string OfficialInitialOfen =
         "crnbqkbnrc/pppppppppp/10/10/10/10/10/10/PPPPPPPPPP/" +
         "CRNBQKBNRC[W/W/w/w] w KQkq - 0 1";
@@ -29,22 +42,41 @@ internal static class Program
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = false
     };
+    private static readonly string[] ForbiddenExecutionEnvironmentVariables =
+    {
+        "DOTNET_STARTUP_HOOKS",
+        "DOTNET_ADDITIONAL_DEPS",
+        "DOTNET_SHARED_STORE",
+        "DOTNET_HOST_PATH",
+        "DOTNET_ROOT",
+        "DOTNET_ROOT_X64",
+        "DOTNET_ROOT_X86",
+        "DOTNET_ROOT(x86)",
+        "DOTNET_MULTILEVEL_LOOKUP",
+        "DOTNET_ROLL_FORWARD",
+        "DOTNET_ROLL_FORWARD_ON_NO_CANDIDATE_FX",
+        "DOTNET_ROLL_FORWARD_TO_PRERELEASE",
+        "DOTNET_BUNDLE_EXTRACT_BASE_DIR"
+    };
 
     public static async Task<int> Main(string[] args)
     {
-        AssertPinnedChessLib();
+        var closure = AssertExecutionClosure();
         if (args.Length == 1 && args[0] == "--self-test")
         {
-            await SelfTest();
+            await SelfTest(closure);
             return 0;
         }
 
         var options = Options.Parse(args);
-        await Run(options);
+        await Run(options, closure, verifyClosureAtPublication: true);
         return 0;
     }
 
-    private static async Task Run(Options options)
+    private static async Task Run(
+        Options options,
+        ExecutionClosure closure,
+        bool verifyClosureAtPublication)
     {
         var input = Path.GetFullPath(options.Input);
         var transcript = Path.GetFullPath(options.Transcript);
@@ -135,6 +167,10 @@ internal static class Program
             var inputAfter = IdentityOf(input);
             if (inputBefore != inputAfter)
                 throw new IOException("input changed while it was being classified");
+            var closureAtPublication = verifyClosureAtPublication
+                ? AssertExecutionClosure()
+                : closure;
+            RequireSameClosure(closure, closureAtPublication);
             var tempTranscript = IdentityOf(transcriptTemp);
             var tempRoots = IdentityOf(rootsTemp);
             var tempChildren = IdentityOf(childrenTemp);
@@ -170,9 +206,16 @@ internal static class Program
                 tempRoots,
                 tempChildren,
                 new RuntimeEvidence(
+                    System.Runtime.InteropServices.RuntimeInformation
+                        .FrameworkDescription,
+                    ExpectedRuntimeVersion,
+                    ExpectedRuntimeBundleSha256,
+                    ExpectedRuntimeManifestSha256,
+                    ExpectedDotnetHostSha256,
                     ExpectedChessLibSha256,
-                    HashFile(typeof(Game).Assembly.Location),
-                    HashFile(Assembly.GetExecutingAssembly().Location)));
+                    ExpectedNewtonsoftJsonSha256,
+                    ExpectedSystemIoPortsSha256,
+                    closureAtPublication));
             await WriteJson(manifestTemp, manifestValue);
 
             RefuseExisting(transcript, "transcript");
@@ -777,23 +820,313 @@ internal static class Program
             counts[classification]++;
     }
 
-    private static void AssertPinnedChessLib()
+    private static ExecutionClosure AssertExecutionClosure()
     {
-        var actual = HashFile(typeof(Game).Assembly.Location);
-        if (actual != ExpectedChessLibSha256)
+        AssertNoForbiddenExecutionEnvironment();
+        var processPath = Environment.ProcessPath
+            ?? throw new InvalidDataException("runtime process path is unavailable");
+        var dotnetHost = RequireAuthorityIdentity(
+            processPath, ExpectedDotnetHostSha256, "frozen dotnet host");
+        if (!Path.GetFileName(processPath).Equals(
+                "dotnet.exe", StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException(
-                $"ChessLib identity mismatch: expected {ExpectedChessLibSha256}, actual {actual}");
+                $"classifier must run under the frozen dotnet.exe host: {processPath}");
+        var runtimeRoot = Path.GetDirectoryName(Path.GetFullPath(processPath))
+            ?? throw new InvalidDataException("dotnet host has no runtime root");
+        var runtimeManifestPath = Path.Combine(
+            Path.GetDirectoryName(runtimeRoot)
+                ?? throw new InvalidDataException("runtime root has no parent"),
+            "dotnet-runtime.manifest.json");
+        var runtimeManifest = RequireAuthorityIdentity(
+            runtimeManifestPath, ExpectedRuntimeManifestSha256,
+            "frozen dotnet runtime manifest");
+        var runtimeFiles = VerifyRuntimeBundle(runtimeRoot, runtimeManifestPath);
+
+        var framework =
+            System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription;
+        if (framework != $".NET {ExpectedRuntimeVersion}" ||
+            Environment.Version.ToString() != ExpectedRuntimeVersion)
+            throw new InvalidDataException(
+                $"runtime version mismatch: framework={framework}, " +
+                $"environment={Environment.Version}");
+        var coreLibraryPath = typeof(object).Assembly.Location;
+        var expectedCoreDirectory = Path.GetFullPath(Path.Combine(
+            runtimeRoot, "shared", "Microsoft.NETCore.App",
+            ExpectedRuntimeVersion));
+        if (!IsWithin(coreLibraryPath, expectedCoreDirectory))
+            throw new InvalidDataException(
+                $"core library was not loaded from the frozen runtime: {coreLibraryPath}");
+        var coreLibrary = AuthorityIdentityOf(coreLibraryPath);
+
+        var classifierAssembly = Assembly.GetExecutingAssembly();
+        var classifierPath = classifierAssembly.Location;
+        var applicationDirectory = Path.GetDirectoryName(
+            Path.GetFullPath(classifierPath))
+            ?? throw new InvalidDataException("classifier assembly has no directory");
+        var classifier = AuthorityIdentityOf(classifierPath);
+        var chessLib = RequireLoadedAssembly(
+            typeof(Game).Assembly, applicationDirectory, "ChessLib.dll",
+            ExpectedChessLibSha256);
+        var newtonsoft = RequireLoadedAssembly(
+            Assembly.Load(new AssemblyName("Newtonsoft.Json")),
+            applicationDirectory, "Newtonsoft.Json.dll",
+            ExpectedNewtonsoftJsonSha256);
+        var ports = RequireLoadedAssembly(
+            Assembly.Load(new AssemblyName("System.IO.Ports")),
+            applicationDirectory, "System.IO.Ports.dll",
+            ExpectedSystemIoPortsSha256);
+
+        return new ExecutionClosure(
+            ExpectedRuntimeVersion,
+            ExpectedRuntimeBundleSha256,
+            runtimeFiles,
+            ForbiddenExecutionEnvironmentVariables,
+            0,
+            dotnetHost,
+            runtimeManifest,
+            coreLibrary,
+            classifier,
+            chessLib,
+            newtonsoft,
+            ports);
+    }
+
+    private static void AssertNoForbiddenExecutionEnvironment()
+    {
+        var present = ForbiddenExecutionEnvironmentVariables
+            .Where(name => !string.IsNullOrEmpty(
+                Environment.GetEnvironmentVariable(name)))
+            .ToArray();
+        if (present.Length != 0)
+            throw new InvalidDataException(
+                "forbidden .NET execution environment variables are set: " +
+                string.Join(", ", present));
+    }
+
+    private static int VerifyRuntimeBundle(
+        string runtimeRoot,
+        string manifestPath)
+    {
+        using var document = JsonDocument.Parse(
+            File.ReadAllText(manifestPath, Encoding.UTF8));
+        var root = document.RootElement;
+        if (root.GetProperty("schemaVersion").GetInt32() != 1 ||
+            root.GetProperty("kind").GetString() != ExpectedRuntimeManifestKind ||
+            root.GetProperty("bundleSha256").GetString() !=
+                ExpectedRuntimeBundleSha256 ||
+            root.GetProperty("dotnetHostRelativePath").GetString() !=
+                "dotnet.exe" ||
+            root.GetProperty("runtimeVersion").GetString() !=
+                ExpectedRuntimeVersion)
+            throw new InvalidDataException("frozen runtime manifest header changed");
+
+        var expected = new Dictionary<string, AuthorityIdentity>(
+            StringComparer.Ordinal);
+        foreach (var entry in root.GetProperty("files").EnumerateArray())
+        {
+            var relative = entry.GetProperty("relativePath").GetString()
+                ?? throw new InvalidDataException(
+                    "runtime manifest has a null relative path");
+            if (!IsCanonicalRelativePath(relative) ||
+                !expected.TryAdd(relative, new AuthorityIdentity(
+                    relative,
+                    entry.GetProperty("bytes").GetInt64(),
+                    entry.GetProperty("sha256").GetString()
+                        ?? throw new InvalidDataException(
+                            "runtime manifest has a null SHA-256"))))
+                throw new InvalidDataException(
+                    $"runtime manifest has an invalid/duplicate path: {relative}");
+        }
+        if (expected.Count != 191)
+            throw new InvalidDataException(
+                $"runtime manifest file count changed: {expected.Count}");
+
+        var actualPaths = EnumerateRegularFilesNoLinks(runtimeRoot)
+            .ToDictionary(
+                path => Path.GetRelativePath(runtimeRoot, path)
+                    .Replace('\\', '/'),
+                path => path,
+                StringComparer.Ordinal);
+        if (!actualPaths.Keys.OrderBy(value => value, StringComparer.Ordinal)
+                .SequenceEqual(expected.Keys.OrderBy(
+                    value => value, StringComparer.Ordinal)))
+            throw new InvalidDataException(
+                "frozen runtime file inventory differs from its manifest");
+        foreach (var item in expected)
+        {
+            var actual = AuthorityIdentityOf(actualPaths[item.Key]);
+            if (actual.Bytes != item.Value.Bytes ||
+                actual.Sha256 != item.Value.Sha256)
+                throw new InvalidDataException(
+                    $"frozen runtime file identity mismatch: {item.Key}");
+        }
+        return expected.Count;
+    }
+
+    private static IReadOnlyList<string> EnumerateRegularFilesNoLinks(
+        string root)
+    {
+        var result = new List<string>();
+        var pending = new Stack<string>();
+        pending.Push(Path.GetFullPath(root));
+        while (pending.Count > 0)
+        {
+            var directory = pending.Pop();
+            AssertNoReparsePath(directory);
+            foreach (var entry in Directory.EnumerateFileSystemEntries(directory))
+            {
+                var attributes = File.GetAttributes(entry);
+                if ((attributes & FileAttributes.ReparsePoint) != 0)
+                    throw new InvalidDataException(
+                        $"runtime bundle contains a link/reparse point: {entry}");
+                if ((attributes & FileAttributes.Directory) != 0)
+                    pending.Push(entry);
+                else
+                    result.Add(Path.GetFullPath(entry));
+            }
+        }
+        return result;
+    }
+
+    private static bool IsCanonicalRelativePath(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value) ||
+            Path.IsPathRooted(value) || value.Contains('\\'))
+            return false;
+        var normalized = Path.GetFullPath(Path.Combine("C:\\", value))
+            .Replace('\\', '/');
+        return normalized == $"C:/{value}" &&
+            value.Split('/').All(part => part is not ("" or "." or ".."));
+    }
+
+    private static AuthorityIdentity RequireLoadedAssembly(
+        Assembly assembly,
+        string applicationDirectory,
+        string fileName,
+        string expectedSha256)
+    {
+        var expectedPath = Path.GetFullPath(Path.Combine(
+            applicationDirectory, fileName));
+        var actualPath = Path.GetFullPath(assembly.Location);
+        if (!StringComparer.OrdinalIgnoreCase.Equals(expectedPath, actualPath))
+            throw new InvalidDataException(
+                $"{fileName} loaded from an unexpected path: {actualPath}");
+        return RequireAuthorityIdentity(actualPath, expectedSha256, fileName);
+    }
+
+    private static AuthorityIdentity RequireAuthorityIdentity(
+        string path,
+        string expectedSha256,
+        string label)
+    {
+        var identity = AuthorityIdentityOf(path);
+        if (identity.Sha256 != expectedSha256)
+            throw new InvalidDataException(
+                $"{label} identity mismatch: expected {expectedSha256}, " +
+                $"actual {identity.Sha256}");
+        return identity;
+    }
+
+    private static bool IsWithin(string path, string directory)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var fullDirectory = Path.GetFullPath(directory)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return fullPath.StartsWith(
+            fullDirectory + Path.DirectorySeparatorChar,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void RequireSameClosure(
+        ExecutionClosure expected,
+        ExecutionClosure actual)
+    {
+        if (JsonSerializer.Serialize(expected, Json) !=
+            JsonSerializer.Serialize(actual, Json))
+            throw new InvalidDataException(
+                "execution closure changed during classification");
     }
 
     private static string HashText(string value) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)))
             .ToLowerInvariant();
 
-    private static string HashFile(string path)
+    private static AuthorityIdentity AuthorityIdentityOf(string path)
     {
-        using var stream = File.OpenRead(path);
-        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+        var fullPath = Path.GetFullPath(path);
+        AssertNoReparsePath(fullPath);
+        var before = new FileInfo(fullPath);
+        before.Refresh();
+        if (!before.Exists)
+            throw new FileNotFoundException("identity artifact is missing", fullPath);
+        using var stream = new FileStream(
+            fullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        if (!GetFileInformationByHandle(
+                stream.SafeFileHandle, out var linkInformation))
+            throw new IOException(
+                $"could not inspect artifact links: {fullPath}",
+                new System.ComponentModel.Win32Exception(
+                    System.Runtime.InteropServices.Marshal.GetLastWin32Error()));
+        if (linkInformation.NumberOfLinks != 1)
+            throw new InvalidDataException(
+                $"hard-linked authority artifact is forbidden: {fullPath}");
+        var identity = new AuthorityIdentity(
+            fullPath,
+            stream.Length,
+            Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant());
+        var after = new FileInfo(fullPath);
+        after.Refresh();
+        if (!after.Exists || before.Length != after.Length ||
+            before.LastWriteTimeUtc != after.LastWriteTimeUtc ||
+            after.Length != identity.Bytes)
+            throw new InvalidDataException(
+                $"artifact changed while its identity was read: {fullPath}");
+        return identity;
     }
+
+    private static void AssertNoReparsePath(string path)
+    {
+        FileSystemInfo? current = File.Exists(path)
+            ? new FileInfo(Path.GetFullPath(path))
+            : new DirectoryInfo(Path.GetFullPath(path));
+        while (current is not null)
+        {
+            if (current.Exists &&
+                (current.Attributes & FileAttributes.ReparsePoint) != 0)
+                throw new InvalidDataException(
+                    $"link/junction/reparse path is forbidden: {current.FullName}");
+            current = current switch
+            {
+                FileInfo file => file.Directory,
+                DirectoryInfo directory => directory.Parent,
+                _ => null
+            };
+        }
+    }
+
+    [System.Runtime.InteropServices.StructLayout(
+        System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct ByHandleFileInformation
+    {
+        public uint FileAttributes;
+        public System.Runtime.InteropServices.ComTypes.FILETIME CreationTime;
+        public System.Runtime.InteropServices.ComTypes.FILETIME LastAccessTime;
+        public System.Runtime.InteropServices.ComTypes.FILETIME LastWriteTime;
+        public uint VolumeSerialNumber;
+        public uint FileSizeHigh;
+        public uint FileSizeLow;
+        public uint NumberOfLinks;
+        public uint FileIndexHigh;
+        public uint FileIndexLow;
+    }
+
+    [System.Runtime.InteropServices.DllImport(
+        "kernel32.dll", SetLastError = true)]
+    [return: System.Runtime.InteropServices.MarshalAs(
+        System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool GetFileInformationByHandle(
+        Microsoft.Win32.SafeHandles.SafeFileHandle file,
+        out ByHandleFileInformation information);
 
     private static ArtifactIdentity IdentityOf(string path)
     {
@@ -884,7 +1217,7 @@ internal static class Program
         }
     }
 
-    private static async Task SelfTest()
+    private static async Task SelfTest(ExecutionClosure closure)
     {
         var accepted = await SourceFromHistory(
             "accepted", "fixture", OfficialInitialOfen,
@@ -1136,7 +1469,8 @@ internal static class Program
             JsonSerializer.Serialize(repeated.Transcript, Json),
             "same source did not produce a byte-stable transcript");
 
-        await PublicationSelfTest(accepted, threefold);
+        await PublicationSelfTest(accepted, threefold, closure);
+        RequireSameClosure(closure, AssertExecutionClosure());
         Console.WriteLine(
             "OmegaTerminalPreclassifierG6 self-test passed: ordinary acceptance, " +
             "threefold, 99->100 halfmove, K+C/K, K+W/K, mate, stalemate, " +
@@ -1206,7 +1540,8 @@ internal static class Program
 
     private static async Task PublicationSelfTest(
         SourceRecord accepted,
-        SourceRecord rejected)
+        SourceRecord rejected,
+        ExecutionClosure closure)
     {
         var root = Path.Combine(
             Path.GetTempPath(),
@@ -1226,7 +1561,7 @@ internal static class Program
                 new UTF8Encoding(false));
             var options = new Options(
                 input, transcript, roots, children, manifest);
-            await Run(options);
+            await Run(options, closure, verifyClosureAtPublication: true);
             var publishedManifest = JsonSerializer.Deserialize<Manifest>(
                 await File.ReadAllTextAsync(manifest, Utf8), Json)
                 ?? throw new InvalidDataException(
@@ -1271,7 +1606,7 @@ internal static class Program
             };
             try
             {
-                await Run(options);
+                await Run(options, closure, verifyClosureAtPublication: false);
                 throw new InvalidDataException("no-clobber rerun succeeded");
             }
             catch (IOException)
@@ -1315,6 +1650,25 @@ internal static class Program
         int RepetitionCount);
 
     private readonly record struct ArtifactIdentity(long Bytes, string Sha256);
+
+    private sealed record AuthorityIdentity(
+        string Path,
+        long Bytes,
+        string Sha256);
+
+    private sealed record ExecutionClosure(
+        string RuntimeVersion,
+        string RuntimeBundleSha256,
+        int RuntimeFilesVerified,
+        IReadOnlyList<string> ForbiddenEnvironmentVariablesChecked,
+        int ForbiddenEnvironmentVariablesPresent,
+        AuthorityIdentity DotnetHost,
+        AuthorityIdentity RuntimeManifest,
+        AuthorityIdentity CoreLibraryAssembly,
+        AuthorityIdentity ClassifierAssembly,
+        AuthorityIdentity ChessLibAssembly,
+        AuthorityIdentity NewtonsoftJsonAssembly,
+        AuthorityIdentity SystemIoPortsAssembly);
 
     private sealed record SourceRecord(
         int SchemaVersion,
@@ -1451,9 +1805,15 @@ internal static class Program
         IReadOnlyDictionary<string, int> ClassificationCounts);
 
     private sealed record RuntimeEvidence(
+        string Framework,
+        string ExpectedRuntimeVersion,
+        string ExpectedRuntimeBundleSha256,
+        string ExpectedRuntimeManifestSha256,
+        string ExpectedDotnetHostSha256,
         string ExpectedChessLibSha256,
-        string ActualChessLibSha256,
-        string ClassifierAssemblySha256);
+        string ExpectedNewtonsoftJsonSha256,
+        string ExpectedSystemIoPortsSha256,
+        ExecutionClosure ExecutionClosure);
 
     private sealed record Manifest(
         int SchemaVersion,

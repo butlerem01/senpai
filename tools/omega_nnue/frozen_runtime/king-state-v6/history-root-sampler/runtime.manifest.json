@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "kind": "omega-g6-frozen-dotnet-runtime-manifest",
+  "profileId": "king-state-v6-move-decision-v1",
+  "status": "frozen-dotnet-runtime-closure",
+  "runtimeVersion": "10.0.9",
+  "runtimeBundleSha256": "0ce194480dfb9a58a59c79bf94f19cb2eb571635a00547094a9c8ff28bb5f8f8",
+  "runtimeFileCount": 191,
+  "dotnetExecutable": {
+    "relativePath": "../../king-state-v5/dotnet-runtime/dotnet.exe",
+    "bytes": 167248,
+    "sha256": "a5ccdc3a41d5e5c6014ff64509aed176db39f4f14caffff3dd1997f8907e94d7"
+  },
+  "dotnetRuntimeManifest": {
+    "relativePath": "../../king-state-v5/dotnet-runtime.manifest.json",
+    "bytes": 33633,
+    "sha256": "c8543f22f4b353ee461f2e417c3d06ea2f05de2622fab49b789923f9944e00ee"
+  },
+  "coreLibraryAssembly": {
+    "relativePath": "../../king-state-v5/dotnet-runtime/shared/Microsoft.NETCore.App/10.0.9/System.Private.CoreLib.dll",
+    "bytes": 16017232,
+    "sha256": "dc1945de746f94987ec705a1f27d512abf72a41a1da37e414d1951e4e823037a"
+  },
+  "forbiddenEnvironmentVariables": [
+    "DOTNET_STARTUP_HOOKS",
+    "DOTNET_ADDITIONAL_DEPS",
+    "DOTNET_SHARED_STORE",
+    "DOTNET_HOST_PATH",
+    "DOTNET_ROOT",
+    "DOTNET_ROOT_X64",
+    "DOTNET_ROOT_X86",
+    "DOTNET_ROOT(x86)",
+    "DOTNET_MULTILEVEL_LOOKUP",
+    "DOTNET_ROLL_FORWARD",
+    "DOTNET_ROLL_FORWARD_ON_NO_CANDIDATE_FX",
+    "DOTNET_ROLL_FORWARD_TO_PRERELEASE",
+    "DOTNET_BUNDLE_EXTRACT_BASE_DIR"
+  ],
+  "environment": {},
+  "workingDirectoryPolicy": "application-assembly-parent",
+  "finalStageSeal": true
+}
+

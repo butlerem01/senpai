@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
-    <InformationalVersion>1.0.0+omega-g6-terminal-preclassifier-v1</InformationalVersion>
+    <InformationalVersion>1.0.0+omega-g6-history-root-sampler-v1</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
