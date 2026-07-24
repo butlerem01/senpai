@@ -46,6 +46,8 @@ UPSTREAM_ROUTING_KIND = "omega-decision-v3-target-free-routing"
 UPSTREAM_TEACHER_CLAIM_KIND = "omega-decision-v3-teacher-claim"
 UPSTREAM_TEACHER_COMPLETION_KIND = "omega-decision-v3-teacher-completion"
 UPSTREAM_HCE_CLAIM_KIND = "omega-decision-v3-pretarget-hce-claim"
+UPSTREAM_HCE_COMPLETION_KIND = "omega-decision-v3-pretarget-hce-completion"
+UPSTREAM_FORBIDDEN_REGISTRY_KIND = "omega-decision-v3-prior-forbidden-registry"
 UPSTREAM_VERIFIER_OPTIONS_KIND = "omega-decision-v3-verifier-options"
 UPSTREAM_VERIFICATION_KIND = "omega-decision-v3-fresh-verification"
 LABEL_MANIFEST_KIND = "omega-nnue-king-state-v6-label-manifest"
@@ -82,6 +84,7 @@ PRIMARY_TRAINING_SEED_BASE = 2026072401
 ROBUSTNESS_TRAINING_SEED_BASE = 2026072402
 INITIALIZER_ORDERED_CATALOG = ("G5", "G2-K2")
 INITIALIZER_SELECTION_MODES = ("promoted-prior", "deterministic-fallback")
+UPSTREAM_REQUIRED_PRIOR_SOURCE_IDS = ("G3", "G4", "G5")
 INITIALIZER_FALLBACK_PROTOCOL = {
     "architecture": "king-state-v6-move-decision-initializer-v1",
     "generator": "pinned upstream initializer verifier",
@@ -305,12 +308,14 @@ UPSTREAM_VERIFIER_OPTIONS = {
         "requireFreshHealthForPromotedEntry": True,
         "requireFailureOrAbortClosureForSkippedEntry": True,
     },
+    "requiredPriorForbiddenSourceIds": list(UPSTREAM_REQUIRED_PRIOR_SOURCE_IDS),
     "requiredSemanticReplays": [
         "initializer selection, embedded health, source closure, and model cross-links",
         "terminal rules manifest/transcript/completion and pre-teacher exclusions",
         "every prior-forbidden manifest/catalog and zero current overlap",
         "component-map coverage and whole-component split assignment",
-        "teacher lock/attempt ledger/completion coverage and budgets",
+        "pre-target static-HCE claim, exact completion receipt, and fresh engine replay",
+        "teacher claim/attempt ledger/completion coverage and budgets",
         "planned projection producer/path against realized corpus/manifest",
     ],
     "resultInformationRead": False,
@@ -539,6 +544,18 @@ def _sha256(path: Path) -> str:
 
 def _identity(path: Path) -> dict[str, Any]:
     return _snapshot_file(path)[0]
+
+
+def _identity_with_inode(path: Path) -> tuple[dict[str, Any], tuple[int, int]]:
+    """Snapshot one path and bind its stable underlying file identity."""
+
+    safe = _safe_existing_file(path)
+    before = os.lstat(safe)
+    identity = _identity(safe)
+    after = os.lstat(safe)
+    if not _same_file_snapshot(before, after):
+        raise ValueError(f"artifact changed while its file identity was read: {safe}")
+    return identity, (after.st_dev, after.st_ino)
 
 
 def _canonical_json(value: Any) -> bytes:
@@ -1097,6 +1114,129 @@ def _parse_component_map(path: Path) -> dict[str, dict[str, str]]:
     return result
 
 
+UPSTREAM_FORBIDDEN_REGISTRY_FIELDS = frozenset(
+    {
+        "schemaVersion",
+        "kind",
+        "profileId",
+        "status",
+        "createdUtc",
+        "requiredSourceIds",
+        "catalogs",
+        "producer",
+        "targetFieldsDecodedAtSeal",
+        "resultInformationRead",
+        "finalStageSeal",
+    }
+)
+UPSTREAM_FORBIDDEN_REGISTRY_ENTRY_FIELDS = frozenset(
+    {"coveredSourceIds", "manifest"}
+)
+
+
+def expected_upstream_forbidden_registry(
+    *,
+    catalog_groups: Sequence[tuple[Sequence[str], Path]],
+    producer: Path,
+    created_utc: str,
+) -> dict[str, Any]:
+    _parse_timestamp(created_utc, "prior-forbidden registry createdUtc")
+    if not catalog_groups:
+        raise ValueError("prior-forbidden registry has no catalogs")
+    entries: list[dict[str, Any]] = []
+    flattened_sources: list[str] = []
+    manifest_paths: set[str] = set()
+    manifest_inodes: set[tuple[int, int]] = set()
+    for index, (covered_source_ids, manifest) in enumerate(catalog_groups):
+        sources = list(covered_source_ids)
+        if (
+            not sources
+            or any(type(source_id) is not str or not source_id for source_id in sources)
+            or len(set(sources)) != len(sources)
+        ):
+            raise ValueError(f"prior-forbidden registry catalog {index} sources changed")
+        manifest_identity, manifest_inode = _identity_with_inode(manifest)
+        manifest_path = os.path.normcase(
+            os.path.normpath(str(manifest_identity["path"]))
+        )
+        if manifest_path in manifest_paths or manifest_inode in manifest_inodes:
+            raise ValueError("prior-forbidden registry repeats a catalog manifest")
+        manifest_paths.add(manifest_path)
+        manifest_inodes.add(manifest_inode)
+        flattened_sources.extend(sources)
+        entries.append(
+            {"coveredSourceIds": sources, "manifest": manifest_identity}
+        )
+    if flattened_sources != list(UPSTREAM_REQUIRED_PRIOR_SOURCE_IDS):
+        raise ValueError("prior-forbidden registry source coverage changed")
+    return {
+        "schemaVersion": SCHEMA_VERSION,
+        "kind": UPSTREAM_FORBIDDEN_REGISTRY_KIND,
+        "profileId": PROFILE_ID,
+        "status": "frozen-complete-prior-source-registry",
+        "createdUtc": created_utc,
+        "requiredSourceIds": list(UPSTREAM_REQUIRED_PRIOR_SOURCE_IDS),
+        "catalogs": entries,
+        "producer": _identity(producer),
+        "targetFieldsDecodedAtSeal": 0,
+        "resultInformationRead": False,
+        "finalStageSeal": True,
+    }
+
+
+def publish_upstream_forbidden_registry(path: Path, **kwargs: Any) -> dict[str, Any]:
+    return _exclusive_json(path, expected_upstream_forbidden_registry(**kwargs))
+
+
+def _verify_upstream_forbidden_registry(path: Path) -> dict[str, Any]:
+    document = _load_json(path, "prior-forbidden registry")
+    _exact_keys(
+        document, UPSTREAM_FORBIDDEN_REGISTRY_FIELDS, "prior-forbidden registry"
+    )
+    if (
+        type(document["schemaVersion"]) is not int
+        or document["schemaVersion"] != SCHEMA_VERSION
+        or document["kind"] != UPSTREAM_FORBIDDEN_REGISTRY_KIND
+        or document["profileId"] != PROFILE_ID
+        or document["status"] != "frozen-complete-prior-source-registry"
+        or not _type_exact_equal(
+            document["requiredSourceIds"], list(UPSTREAM_REQUIRED_PRIOR_SOURCE_IDS)
+        )
+        or type(document["catalogs"]) is not list
+        or type(document["targetFieldsDecodedAtSeal"]) is not int
+        or document["targetFieldsDecodedAtSeal"] != 0
+        or document["resultInformationRead"] is not False
+        or document["finalStageSeal"] is not True
+    ):
+        raise ValueError("prior-forbidden registry header changed")
+    groups: list[tuple[Sequence[str], Path]] = []
+    for index, entry in enumerate(document["catalogs"]):
+        if not isinstance(entry, dict):
+            raise ValueError(f"prior-forbidden registry catalog {index} is not an object")
+        _exact_keys(
+            entry,
+            UPSTREAM_FORBIDDEN_REGISTRY_ENTRY_FIELDS,
+            f"prior-forbidden registry catalog {index}",
+        )
+        if type(entry["coveredSourceIds"]) is not list:
+            raise ValueError(f"prior-forbidden registry catalog {index} sources changed")
+        manifest = _verify_identity_record(
+            entry["manifest"], f"prior-forbidden registry catalog {index} manifest"
+        )
+        groups.append((entry["coveredSourceIds"], Path(manifest["path"])))
+    producer = _verify_identity_record(
+        document["producer"], "prior-forbidden registry producer"
+    )
+    expected = expected_upstream_forbidden_registry(
+        catalog_groups=groups,
+        producer=Path(producer["path"]),
+        created_utc=document["createdUtc"],
+    )
+    if not _type_exact_equal(document, expected):
+        raise ValueError("prior-forbidden registry differs from recomputation")
+    return document
+
+
 UPSTREAM_PRELABEL_FIELDS = frozenset(
     {
         "schemaVersion",
@@ -1106,6 +1246,10 @@ UPSTREAM_PRELABEL_FIELDS = frozenset(
         "createdUtc",
         "componentMap",
         "targetFreeRouting",
+        "terminalClassifierLineage",
+        "priorForbiddenRegistry",
+        "priorForbiddenCatalogs",
+        "initializerManifest",
         "sourceRootManifest",
         "sourceChildrenManifest",
         "producer",
@@ -1120,13 +1264,38 @@ def expected_upstream_prelabel_seal(
     *,
     component_map: Path,
     target_free_routing: Path,
+    terminal_classifier_lineage: Path,
+    prior_forbidden_registry: Path,
+    prior_forbidden_catalogs: Sequence[Path],
+    initializer_manifest: Path,
     source_root_manifest: Path,
     source_children_manifest: Path,
     producer: Path,
     created_utc: str,
 ) -> dict[str, Any]:
-    _parse_timestamp(created_utc, "upstream prelabel createdUtc")
+    created = _parse_timestamp(created_utc, "upstream prelabel createdUtc")
     components = _parse_component_map(component_map)
+    forbidden_paths = tuple(prior_forbidden_catalogs)
+    if not forbidden_paths:
+        raise ValueError("upstream prelabel has no prior-forbidden catalogs")
+    forbidden_registry = _verify_upstream_forbidden_registry(
+        prior_forbidden_registry
+    )
+    if created <= _parse_timestamp(
+        forbidden_registry["createdUtc"], "prior-forbidden registry createdUtc"
+    ):
+        raise ValueError("upstream prelabel must follow prior-forbidden registry freeze")
+    registry_catalogs = [entry["manifest"] for entry in forbidden_registry["catalogs"]]
+    forbidden_identities = [_identity(path) for path in forbidden_paths]
+    if not _type_exact_equal(registry_catalogs, forbidden_identities):
+        raise ValueError("upstream prelabel catalogs differ from frozen registry")
+    initializer_document = _load_json(
+        initializer_manifest, "prelabel-bound initializer manifest"
+    )
+    if created <= _parse_timestamp(
+        initializer_document.get("createdUtc"), "initializer createdUtc"
+    ):
+        raise ValueError("upstream prelabel must follow initializer freeze")
     return {
         "schemaVersion": SCHEMA_VERSION,
         "kind": UPSTREAM_PRELABEL_SEAL_KIND,
@@ -1135,6 +1304,10 @@ def expected_upstream_prelabel_seal(
         "createdUtc": created_utc,
         "componentMap": _identity(component_map),
         "targetFreeRouting": _identity(target_free_routing),
+        "terminalClassifierLineage": _identity(terminal_classifier_lineage),
+        "priorForbiddenRegistry": _identity(prior_forbidden_registry),
+        "priorForbiddenCatalogs": forbidden_identities,
+        "initializerManifest": _identity(initializer_manifest),
         "sourceRootManifest": _identity(source_root_manifest),
         "sourceChildrenManifest": _identity(source_children_manifest),
         "producer": _identity(producer),
@@ -1149,7 +1322,14 @@ def publish_upstream_prelabel_seal(path: Path, **kwargs: Any) -> dict[str, Any]:
 
 
 def _verify_upstream_prelabel_seal(
-    path: Path, *, component_map: Path, target_free_routing: Path | None = None
+    path: Path,
+    *,
+    component_map: Path,
+    target_free_routing: Path | None = None,
+    terminal_classifier_lineage: Path | None = None,
+    prior_forbidden_registry: Path | None = None,
+    prior_forbidden_catalogs: Sequence[Path] | None = None,
+    initializer_manifest: Path | None = None,
 ) -> dict[str, Any]:
     document = _load_json(path, "upstream prelabel seal")
     _exact_keys(document, UPSTREAM_PRELABEL_FIELDS, "upstream prelabel seal")
@@ -1165,6 +1345,17 @@ def _verify_upstream_prelabel_seal(
         or document["targetFieldsEmittedAtSeal"] != 0
     ):
         raise ValueError("upstream prelabel schema/status changed")
+    forbidden_values = document["priorForbiddenCatalogs"]
+    if type(forbidden_values) is not list or not forbidden_values:
+        raise ValueError("upstream prelabel prior-forbidden catalogs changed")
+    sealed_forbidden = tuple(
+        Path(
+            _verify_identity_record(
+                value, f"upstream prelabel forbidden catalog {index}"
+            )["path"]
+        )
+        for index, value in enumerate(forbidden_values)
+    )
     expected = expected_upstream_prelabel_seal(
         component_map=component_map,
         target_free_routing=(
@@ -1173,6 +1364,41 @@ def _verify_upstream_prelabel_seal(
             else Path(
                 _verify_identity_record(
                     document["targetFreeRouting"], "upstream target-free routing"
+                )["path"]
+            )
+        ),
+        terminal_classifier_lineage=(
+            terminal_classifier_lineage
+            if terminal_classifier_lineage is not None
+            else Path(
+                _verify_identity_record(
+                    document["terminalClassifierLineage"],
+                    "upstream terminal-classifier lineage",
+                )["path"]
+            )
+        ),
+        prior_forbidden_registry=(
+            prior_forbidden_registry
+            if prior_forbidden_registry is not None
+            else Path(
+                _verify_identity_record(
+                    document["priorForbiddenRegistry"],
+                    "upstream prior-forbidden registry",
+                )["path"]
+            )
+        ),
+        prior_forbidden_catalogs=(
+            tuple(prior_forbidden_catalogs)
+            if prior_forbidden_catalogs is not None
+            else sealed_forbidden
+        ),
+        initializer_manifest=(
+            initializer_manifest
+            if initializer_manifest is not None
+            else Path(
+                _verify_identity_record(
+                    document["initializerManifest"],
+                    "upstream prelabel initializer manifest",
                 )["path"]
             )
         ),
@@ -1621,10 +1847,14 @@ def _verify_hce_options(path: Path) -> dict[str, Any]:
 
 
 def _parse_hce_projection(
-    path: Path, expected_child_ids: set[str]
+    path: Path,
+    expected_child_ids: set[str],
+    *,
+    expected_order: Sequence[str] | None = None,
 ) -> dict[str, int]:
     safe, lines = _snapshot_utf8_lines(path, "static-HCE projection")
     result: dict[str, int] = {}
+    ordered_child_ids: list[str] = []
     for line_number, line in enumerate(lines, 1):
         if not line.strip():
             continue
@@ -1651,8 +1881,11 @@ def _parse_hce_projection(
         if value["childId"] in result:
             raise ValueError(f"{location}: duplicate HCE childId")
         result[value["childId"]] = score
+        ordered_child_ids.append(value["childId"])
     if set(result) != expected_child_ids:
         raise ValueError("static-HCE projection child inventory differs from corpus")
+    if expected_order is not None and ordered_child_ids != list(expected_order):
+        raise ValueError("static-HCE projection row order differs from frozen input order")
     return result
 
 
@@ -2383,7 +2616,7 @@ def verify_canonical_namespace() -> Generation6Registry:
             hce_options=Path(identities["staticHceOptions"]["path"]),
         ),
     )
-    _, upstream_verification = _verify_upstream_capsule(
+    upstream_capsule, upstream_verification = _verify_upstream_capsule(
         Path(identities["upstreamCapsule"]["path"]),
         authority=authority,
         preregistration=document,
@@ -2401,6 +2634,10 @@ def verify_canonical_namespace() -> Generation6Registry:
         <= _parse_timestamp(authority.hce_created_utc, "HCE createdUtc")
         or created
         <= _parse_timestamp(initializer["createdUtc"], "initializer createdUtc")
+        or created
+        <= _parse_timestamp(
+            upstream_capsule["createdUtc"], "upstream capsule createdUtc"
+        )
     ):
         raise ValueError("preregistered authority/chronology changed")
     registry = Generation6Registry(
@@ -2784,6 +3021,7 @@ UPSTREAM_CAPSULE_FIELDS = frozenset(
         "plannedProjectionProducer",
         "plannedProjectedCorpusPath",
         "plannedProjectionManifestPath",
+        "priorForbiddenRegistry",
         "priorForbiddenCatalogs",
         "teacherClaim",
         "teacherEngine",
@@ -2800,6 +3038,7 @@ UPSTREAM_CAPSULE_FIELDS = frozenset(
         "projectedCorpus",
         "labelManifest",
         "preTargetHceClaim",
+        "preTargetHceCompletion",
         "staticHceEngine",
         "staticHceRunner",
         "staticHceOptions",
@@ -2830,6 +3069,7 @@ UPSTREAM_TEACHER_CLAIM_FIELDS = frozenset(
         "plannedProjectionProducer",
         "plannedProjectedCorpusPath",
         "plannedProjectionManifestPath",
+        "preTargetHceCompletion",
         "targetRowsDecodedAtClaim",
         "targetFieldsDecodedAtClaim",
         "resultInformationRead",
@@ -2878,6 +3118,29 @@ UPSTREAM_HCE_CLAIM_FIELDS = frozenset(
         "resultInformationRead",
     }
 )
+UPSTREAM_HCE_COMPLETION_FIELDS = frozenset(
+    {
+        "schemaVersion",
+        "kind",
+        "profileId",
+        "status",
+        "createdUtc",
+        "claim",
+        "prelabelSeal",
+        "targetFreeRouting",
+        "engine",
+        "runner",
+        "options",
+        "transcript",
+        "inputOrderSha256",
+        "rows",
+        "perspective",
+        "targetRowsDecodedAtCompletion",
+        "targetFieldsDecodedAtCompletion",
+        "resultInformationRead",
+        "finalStageSeal",
+    }
+)
 UPSTREAM_TEACHER_BUDGETS = {
     "shallowNodes": 2000,
     "deepNodes": 50000,
@@ -2889,9 +3152,12 @@ UPSTREAM_TEACHER_BUDGETS = {
 UPSTREAM_CAPSULE_DECLARATION = {
     "componentAndSplitMapFrozenBeforeTeacher": True,
     "terminalClassifierLineageFrozenBeforeTeacher": True,
+    "prelabelSealBindsTerminalClassifierAndPriorForbiddenRegistry": True,
+    "prelabelSealBindsInitializerAuthority": True,
     "plannedProjectionProducerAndPathsFrozenBeforeTeacher": True,
     "priorForbiddenCatalogFrozenBeforeTeacher": True,
     "staticHceCompletedBeforeTeacherTargets": True,
+    "teacherClaimBindsCompletedStaticHceReceipt": True,
     "heldOutTargetsDecodedByGeneration6AtClosure": 0,
     "gameResultsRead": False,
 }
@@ -2909,6 +3175,7 @@ UPSTREAM_VERIFICATION_FIELDS = frozenset(
         "terminalAuthority",
         "priorForbiddenAuthority",
         "componentAuthority",
+        "staticHceAuthority",
         "teacherLedgerAuthority",
         "projectionAuthority",
         "resultInformationRead",
@@ -2944,6 +3211,8 @@ UPSTREAM_TERMINAL_AUTHORITY_FIELDS = frozenset(
 UPSTREAM_FORBIDDEN_AUTHORITY_FIELDS = frozenset(
     {
         "catalogs",
+        "registry",
+        "requiredSourceIds",
         "catalogPositions",
         "manifestsSemanticallyReplayed",
         "exactPositionOverlaps",
@@ -2953,6 +3222,25 @@ UPSTREAM_FORBIDDEN_AUTHORITY_FIELDS = frozenset(
 )
 UPSTREAM_COMPONENT_AUTHORITY_FIELDS = frozenset(
     {"componentMap", "roots", "components", "wholeComponentSplits", "semanticsReplayed"}
+)
+UPSTREAM_STATIC_HCE_AUTHORITY_FIELDS = frozenset(
+    {
+        "claim",
+        "completion",
+        "teacherClaim",
+        "prelabelSeal",
+        "targetFreeRouting",
+        "engine",
+        "runner",
+        "options",
+        "transcript",
+        "inputOrderSha256",
+        "rows",
+        "perspective",
+        "freshReplayMatches",
+        "completedBeforeTeacherClaim",
+        "semanticsReplayed",
+    }
 )
 UPSTREAM_TEACHER_LEDGER_AUTHORITY_FIELDS = frozenset(
     {
@@ -3041,6 +3329,216 @@ def _parse_target_free_routing(
     if not routes:
         raise ValueError("target-free routing is empty")
     return routes
+
+
+def _target_free_hce_order(
+    routes: Mapping[str, Mapping[str, Any]],
+) -> list[dict[str, str]]:
+    rows = [
+        {
+            "childId": child["childId"],
+            "normalizedChildOfen": child["normalizedChildOfen"],
+        }
+        for route in routes.values()
+        for child in route["children"]
+    ]
+    rows.sort(key=lambda row: row["childId"])
+    return rows
+
+
+def _verify_upstream_hce_claim(
+    path: Path,
+    *,
+    prelabel_seal: Path,
+    target_free_routing: Path,
+    engine: Path,
+    runner: Path,
+    options: Path,
+    planned_transcript: Path,
+) -> dict[str, Any]:
+    document = _load_json(path, "pre-target HCE claim")
+    _exact_keys(document, UPSTREAM_HCE_CLAIM_FIELDS, "pre-target HCE claim")
+    expected_links = {
+        "prelabelSeal": _identity(prelabel_seal),
+        "targetFreeRouting": _identity(target_free_routing),
+        "engine": _identity(engine),
+        "runner": _identity(runner),
+        "options": _identity(options),
+    }
+    _verify_hce_options(options)
+    if (
+        type(document["schemaVersion"]) is not int
+        or document["schemaVersion"] != SCHEMA_VERSION
+        or document["kind"] != UPSTREAM_HCE_CLAIM_KIND
+        or document["profileId"] != PROFILE_ID
+        or document["status"] != "claimed-before-teacher-and-target-decode"
+        or document["plannedTranscriptPath"] != str(_safe_existing_file(planned_transcript))
+        or type(document["targetRowsDecodedAtClaim"]) is not int
+        or document["targetRowsDecodedAtClaim"] != 0
+        or type(document["targetFieldsDecodedAtClaim"]) is not int
+        or document["targetFieldsDecodedAtClaim"] != 0
+        or document["resultInformationRead"] is not False
+        or any(
+            not _type_exact_equal(document[field], value)
+            for field, value in expected_links.items()
+        )
+    ):
+        raise ValueError("pre-target HCE claim changed")
+    _parse_timestamp(document["createdUtc"], "pre-target HCE claim createdUtc")
+    return document
+
+
+def expected_upstream_hce_completion(
+    *,
+    claim: Path,
+    prelabel_seal: Path,
+    target_free_routing: Path,
+    engine: Path,
+    runner: Path,
+    options: Path,
+    transcript: Path,
+    created_utc: str,
+) -> dict[str, Any]:
+    dependencies = tuple(
+        _safe_existing_file(path)
+        for path in (
+            claim,
+            prelabel_seal,
+            target_free_routing,
+            engine,
+            runner,
+            options,
+            transcript,
+        )
+    )
+    lexical_keys = [
+        os.path.normcase(os.path.normpath(str(path))) for path in dependencies
+    ]
+    inode_keys = [
+        (os.lstat(path).st_dev, os.lstat(path).st_ino) for path in dependencies
+    ]
+    if len(set(lexical_keys)) != len(lexical_keys) or len(set(inode_keys)) != len(
+        inode_keys
+    ):
+        raise ValueError("pre-target HCE authority roles share a path or inode")
+    (
+        claim,
+        prelabel_seal,
+        target_free_routing,
+        engine,
+        runner,
+        options,
+        transcript,
+    ) = dependencies
+    snapshots = {str(path): _identity(path) for path in dependencies}
+    claim_document = _verify_upstream_hce_claim(
+        claim,
+        prelabel_seal=prelabel_seal,
+        target_free_routing=target_free_routing,
+        engine=engine,
+        runner=runner,
+        options=options,
+        planned_transcript=transcript,
+    )
+    created = _parse_timestamp(created_utc, "pre-target HCE completion createdUtc")
+    if created <= _parse_timestamp(
+        claim_document["createdUtc"], "pre-target HCE claim createdUtc"
+    ):
+        raise ValueError("pre-target HCE completion must follow its claim")
+    routes = _parse_target_free_routing(target_free_routing)
+    ordered = _target_free_hce_order(routes)
+    child_ids = {row["childId"] for row in ordered}
+    scores = _parse_hce_projection(
+        transcript,
+        child_ids,
+        expected_order=[row["childId"] for row in ordered],
+    )
+    replay = _run_exact_evaluator(
+        engine=engine,
+        runner=runner,
+        mode="--evaluate-handcrafted-stream",
+        ofens=[row["normalizedChildOfen"] for row in ordered],
+    )
+    replay_by_child = {
+        row["childId"]: replay[str(index)] for index, row in enumerate(ordered)
+    }
+    if replay_by_child != scores:
+        raise ValueError("pre-target HCE transcript differs from fresh engine replay")
+    for dependency in dependencies:
+        if not _type_exact_equal(_identity(dependency), snapshots[str(dependency)]):
+            raise ValueError("pre-target HCE dependency changed during completion replay")
+    return {
+        "schemaVersion": SCHEMA_VERSION,
+        "kind": UPSTREAM_HCE_COMPLETION_KIND,
+        "profileId": PROFILE_ID,
+        "status": "completed-before-teacher-and-target-decode",
+        "createdUtc": created_utc,
+        "claim": snapshots[str(claim)],
+        "prelabelSeal": snapshots[str(prelabel_seal)],
+        "targetFreeRouting": snapshots[str(target_free_routing)],
+        "engine": snapshots[str(engine)],
+        "runner": snapshots[str(runner)],
+        "options": snapshots[str(options)],
+        "transcript": snapshots[str(transcript)],
+        "inputOrderSha256": _sha256_bytes(_canonical_json(ordered)),
+        "rows": len(ordered),
+        "perspective": STATIC_HCE_PERSPECTIVE,
+        "targetRowsDecodedAtCompletion": 0,
+        "targetFieldsDecodedAtCompletion": 0,
+        "resultInformationRead": False,
+        "finalStageSeal": True,
+    }
+
+
+def publish_upstream_hce_completion(path: Path, **kwargs: Any) -> dict[str, Any]:
+    return _exclusive_json(path, expected_upstream_hce_completion(**kwargs))
+
+
+def _verify_upstream_hce_completion(
+    path: Path,
+    *,
+    claim: Path,
+    prelabel_seal: Path,
+    target_free_routing: Path,
+    engine: Path,
+    runner: Path,
+    options: Path,
+    transcript: Path,
+) -> dict[str, Any]:
+    document = _load_json(path, "pre-target HCE completion")
+    _exact_keys(
+        document, UPSTREAM_HCE_COMPLETION_FIELDS, "pre-target HCE completion"
+    )
+    if (
+        type(document["schemaVersion"]) is not int
+        or document["schemaVersion"] != SCHEMA_VERSION
+        or document["kind"] != UPSTREAM_HCE_COMPLETION_KIND
+        or document["profileId"] != PROFILE_ID
+        or document["status"] != "completed-before-teacher-and-target-decode"
+        or type(document["rows"]) is not int
+        or document["rows"] <= 0
+        or document["perspective"] != STATIC_HCE_PERSPECTIVE
+        or type(document["targetRowsDecodedAtCompletion"]) is not int
+        or document["targetRowsDecodedAtCompletion"] != 0
+        or type(document["targetFieldsDecodedAtCompletion"]) is not int
+        or document["targetFieldsDecodedAtCompletion"] != 0
+        or document["resultInformationRead"] is not False
+        or document["finalStageSeal"] is not True
+    ):
+        raise ValueError("pre-target HCE completion header changed")
+    expected = expected_upstream_hce_completion(
+        claim=claim,
+        prelabel_seal=prelabel_seal,
+        target_free_routing=target_free_routing,
+        engine=engine,
+        runner=runner,
+        options=options,
+        transcript=transcript,
+        created_utc=document["createdUtc"],
+    )
+    if not _type_exact_equal(document, expected):
+        raise ValueError("pre-target HCE completion differs from fresh replay")
+    return document
 
 
 def _opaque_teacher_structural(path: Path) -> dict[str, dict[str, str]]:
@@ -3135,6 +3633,7 @@ def _verify_upstream_verifier_result(
     identities: Mapping[str, Mapping[str, Any]],
     preregistration: Mapping[str, Any],
     initializer: Mapping[str, Any],
+    hce_completion: Mapping[str, Any],
     routed_children: int,
     root_count: int,
     component_count: int,
@@ -3173,9 +3672,13 @@ def _verify_upstream_verifier_result(
     if (
         not _type_exact_equal(initial["manifest"], identities["initializerManifest"])
         or initial["selectionMode"] != initializer["selectionMode"]
-        or initial["selectedCatalogIndex"] != initializer["selectedCatalogIndex"]
+        or not _type_exact_equal(
+            initial["selectedCatalogIndex"], initializer["selectedCatalogIndex"]
+        )
         or not _type_exact_equal(initial["selectedModel"], identities["initializerModel"])
-        or initial["catalogSourceIds"] != list(INITIALIZER_ORDERED_CATALOG)
+        or not _type_exact_equal(
+            initial["catalogSourceIds"], list(INITIALIZER_ORDERED_CATALOG)
+        )
         or initial["firstEligibleSelected"] is not True
         or initial["selectionSemanticsVerified"] is not True
         or initial["sourceClosureSemanticsVerified"] is not True
@@ -3228,7 +3731,14 @@ def _verify_upstream_verifier_result(
         "upstream forbidden authority",
     )
     if (
-        not _type_exact_equal(forbidden["catalogs"], capsule["priorForbiddenCatalogs"])
+        not _type_exact_equal(
+            forbidden["registry"], identities["priorForbiddenRegistry"]
+        )
+        or not _type_exact_equal(
+            forbidden["requiredSourceIds"],
+            list(UPSTREAM_REQUIRED_PRIOR_SOURCE_IDS),
+        )
+        or not _type_exact_equal(forbidden["catalogs"], capsule["priorForbiddenCatalogs"])
         or type(forbidden["catalogPositions"]) is not int
         or forbidden["catalogPositions"] <= 0
         or forbidden["manifestsSemanticallyReplayed"] is not True
@@ -3259,6 +3769,40 @@ def _verify_upstream_verifier_result(
         or component["semanticsReplayed"] is not True
     ):
         raise ValueError("upstream component-map semantic replay changed")
+
+    static_hce = result["staticHceAuthority"]
+    if not isinstance(static_hce, dict):
+        raise ValueError("upstream static-HCE authority is not an object")
+    _exact_keys(
+        static_hce,
+        UPSTREAM_STATIC_HCE_AUTHORITY_FIELDS,
+        "upstream static-HCE authority",
+    )
+    if (
+        not _type_exact_equal(static_hce["claim"], identities["preTargetHceClaim"])
+        or not _type_exact_equal(
+            static_hce["completion"], identities["preTargetHceCompletion"]
+        )
+        or not _type_exact_equal(static_hce["teacherClaim"], identities["teacherClaim"])
+        or not _type_exact_equal(static_hce["prelabelSeal"], identities["prelabelSeal"])
+        or not _type_exact_equal(
+            static_hce["targetFreeRouting"], identities["targetFreeRouting"]
+        )
+        or not _type_exact_equal(static_hce["engine"], identities["staticHceEngine"])
+        or not _type_exact_equal(static_hce["runner"], identities["staticHceRunner"])
+        or not _type_exact_equal(static_hce["options"], identities["staticHceOptions"])
+        or not _type_exact_equal(
+            static_hce["transcript"], identities["staticHceTranscript"]
+        )
+        or static_hce["inputOrderSha256"] != hce_completion["inputOrderSha256"]
+        or type(static_hce["rows"]) is not int
+        or static_hce["rows"] != routed_children
+        or static_hce["perspective"] != STATIC_HCE_PERSPECTIVE
+        or static_hce["freshReplayMatches"] is not True
+        or static_hce["completedBeforeTeacherClaim"] is not True
+        or static_hce["semanticsReplayed"] is not True
+    ):
+        raise ValueError("upstream static-HCE replay changed")
 
     teacher = result["teacherLedgerAuthority"]
     if not isinstance(teacher, dict):
@@ -3357,6 +3901,7 @@ def _verify_upstream_capsule(
         "initializerModel",
         "initializerManifest",
         "plannedProjectionProducer",
+        "priorForbiddenRegistry",
         "teacherClaim",
         "teacherEngine",
         "teacherRunner",
@@ -3370,6 +3915,7 @@ def _verify_upstream_capsule(
         "projectedCorpus",
         "labelManifest",
         "preTargetHceClaim",
+        "preTargetHceCompletion",
         "staticHceEngine",
         "staticHceRunner",
         "staticHceOptions",
@@ -3380,6 +3926,31 @@ def _verify_upstream_capsule(
         field: _verify_identity_record(capsule[field], f"capsule {field}")
         for field in identity_fields
     }
+    disjoint_roles = (
+        "preTargetHceClaim",
+        "preTargetHceCompletion",
+        "staticHceTranscript",
+        "teacherClaim",
+        "teacherAttemptLedger",
+        "teacherLabels",
+        "teacherManifest",
+        "projectedCorpus",
+        "labelManifest",
+    )
+    role_paths = {
+        role: _safe_existing_file(Path(identities[role]["path"]))
+        for role in disjoint_roles
+    }
+    lexical_keys = [
+        os.path.normcase(os.path.normpath(str(path))) for path in role_paths.values()
+    ]
+    inode_keys = [
+        (os.lstat(path).st_dev, os.lstat(path).st_ino) for path in role_paths.values()
+    ]
+    if len(set(lexical_keys)) != len(lexical_keys) or len(set(inode_keys)) != len(
+        inode_keys
+    ):
+        raise ValueError("capsule target/HCE authority roles share a path or inode")
     if (
         type(capsule["priorForbiddenCatalogs"]) is not list
         or not capsule["priorForbiddenCatalogs"]
@@ -3387,6 +3958,14 @@ def _verify_upstream_capsule(
         raise ValueError("capsule prior forbidden catalog is empty")
     for index, identity in enumerate(capsule["priorForbiddenCatalogs"]):
         _verify_identity_record(identity, f"capsule forbidden catalog {index}")
+    forbidden_registry = _verify_upstream_forbidden_registry(
+        Path(identities["priorForbiddenRegistry"]["path"])
+    )
+    if not _type_exact_equal(
+        [entry["manifest"] for entry in forbidden_registry["catalogs"]],
+        capsule["priorForbiddenCatalogs"],
+    ):
+        raise ValueError("capsule prior-forbidden registry/catalog list changed")
     if (
         type(capsule["plannedProjectedCorpusPath"]) is not str
         or capsule["plannedProjectedCorpusPath"]
@@ -3465,6 +4044,16 @@ def _verify_upstream_capsule(
     structural = {root.root_id: root for root in authority.opaque.roots}
     if set(routes) != set(components) or set(routes) != set(structural):
         raise ValueError("capsule routing/component/projected root inventories differ")
+    hce_completion = _verify_upstream_hce_completion(
+        Path(identities["preTargetHceCompletion"]["path"]),
+        claim=Path(identities["preTargetHceClaim"]["path"]),
+        prelabel_seal=Path(identities["prelabelSeal"]["path"]),
+        target_free_routing=Path(identities["targetFreeRouting"]["path"]),
+        engine=Path(identities["staticHceEngine"]["path"]),
+        runner=Path(identities["staticHceRunner"]["path"]),
+        options=Path(identities["staticHceOptions"]["path"]),
+        transcript=Path(identities["staticHceTranscript"]["path"]),
+    )
     verifier_result = _run_upstream_verifier(
         capsule_path=path, preregistration=preregistration
     )
@@ -3475,6 +4064,7 @@ def _verify_upstream_capsule(
         identities=identities,
         preregistration=preregistration,
         initializer=initializer_document,
+        hce_completion=hce_completion,
         routed_children=len(authority.opaque.rows),
         root_count=len(routes),
         component_count=len(
@@ -3530,6 +4120,16 @@ def _verify_upstream_capsule(
         Path(identities["prelabelSeal"]["path"]),
         component_map=Path(identities["componentMap"]["path"]),
         target_free_routing=Path(identities["targetFreeRouting"]["path"]),
+        terminal_classifier_lineage=Path(
+            identities["terminalClassifierLineage"]["path"]
+        ),
+        prior_forbidden_registry=Path(
+            identities["priorForbiddenRegistry"]["path"]
+        ),
+        prior_forbidden_catalogs=tuple(
+            Path(value["path"]) for value in capsule["priorForbiddenCatalogs"]
+        ),
+        initializer_manifest=Path(identities["initializerManifest"]["path"]),
     )
     teacher_claim = _load_json(
         Path(identities["teacherClaim"]["path"]), "capsule teacher claim"
@@ -3547,9 +4147,11 @@ def _verify_upstream_capsule(
         "plannedProjectionProducer": identities["plannedProjectionProducer"],
         "plannedProjectedCorpusPath": capsule["plannedProjectedCorpusPath"],
         "plannedProjectionManifestPath": capsule["plannedProjectionManifestPath"],
+        "preTargetHceCompletion": identities["preTargetHceCompletion"],
     }
     if (
-        teacher_claim.get("schemaVersion") != SCHEMA_VERSION
+        type(teacher_claim.get("schemaVersion")) is not int
+        or teacher_claim.get("schemaVersion") != SCHEMA_VERSION
         or teacher_claim.get("kind") != UPSTREAM_TEACHER_CLAIM_KIND
         or teacher_claim.get("profileId") != PROFILE_ID
         or teacher_claim.get("status") != "claimed-before-first-teacher-target-decode"
@@ -3590,7 +4192,8 @@ def _verify_upstream_capsule(
         "labelManifest": identities["labelManifest"],
     }
     if (
-        completion.get("schemaVersion") != SCHEMA_VERSION
+        type(completion.get("schemaVersion")) is not int
+        or completion.get("schemaVersion") != SCHEMA_VERSION
         or completion.get("kind") != UPSTREAM_TEACHER_COMPLETION_KIND
         or completion.get("profileId") != PROFILE_ID
         or completion.get("status") != "completed-exact-claimed-teacher-and-projection"
@@ -3602,35 +4205,67 @@ def _verify_upstream_capsule(
         )
     ):
         raise ValueError("capsule teacher completion changed")
-    hce_claim = _load_json(
-        Path(identities["preTargetHceClaim"]["path"]), "capsule HCE claim"
+    hce_claim = _verify_upstream_hce_claim(
+        Path(identities["preTargetHceClaim"]["path"]),
+        prelabel_seal=Path(identities["prelabelSeal"]["path"]),
+        target_free_routing=Path(identities["targetFreeRouting"]["path"]),
+        engine=Path(identities["staticHceEngine"]["path"]),
+        runner=Path(identities["staticHceRunner"]["path"]),
+        options=Path(identities["staticHceOptions"]["path"]),
+        planned_transcript=Path(identities["staticHceTranscript"]["path"]),
     )
-    _exact_keys(hce_claim, UPSTREAM_HCE_CLAIM_FIELDS, "capsule HCE claim")
-    if (
-        hce_claim.get("schemaVersion") != SCHEMA_VERSION
-        or hce_claim.get("kind") != UPSTREAM_HCE_CLAIM_KIND
-        or hce_claim.get("profileId") != PROFILE_ID
-        or hce_claim.get("status") != "claimed-before-teacher-and-target-decode"
-        or not _type_exact_equal(hce_claim.get("prelabelSeal"), identities["prelabelSeal"])
-        or not _type_exact_equal(
-            hce_claim.get("targetFreeRouting"), identities["targetFreeRouting"]
-        )
-        or not _type_exact_equal(hce_claim.get("engine"), identities["staticHceEngine"])
-        or not _type_exact_equal(hce_claim.get("runner"), identities["staticHceRunner"])
-        or not _type_exact_equal(hce_claim.get("options"), identities["staticHceOptions"])
-        or hce_claim.get("plannedTranscriptPath")
-        != identities["staticHceTranscript"]["path"]
-        or type(hce_claim.get("targetRowsDecodedAtClaim")) is not int
-        or hce_claim.get("targetRowsDecodedAtClaim") != 0
-        or type(hce_claim.get("targetFieldsDecodedAtClaim")) is not int
-        or hce_claim.get("targetFieldsDecodedAtClaim") != 0
-        or hce_claim.get("resultInformationRead") is not False
+    prelabel_created = _parse_timestamp(prelabel["createdUtc"], "prelabel createdUtc")
+    hce_claim_created = _parse_timestamp(
+        hce_claim["createdUtc"], "pre-target HCE claim createdUtc"
+    )
+    hce_completion_created = _parse_timestamp(
+        hce_completion["createdUtc"], "pre-target HCE completion createdUtc"
+    )
+    teacher_claim_created = _parse_timestamp(
+        teacher_claim["createdUtc"], "teacher claim createdUtc"
+    )
+    teacher_completion_created = _parse_timestamp(
+        completion["createdUtc"], "teacher completion createdUtc"
+    )
+    teacher_manifest_document = _load_json(
+        Path(identities["teacherManifest"]["path"]),
+        "capsule teacher manifest",
+    )
+    teacher_manifest_created = _parse_timestamp(
+        teacher_manifest_document["createdUtc"], "teacher manifest createdUtc"
+    )
+    label_manifest_created = _parse_timestamp(
+        label_document["createdUtc"], "label manifest createdUtc"
+    )
+    static_hce_manifest_document = _load_json(
+        Path(identities["staticHceManifest"]["path"]),
+        "capsule static-HCE manifest",
+    )
+    static_hce_manifest_created = _parse_timestamp(
+        static_hce_manifest_document["createdUtc"],
+        "static-HCE manifest createdUtc",
+    )
+    capsule_created = _parse_timestamp(capsule["createdUtc"], "upstream capsule createdUtc")
+    if not (
+        prelabel_created
+        < hce_claim_created
+        < hce_completion_created
+        < teacher_claim_created
+        < teacher_completion_created
+        < capsule_created
     ):
-        raise ValueError("capsule pre-target HCE claim changed")
-    if _parse_timestamp(teacher_claim["createdUtc"], "teacher claim createdUtc") <= _parse_timestamp(
-        prelabel["createdUtc"], "prelabel createdUtc"
+        raise ValueError("upstream pre-target/teacher chronology changed")
+    if not (
+        teacher_claim_created
+        < teacher_manifest_created
+        < label_manifest_created
+        < teacher_completion_created
     ):
-        raise ValueError("teacher claim does not follow prelabel freeze")
+        raise ValueError("upstream teacher target/projection chronology changed")
+    if not (
+        label_manifest_created < static_hce_manifest_created < capsule_created
+    ):
+        raise ValueError("upstream static-HCE/capsule chronology changed")
     return capsule, verifier_result
 
 
@@ -7391,6 +8026,8 @@ def protocol_document() -> dict[str, Any]:
             "teacherClaimKind": UPSTREAM_TEACHER_CLAIM_KIND,
             "teacherCompletionKind": UPSTREAM_TEACHER_COMPLETION_KIND,
             "preTargetHceClaimKind": UPSTREAM_HCE_CLAIM_KIND,
+            "preTargetHceCompletionKind": UPSTREAM_HCE_COMPLETION_KIND,
+            "priorForbiddenRegistryKind": UPSTREAM_FORBIDDEN_REGISTRY_KIND,
             "freshVerifier": {
                 "canonicalRelativePath": "tools/omega_nnue/verify_omega_decision_v3_upstream.py",
                 "options": upstream_verifier_options_document(),
@@ -7402,10 +8039,10 @@ def protocol_document() -> dict[str, Any]:
                 "source root/group, child id/OFEN, phase, side",
                 "independent component and whole-component split projection",
                 "fresh terminal rules manifest/transcript/completion coverage replay",
-                "fresh semantic replay of every prior-forbidden catalog with zero overlap",
+                "complete required-source registry and fresh semantic replay of every prior-forbidden catalog with zero overlap",
                 "planned projection producer/corpus/manifest against realized projection",
                 "teacher claim, engine, runner, options, budget, order, ledger, and completion replay",
-                "controlled pre-target HCE claim/transcript and fresh engine replay",
+                "controlled pre-target HCE claim/completion/transcript, chronology, and fresh engine replay",
                 "fixed prior-promoted initializer catalog or deterministic fallback",
                 "semantic G5 success/failure/abort closure without requiring G5 success",
                 "exact projection and closure identities",

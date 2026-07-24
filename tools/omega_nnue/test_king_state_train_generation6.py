@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 try:
     from . import king_state_train_generation6 as host_g6
@@ -68,6 +69,7 @@ mode = sys.argv[1]
 if mode == "--verify-omega-decision-v3-capsule":
     capsule_path, options_path, initializer_path = sys.argv[2:]
     capsule = json.loads(Path(capsule_path).read_text(encoding="utf-8"))
+    verifier_options = json.loads(Path(options_path).read_text(encoding="utf-8"))
     initializer = json.loads(Path(initializer_path).read_text(encoding="utf-8"))
     routing = [
         json.loads(line)
@@ -92,6 +94,11 @@ if mode == "--verify-omega-decision-v3-capsule":
     ]
     terminal = json.loads(
         Path(capsule["terminalClassifierLineage"]["path"]).read_text(
+            encoding="utf-8"
+        )
+    )
+    hce_completion = json.loads(
+        Path(capsule["preTargetHceCompletion"]["path"]).read_text(
             encoding="utf-8"
         )
     )
@@ -140,6 +147,8 @@ if mode == "--verify-omega-decision-v3-capsule":
             "completionSemanticsVerified": terminal["finalStageSeal"] is True,
         },
         "priorForbiddenAuthority": {
+            "registry": capsule["priorForbiddenRegistry"],
+            "requiredSourceIds": verifier_options["requiredPriorForbiddenSourceIds"],
             "catalogs": capsule["priorForbiddenCatalogs"],
             "catalogPositions": catalog_positions,
             "manifestsSemanticallyReplayed": True,
@@ -152,6 +161,23 @@ if mode == "--verify-omega-decision-v3-capsule":
             "roots": len(components),
             "components": len({row["leakageComponentId"] for row in components}),
             "wholeComponentSplits": True,
+            "semanticsReplayed": True,
+        },
+        "staticHceAuthority": {
+            "claim": capsule["preTargetHceClaim"],
+            "completion": capsule["preTargetHceCompletion"],
+            "teacherClaim": capsule["teacherClaim"],
+            "prelabelSeal": capsule["prelabelSeal"],
+            "targetFreeRouting": capsule["targetFreeRouting"],
+            "engine": capsule["staticHceEngine"],
+            "runner": capsule["staticHceRunner"],
+            "options": capsule["staticHceOptions"],
+            "transcript": capsule["staticHceTranscript"],
+            "inputOrderSha256": hce_completion["inputOrderSha256"],
+            "rows": hce_completion["rows"],
+            "perspective": hce_completion["perspective"],
+            "freshReplayMatches": True,
+            "completedBeforeTeacherClaim": True,
             "semanticsReplayed": True,
         },
         "teacherLedgerAuthority": {
@@ -342,8 +368,20 @@ class CanonicalFixture:
         sequential_trainer: bool = False,
         terminal_unclassified: bool = False,
         boolean_zero_verifier: bool = False,
+        boolean_initializer_index: bool = False,
+        non_integer_hce_rows: bool = False,
         forbidden_overlap: bool = False,
         force_second_promoted_initializer: bool = False,
+        first_prior_initializer_ineligible: bool = False,
+        prelabel_terminal_substitution: bool = False,
+        prelabel_forbidden_substitution: bool = False,
+        prelabel_initializer_substitution: bool = False,
+        teacher_claim_wrong_hce_completion: bool = False,
+        hce_completion_equal_teacher_claim: bool = False,
+        teacher_manifest_before_claim: bool = False,
+        teacher_completion_before_label_manifest: bool = False,
+        hce_manifest_after_capsule: bool = False,
+        preregistration_before_capsule: bool = False,
     ) -> None:
         self.root = root
         module_path = root / "tools/omega_nnue/king_state_train_generation6.py"
@@ -375,6 +413,16 @@ class CanonicalFixture:
                 '"unclassifiedChildren": terminal["unclassifiedChildren"],',
                 '"unclassifiedChildren": False,',
             )
+        if boolean_initializer_index:
+            runner_source = runner_source.replace(
+                '"selectedCatalogIndex": initializer["selectedCatalogIndex"],',
+                '"selectedCatalogIndex": True,',
+            )
+        if non_integer_hce_rows:
+            runner_source = runner_source.replace(
+                '"rows": hce_completion["rows"],',
+                '"rows": float(hce_completion["rows"]),',
+            )
         self.runner.write_text(runner_source, encoding="utf-8")
         self.initializer_mode = initializer_mode
         self.omit_last_teacher_attempt = omit_last_teacher_attempt
@@ -382,10 +430,125 @@ class CanonicalFixture:
         self.terminal_unclassified = terminal_unclassified
         self.forbidden_overlap = forbidden_overlap
         self.force_second_promoted_initializer = force_second_promoted_initializer
+        self.first_prior_initializer_ineligible = first_prior_initializer_ineligible
+        self.prelabel_terminal_substitution = prelabel_terminal_substitution
+        self.prelabel_forbidden_substitution = prelabel_forbidden_substitution
+        self.prelabel_initializer_substitution = prelabel_initializer_substitution
+        self.teacher_claim_wrong_hce_completion = teacher_claim_wrong_hce_completion
+        self.hce_completion_equal_teacher_claim = hce_completion_equal_teacher_claim
+        self.teacher_manifest_before_claim = teacher_manifest_before_claim
+        self.teacher_completion_before_label_manifest = (
+            teacher_completion_before_label_manifest
+        )
+        self.hce_manifest_after_capsule = hce_manifest_after_capsule
+        self.preregistration_before_capsule = preregistration_before_capsule
         self._build_authority()
 
     def _identity(self, path: Path) -> dict:
         return self.g6._identity(path)
+
+    def _build_initializer_authority(self) -> tuple[Path, Path, Path, Path]:
+        g6 = self.g6
+        initializer = self.data / "I0.nnue"
+        if self.initializer_mode == "promoted-prior":
+            initializer.write_bytes(b"PROMOTED PRIOR INITIALIZER\n")
+        elif self.initializer_mode == "deterministic-fallback":
+            initializer.write_bytes(b"DETERMINISTIC FALLBACK INITIALIZER\n")
+        else:
+            raise ValueError(self.initializer_mode)
+        initializer_producer = self.data / "initializer-producer.bin"
+        initializer_producer.write_bytes(b"initializer producer\n")
+        initializer_selection = self.data / "initializer-selection.json"
+        g5_selection = self.data / "g5-selection.json"
+        g5_closure = self.data / "g5-closure.json"
+        g2_selection = self.data / "g2-k2-selection.json"
+        g2_closure = self.data / "g2-k2-closure.json"
+        promoted = self.initializer_mode == "promoted-prior"
+        g5_promoted = promoted and not self.first_prior_initializer_ineligible
+        _write_json(g5_selection, {
+            "kind": "generation5-selection-seal",
+            "status": "selected-validation-winner" if g5_promoted else "closed-no-eligible-candidate",
+            "selectedModel": self._identity(initializer) if g5_promoted else None,
+            "healthPassed": True if g5_promoted else None,
+        })
+        _write_json(g5_closure, {
+            "kind": "generation5-terminal-closure",
+            "outcome": "promoted" if g5_promoted else "closed-no-eligible-candidate",
+            "selection": self._identity(g5_selection),
+            "winnerModel": self._identity(initializer) if g5_promoted else None,
+            "winnerHealthPassed": True if g5_promoted else None,
+        })
+        _write_json(g2_selection, {
+            "kind": "generation2-k2-selection-seal",
+            "status": "selected-validation-winner" if promoted else "failed",
+            "selectedModel": self._identity(initializer) if promoted else None,
+            "healthPassed": True if promoted else None,
+        })
+        _write_json(g2_closure, {
+            "kind": "generation2-k2-terminal-closure",
+            "outcome": "promoted" if promoted else "aborted",
+            "selection": self._identity(g2_selection),
+            "winnerModel": self._identity(initializer) if promoted else None,
+            "winnerHealthPassed": True if promoted else None,
+        })
+        ordered_catalog = [
+            {
+                "sourceId": "G5",
+                "selectionSeal": self._identity(g5_selection),
+                "closure": self._identity(g5_closure),
+                "model": self._identity(initializer) if g5_promoted else None,
+                "promotionStatus": "promoted" if g5_promoted else "failed",
+            },
+            {
+                "sourceId": "G2-K2",
+                "selectionSeal": self._identity(g2_selection),
+                "closure": self._identity(g2_closure),
+                "model": self._identity(initializer) if promoted else None,
+                "promotionStatus": "promoted" if promoted else "aborted",
+            },
+        ]
+        selected_catalog_index = (
+            1
+            if promoted
+            and (
+                self.force_second_promoted_initializer
+                or self.first_prior_initializer_ineligible
+            )
+            else (0 if promoted else None)
+        )
+        source_closure = (
+            g2_closure if selected_catalog_index == 1 else g5_closure
+        )
+        _write_json(initializer_selection, {
+            "schemaVersion": 1,
+            "kind": "omega-decision-v3-pre-g6-initializer-selection",
+            "profileId": g6.PROFILE_ID,
+            "selectionMode": self.initializer_mode,
+            "selectedCatalogIndex": selected_catalog_index,
+            "selectedModel": self._identity(initializer),
+            "orderedCatalog": ordered_catalog,
+            "fallbackProtocol": dict(g6.INITIALIZER_FALLBACK_PROTOCOL),
+            "g6TargetRowsDecoded": 0,
+            "resultInformationRead": False,
+        })
+        initializer_manifest = self.data / "initializer.manifest.json"
+        _write_json(initializer_manifest, {
+            "schemaVersion": 1,
+            "kind": g6.INITIALIZER_MANIFEST_KIND,
+            "profileId": g6.PROFILE_ID,
+            "status": "frozen-pre-g6-initializer-selection",
+            "createdUtc": "2026-07-24T00:00:00.000001Z",
+            "resultInformationRead": False,
+            "model": self._identity(initializer),
+            "producer": self._identity(initializer_producer),
+            "selectionMode": self.initializer_mode,
+            "selectedCatalogIndex": selected_catalog_index,
+            "selectionSeal": self._identity(initializer_selection),
+            "sourceClosure": self._identity(source_closure),
+            "orderedCatalog": ordered_catalog,
+            "fallbackProtocol": dict(g6.INITIALIZER_FALLBACK_PROTOCOL),
+        })
+        return initializer, initializer_selection, source_closure, initializer_manifest
 
     def _build_authority(self) -> None:
         g6 = self.g6
@@ -400,6 +563,7 @@ class CanonicalFixture:
         prelabel_producer = self.data / "prelabel-producer.bin"
         teacher_producer = self.data / "teacher-producer.bin"
         projection_producer = self.data / "projection-producer.bin"
+        forbidden_registry_producer = self.data / "forbidden-registry-producer.bin"
         terminal_classifier = self.data / "terminal-classifier.lineage.json"
         forbidden_catalog = self.data / "prior-forbidden.jsonl"
         forbidden_manifest = self.data / "prior-forbidden.manifest.json"
@@ -409,6 +573,7 @@ class CanonicalFixture:
             (prelabel_producer, b"prelabel producer\n"),
             (teacher_producer, b"teacher producer\n"),
             (projection_producer, b"projection producer\n"),
+            (forbidden_registry_producer, b"forbidden registry producer\n"),
         ):
             path.write_bytes(payload)
         _write_json(source_root_manifest, {"kind": "source-root-inventory", "roots": 80})
@@ -540,37 +705,68 @@ class CanonicalFixture:
             attempt_rows.pop()
         _write_jsonl(teacher_ledger, attempt_rows)
 
+        (
+            initializer,
+            initializer_selection,
+            source_closure,
+            initializer_manifest,
+        ) = self._build_initializer_authority()
+        prelabel_initializer = initializer_manifest
+        if self.prelabel_initializer_substitution:
+            prelabel_initializer = self.data / "substituted-initializer.manifest.json"
+            shutil.copyfile(initializer_manifest, prelabel_initializer)
+        prelabel_terminal = terminal_classifier
+        if self.prelabel_terminal_substitution:
+            prelabel_terminal = self.data / "substituted-terminal-classifier.json"
+            shutil.copyfile(terminal_classifier, prelabel_terminal)
+        forbidden_registry = self.data / "prior-forbidden.registry.json"
+        g6.publish_upstream_forbidden_registry(
+            forbidden_registry,
+            catalog_groups=((g6.UPSTREAM_REQUIRED_PRIOR_SOURCE_IDS, forbidden_manifest),),
+            producer=forbidden_registry_producer,
+            created_utc="2026-07-24T00:00:00.000001Z",
+        )
+        prelabel_forbidden = forbidden_manifest
+        prelabel_forbidden_registry = forbidden_registry
+        if self.prelabel_forbidden_substitution:
+            prelabel_forbidden = self.data / "substituted-forbidden.manifest.json"
+            shutil.copyfile(forbidden_manifest, prelabel_forbidden)
+            prelabel_forbidden_registry = (
+                self.data / "substituted-prior-forbidden.registry.json"
+            )
+            g6.publish_upstream_forbidden_registry(
+                prelabel_forbidden_registry,
+                catalog_groups=(
+                    (g6.UPSTREAM_REQUIRED_PRIOR_SOURCE_IDS, prelabel_forbidden),
+                ),
+                producer=forbidden_registry_producer,
+                created_utc="2026-07-24T00:00:00.000001Z",
+            )
         prelabel_path = self.data / "prelabel.json"
         g6.publish_upstream_prelabel_seal(
             prelabel_path,
             component_map=components_path,
             target_free_routing=routing_path,
+            terminal_classifier_lineage=prelabel_terminal,
+            prior_forbidden_registry=prelabel_forbidden_registry,
+            prior_forbidden_catalogs=(prelabel_forbidden,),
+            initializer_manifest=prelabel_initializer,
             source_root_manifest=source_root_manifest,
             source_children_manifest=source_child_manifest,
             producer=prelabel_producer,
-            created_utc="2026-07-24T00:00:00.000001Z",
+            created_utc="2026-07-24T00:00:00.000002Z",
         )
 
         hce_options = self.data / "hce-options.json"
         hce_projection = self.data / "hce.jsonl"
         _write_json(hce_options, g6.static_hce_options_document())
-        _write_jsonl(hce_projection, [
-            {
-                "schemaVersion": 1,
-                "kind": g6.HCE_ROW_KIND,
-                "profileId": g6.PROFILE_ID,
-                "childId": row["childId"],
-                "handcraftedCpChildStm": 0,
-            }
-            for row in projected
-        ])
         hce_claim = self.data / "hce.claim.json"
         _write_json(hce_claim, {
             "schemaVersion": 1,
             "kind": g6.UPSTREAM_HCE_CLAIM_KIND,
             "profileId": g6.PROFILE_ID,
             "status": "claimed-before-teacher-and-target-decode",
-            "createdUtc": "2026-07-24T00:00:00.000002Z",
+            "createdUtc": "2026-07-24T00:00:00.000003Z",
             "prelabelSeal": self._identity(prelabel_path),
             "targetFreeRouting": self._identity(routing_path),
             "engine": self._identity(Path(sys.executable)),
@@ -581,6 +777,32 @@ class CanonicalFixture:
             "targetFieldsDecodedAtClaim": 0,
             "resultInformationRead": False,
         })
+        _write_jsonl(hce_projection, [
+            {
+                "schemaVersion": 1,
+                "kind": g6.HCE_ROW_KIND,
+                "profileId": g6.PROFILE_ID,
+                "childId": row["childId"],
+                "handcraftedCpChildStm": 0,
+            }
+            for row in sorted(projected, key=lambda item: item["childId"])
+        ])
+        hce_completion = self.data / "hce.completion.json"
+        g6.publish_upstream_hce_completion(
+            hce_completion,
+            claim=hce_claim,
+            prelabel_seal=prelabel_path,
+            target_free_routing=routing_path,
+            engine=Path(sys.executable),
+            runner=self.runner,
+            options=hce_options,
+            transcript=hce_projection,
+            created_utc="2026-07-24T00:00:00.000004Z",
+        )
+        claimed_hce_completion = hce_completion
+        if self.teacher_claim_wrong_hce_completion:
+            claimed_hce_completion = self.data / "wrong-hce-completion.json"
+            _write_json(claimed_hce_completion, {"wrong": True})
 
         route_digest = g6._sha256_bytes(g6._canonical_json(
             [g6._parse_target_free_routing(routing_path)[key]
@@ -598,7 +820,11 @@ class CanonicalFixture:
             "kind": g6.UPSTREAM_TEACHER_CLAIM_KIND,
             "profileId": g6.PROFILE_ID,
             "status": "claimed-before-first-teacher-target-decode",
-            "createdUtc": "2026-07-24T00:00:00.000003Z",
+            "createdUtc": (
+                "2026-07-24T00:00:00.000004Z"
+                if self.hce_completion_equal_teacher_claim
+                else "2026-07-24T00:00:00.000005Z"
+            ),
             "prelabelSeal": self._identity(prelabel_path),
             "targetFreeRouting": self._identity(routing_path),
             "componentMap": self._identity(components_path),
@@ -610,6 +836,7 @@ class CanonicalFixture:
             "plannedProjectionProducer": self._identity(projection_producer),
             "plannedProjectedCorpusPath": str(planned_corpus.resolve()),
             "plannedProjectionManifestPath": str(planned_manifest.resolve()),
+            "preTargetHceCompletion": self._identity(claimed_hce_completion),
             "targetRowsDecodedAtClaim": 0,
             "targetFieldsDecodedAtClaim": 0,
             "resultInformationRead": False,
@@ -621,7 +848,11 @@ class CanonicalFixture:
             component_map=components_path,
             labels=teacher_labels_path,
             producer=teacher_producer,
-            created_utc="2026-07-24T00:00:00.000004Z",
+            created_utc=(
+                "2026-07-24T00:00:00.000004Z"
+                if self.teacher_manifest_before_claim
+                else "2026-07-24T00:00:00.000006Z"
+            ),
         )
         _write_jsonl(corpus, projected)
         g6.publish_label_manifest(
@@ -632,7 +863,7 @@ class CanonicalFixture:
             upstream_teacher_labels=teacher_labels_path,
             upstream_teacher_manifest=teacher_manifest,
             projection_producer=projection_producer,
-            created_utc="2026-07-24T00:00:00.000005Z",
+            created_utc="2026-07-24T00:00:00.000007Z",
         )
         hce_manifest = self.data / "hce.manifest.json"
         g6.publish_static_hce_manifest(
@@ -644,7 +875,11 @@ class CanonicalFixture:
             engine=Path(sys.executable),
             runner=self.runner,
             options=hce_options,
-            created_utc="2026-07-24T00:00:00.000006Z",
+            created_utc=(
+                "2026-07-24T00:00:00.000011Z"
+                if self.hce_manifest_after_capsule
+                else "2026-07-24T00:00:00.000008Z"
+            ),
         )
         teacher_ledger_completion = self.data / "teacher-attempts.complete.json"
         _write_json(teacher_ledger_completion, {
@@ -664,7 +899,11 @@ class CanonicalFixture:
             "kind": g6.UPSTREAM_TEACHER_COMPLETION_KIND,
             "profileId": g6.PROFILE_ID,
             "status": "completed-exact-claimed-teacher-and-projection",
-            "createdUtc": "2026-07-24T00:00:00.000007Z",
+            "createdUtc": (
+                "2026-07-24T00:00:00.000006Z"
+                if self.teacher_completion_before_label_manifest
+                else "2026-07-24T00:00:00.000009Z"
+            ),
             "claim": self._identity(teacher_claim),
             "prelabelSeal": self._identity(prelabel_path),
             "engine": self._identity(Path(sys.executable)),
@@ -683,100 +922,6 @@ class CanonicalFixture:
             "resultInformationRead": False,
         })
 
-        initializer = self.data / "I0.nnue"
-        if self.initializer_mode == "promoted-prior":
-            initializer.write_bytes(b"PROMOTED PRIOR INITIALIZER\n")
-        elif self.initializer_mode == "deterministic-fallback":
-            initializer.write_bytes(b"DETERMINISTIC FALLBACK INITIALIZER\n")
-        else:
-            raise ValueError(self.initializer_mode)
-        initializer_producer = self.data / "initializer-producer.bin"
-        initializer_producer.write_bytes(b"initializer producer\n")
-        initializer_selection = self.data / "initializer-selection.json"
-        g5_selection = self.data / "g5-selection.json"
-        g5_closure = self.data / "g5-closure.json"
-        g2_selection = self.data / "g2-k2-selection.json"
-        g2_closure = self.data / "g2-k2-closure.json"
-        promoted = self.initializer_mode == "promoted-prior"
-        _write_json(g5_selection, {
-            "kind": "generation5-selection-seal",
-            "status": "selected-validation-winner" if promoted else "closed-no-eligible-candidate",
-            "selectedModel": self._identity(initializer) if promoted else None,
-            "healthPassed": True if promoted else None,
-        })
-        _write_json(g5_closure, {
-            "kind": "generation5-terminal-closure",
-            "outcome": "promoted" if promoted else "closed-no-eligible-candidate",
-            "selection": self._identity(g5_selection),
-            "winnerModel": self._identity(initializer) if promoted else None,
-            "winnerHealthPassed": True if promoted else None,
-        })
-        _write_json(g2_selection, {
-            "kind": "generation2-k2-selection-seal",
-            "status": "selected-validation-winner" if promoted else "failed",
-            "selectedModel": self._identity(initializer) if promoted else None,
-            "healthPassed": True if promoted else None,
-        })
-        _write_json(g2_closure, {
-            "kind": "generation2-k2-terminal-closure",
-            "outcome": "promoted" if promoted else "aborted",
-            "selection": self._identity(g2_selection),
-            "winnerModel": self._identity(initializer) if promoted else None,
-            "winnerHealthPassed": True if promoted else None,
-        })
-        ordered_catalog = [
-            {
-                "sourceId": "G5",
-                "selectionSeal": self._identity(g5_selection),
-                "closure": self._identity(g5_closure),
-                "model": self._identity(initializer) if promoted else None,
-                "promotionStatus": "promoted" if promoted else "failed",
-            },
-            {
-                "sourceId": "G2-K2",
-                "selectionSeal": self._identity(g2_selection),
-                "closure": self._identity(g2_closure),
-                "model": self._identity(initializer) if promoted else None,
-                "promotionStatus": "promoted" if promoted else "aborted",
-            },
-        ]
-        selected_catalog_index = (
-            1
-            if promoted and self.force_second_promoted_initializer
-            else (0 if promoted else None)
-        )
-        source_closure = (
-            g2_closure if selected_catalog_index == 1 else g5_closure
-        )
-        _write_json(initializer_selection, {
-            "schemaVersion": 1,
-            "kind": "omega-decision-v3-pre-g6-initializer-selection",
-            "profileId": g6.PROFILE_ID,
-            "selectionMode": self.initializer_mode,
-            "selectedCatalogIndex": selected_catalog_index,
-            "selectedModel": self._identity(initializer),
-            "orderedCatalog": ordered_catalog,
-            "fallbackProtocol": dict(g6.INITIALIZER_FALLBACK_PROTOCOL),
-            "g6TargetRowsDecoded": 0,
-            "resultInformationRead": False,
-        })
-        initializer_manifest = self.data / "initializer.manifest.json"
-        _write_json(initializer_manifest, {
-            "schemaVersion": 1,
-            "kind": g6.INITIALIZER_MANIFEST_KIND,
-            "profileId": g6.PROFILE_ID,
-            "status": "frozen-pre-g6-initializer-selection",
-            "createdUtc": "2026-07-24T00:00:00.000001Z",
-            "resultInformationRead": False,
-            "model": self._identity(initializer),
-            "producer": self._identity(initializer_producer),
-            "selectionMode": self.initializer_mode,
-            "selectedCatalogIndex": selected_catalog_index,
-            "selectionSeal": self._identity(initializer_selection),
-            "sourceClosure": self._identity(source_closure),
-            "orderedCatalog": ordered_catalog,
-            "fallbackProtocol": dict(g6.INITIALIZER_FALLBACK_PROTOCOL),
-        })
         evaluator_options = self.data / "evaluator-options.json"
         _write_json(evaluator_options, g6.evaluator_options_document())
         runtime_manifest = self.data / "runtime-manifest.json"
@@ -807,7 +952,7 @@ class CanonicalFixture:
             "kind": g6.UPSTREAM_CAPSULE_KIND,
             "profileId": g6.PROFILE_ID,
             "status": "closed-pretarget-to-final-projection-lineage",
-            "createdUtc": "2026-07-24T00:00:00.000008Z",
+            "createdUtc": "2026-07-24T00:00:00.000010Z",
             "upstreamVerifierExecutable": self._identity(Path(sys.executable)),
             "upstreamVerifierRunner": self._identity(self.runner),
             "upstreamVerifierOptions": self._identity(upstream_verifier_options),
@@ -822,6 +967,7 @@ class CanonicalFixture:
             "plannedProjectionProducer": self._identity(projection_producer),
             "plannedProjectedCorpusPath": str(planned_corpus.resolve()),
             "plannedProjectionManifestPath": str(planned_manifest.resolve()),
+            "priorForbiddenRegistry": self._identity(forbidden_registry),
             "priorForbiddenCatalogs": [self._identity(forbidden_manifest)],
             "teacherClaim": self._identity(teacher_claim),
             "teacherEngine": self._identity(Path(sys.executable)),
@@ -838,6 +984,7 @@ class CanonicalFixture:
             "projectedCorpus": self._identity(corpus),
             "labelManifest": self._identity(label_manifest),
             "preTargetHceClaim": self._identity(hce_claim),
+            "preTargetHceCompletion": self._identity(hce_completion),
             "staticHceEngine": self._identity(Path(sys.executable)),
             "staticHceRunner": self._identity(self.runner),
             "staticHceOptions": self._identity(hce_options),
@@ -857,7 +1004,11 @@ class CanonicalFixture:
             "kind": g6.PREREGISTRATION_KIND,
             "profileId": g6.PROFILE_ID,
             "status": "frozen-single-lineage-before-generation6-training",
-            "createdUtc": "2026-07-24T00:00:00.000009Z",
+            "createdUtc": (
+                "2026-07-24T00:00:00.000009Z"
+                if self.preregistration_before_capsule
+                else "2026-07-24T00:00:00.000011Z"
+            ),
             "namespace": str(self.namespace.resolve()),
             "artifactPaths": dict(g6.CANONICAL_ARTIFACT_PATHS),
             "protocol": self._identity(protocol),
@@ -916,6 +1067,7 @@ class CanonicalFixture:
             "routing": routing_path,
             "capsule": capsule_path,
             "hce": hce_projection,
+            "forbidden_registry": forbidden_registry,
         }
 
     def run_to_selection(self) -> str:
@@ -1067,6 +1219,255 @@ class Generation6Tests(unittest.TestCase):
                 Path(directory), boolean_zero_verifier=True
             )
             with self.assertRaises(ValueError):
+                fixture.g6.verify_canonical_namespace()
+
+    def test_boolean_initializer_index_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = CanonicalFixture(
+                Path(directory),
+                boolean_initializer_index=True,
+                first_prior_initializer_ineligible=True,
+            )
+            with self.assertRaisesRegex(
+                ValueError, "upstream initializer semantic replay changed"
+            ):
+                fixture.g6.verify_canonical_namespace()
+
+    def test_non_integer_static_hce_row_count_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = CanonicalFixture(Path(directory), non_integer_hce_rows=True)
+            with self.assertRaisesRegex(ValueError, "upstream static-HCE replay changed"):
+                fixture.g6.verify_canonical_namespace()
+
+    def test_prelabel_binds_terminal_forbidden_and_initializer_authorities(self) -> None:
+        for option in (
+            "prelabel_terminal_substitution",
+            "prelabel_forbidden_substitution",
+            "prelabel_initializer_substitution",
+        ):
+            with self.subTest(option=option), tempfile.TemporaryDirectory() as directory:
+                fixture = CanonicalFixture(Path(directory), **{option: True})
+                expected_error = (
+                    "upstream prelabel seal differs from recomputation"
+                )
+                with self.assertRaisesRegex(
+                    ValueError, expected_error
+                ):
+                    fixture.g6.verify_canonical_namespace()
+
+    def test_teacher_targets_and_projection_are_created_inside_claim_window(self) -> None:
+        cases = (
+            (
+                "teacher-manifest-before-claim",
+                {"teacher_manifest_before_claim": True},
+                "upstream teacher target/projection chronology changed",
+            ),
+            (
+                "completion-before-label-manifest",
+                {"teacher_completion_before_label_manifest": True},
+                "upstream teacher target/projection chronology changed",
+            ),
+            (
+                "static-hce-manifest-after-capsule",
+                {"hce_manifest_after_capsule": True},
+                "upstream static-HCE/capsule chronology changed",
+            ),
+            (
+                "preregistration-before-capsule",
+                {"preregistration_before_capsule": True},
+                "preregistered authority/chronology changed",
+            ),
+        )
+        for name, options, expected_error in cases:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                fixture = CanonicalFixture(Path(directory), **options)
+                with self.assertRaisesRegex(ValueError, expected_error):
+                    fixture.g6.verify_canonical_namespace()
+
+    def test_teacher_claim_binds_exact_hce_completion(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = CanonicalFixture(
+                Path(directory), teacher_claim_wrong_hce_completion=True
+            )
+            with self.assertRaisesRegex(
+                ValueError, "capsule teacher claim is not the frozen plan"
+            ):
+                fixture.g6.verify_canonical_namespace()
+
+    def test_forbidden_registry_cannot_omit_required_source(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = CanonicalFixture(Path(directory))
+            registry_path = fixture.paths["forbidden_registry"]
+            registry = json.loads(registry_path.read_text(encoding="utf-8"))
+            registry["requiredSourceIds"] = ["G3", "G4"]
+            registry["catalogs"][0]["coveredSourceIds"] = ["G3", "G4"]
+            substituted_registry = registry_path.with_name(
+                "incomplete-prior-forbidden.registry.json"
+            )
+            _write_json(substituted_registry, registry)
+            capsule = json.loads(fixture.paths["capsule"].read_text(encoding="utf-8"))
+            capsule["priorForbiddenRegistry"] = fixture._identity(substituted_registry)
+            _write_json(fixture.paths["capsule"], capsule)
+            preregistration = fixture.namespace / "00-preregistration.json"
+            prereg = json.loads(preregistration.read_text(encoding="utf-8"))
+            prereg["upstreamCapsule"] = fixture._identity(fixture.paths["capsule"])
+            _write_json(preregistration, prereg)
+            with self.assertRaisesRegex(
+                ValueError, "prior-forbidden registry header changed"
+            ):
+                fixture.g6.verify_canonical_namespace()
+
+    def test_forbidden_registry_rejects_distinct_paths_to_same_inode(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = root / "g3.manifest.json"
+            second = root / "g4-g5.manifest.json"
+            producer = root / "producer.bin"
+            _write_json(first, {"source": "G3"})
+            _write_json(second, {"source": "G4-G5"})
+            producer.write_bytes(b"producer\n")
+            identities = {
+                first: host_g6._identity(first),
+                second: host_g6._identity(second),
+            }
+
+            def same_inode(path: Path) -> tuple[dict, tuple[int, int]]:
+                return identities[Path(path)], (17, 29)
+
+            with mock.patch.object(
+                host_g6, "_identity_with_inode", side_effect=same_inode
+            ), self.assertRaisesRegex(
+                ValueError, "prior-forbidden registry repeats a catalog manifest"
+            ):
+                host_g6.expected_upstream_forbidden_registry(
+                    catalog_groups=(
+                        (("G3",), first),
+                        (("G4", "G5"), second),
+                    ),
+                    producer=producer,
+                    created_utc="2026-07-24T00:00:00.000001Z",
+                )
+
+    def test_hce_completion_strictly_precedes_teacher_claim(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = CanonicalFixture(
+                Path(directory), hce_completion_equal_teacher_claim=True
+            )
+            with self.assertRaisesRegex(
+                ValueError, "upstream pre-target/teacher chronology changed"
+            ):
+                fixture.g6.verify_canonical_namespace()
+
+    def test_hce_completion_rejects_reordered_or_forged_transcript(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = CanonicalFixture(Path(directory))
+            capsule = json.loads(fixture.paths["capsule"].read_text(encoding="utf-8"))
+            original_rows = [
+                json.loads(line)
+                for line in fixture.paths["hce"].read_text(encoding="utf-8").splitlines()
+            ]
+            original_claim = json.loads(
+                Path(capsule["preTargetHceClaim"]["path"]).read_text(encoding="utf-8")
+            )
+            cases = (
+                ("reordered", list(reversed(original_rows)), "row order differs"),
+                (
+                    "forged-score",
+                    [
+                        {**row, "handcraftedCpChildStm": 1}
+                        if index == 0
+                        else row
+                        for index, row in enumerate(original_rows)
+                    ],
+                    "differs from fresh engine replay",
+                ),
+            )
+            for name, rows, expected_error in cases:
+                with self.subTest(name=name):
+                    transcript = fixture.data / f"{name}.hce.jsonl"
+                    claim = fixture.data / f"{name}.hce.claim.json"
+                    _write_jsonl(transcript, rows)
+                    claim_document = dict(original_claim)
+                    claim_document["plannedTranscriptPath"] = str(transcript.resolve())
+                    _write_json(claim, claim_document)
+                    with self.assertRaisesRegex(ValueError, expected_error):
+                        fixture.g6.expected_upstream_hce_completion(
+                            claim=claim,
+                            prelabel_seal=Path(capsule["prelabelSeal"]["path"]),
+                            target_free_routing=Path(
+                                capsule["targetFreeRouting"]["path"]
+                            ),
+                            engine=Path(capsule["staticHceEngine"]["path"]),
+                            runner=Path(capsule["staticHceRunner"]["path"]),
+                            options=Path(capsule["staticHceOptions"]["path"]),
+                            transcript=transcript,
+                            created_utc="2026-07-24T00:00:00.000004Z",
+                        )
+
+    def test_hce_completion_rejects_shared_paths_and_inodes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = CanonicalFixture(Path(directory))
+            capsule = json.loads(fixture.paths["capsule"].read_text(encoding="utf-8"))
+            prelabel = Path(capsule["prelabelSeal"]["path"])
+            common = {
+                "target_free_routing": Path(capsule["targetFreeRouting"]["path"]),
+                "engine": Path(capsule["staticHceEngine"]["path"]),
+                "runner": Path(capsule["staticHceRunner"]["path"]),
+                "options": Path(capsule["staticHceOptions"]["path"]),
+                "transcript": Path(capsule["staticHceTranscript"]["path"]),
+                "created_utc": "2026-07-24T00:00:00.000004Z",
+            }
+            with self.subTest(alias="same-path"), self.assertRaisesRegex(
+                ValueError, "pre-target HCE authority roles share a path or inode"
+            ):
+                fixture.g6.expected_upstream_hce_completion(
+                    claim=prelabel,
+                    prelabel_seal=prelabel,
+                    **common,
+                )
+
+            claim_hardlink = fixture.data / "claim-hardlink-to-prelabel.json"
+            os.link(prelabel, claim_hardlink)
+            with self.subTest(alias="same-inode"), self.assertRaisesRegex(
+                ValueError, "pre-target HCE authority roles share a path or inode"
+            ):
+                fixture.g6.expected_upstream_hce_completion(
+                    claim=claim_hardlink,
+                    prelabel_seal=prelabel,
+                    **common,
+                )
+
+    def test_capsule_rejects_shared_target_authority_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = CanonicalFixture(Path(directory))
+            capsule_path = fixture.paths["capsule"]
+            capsule = json.loads(capsule_path.read_text(encoding="utf-8"))
+            hce_claim = Path(capsule["preTargetHceClaim"]["path"])
+            capsule["teacherClaim"] = fixture._identity(hce_claim)
+            _write_json(capsule_path, capsule)
+            preregistration = fixture.namespace / "00-preregistration.json"
+            prereg = json.loads(preregistration.read_text(encoding="utf-8"))
+            prereg["upstreamCapsule"] = fixture._identity(capsule_path)
+            _write_json(preregistration, prereg)
+            with self.assertRaisesRegex(
+                ValueError,
+                "capsule target/HCE authority roles share a path or inode",
+            ):
+                fixture.g6.verify_canonical_namespace()
+
+    def test_capsule_requires_hce_completion_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = CanonicalFixture(Path(directory))
+            capsule = json.loads(fixture.paths["capsule"].read_text(encoding="utf-8"))
+            capsule.pop("preTargetHceCompletion")
+            _write_json(fixture.paths["capsule"], capsule)
+            preregistration = fixture.namespace / "00-preregistration.json"
+            prereg = json.loads(preregistration.read_text(encoding="utf-8"))
+            prereg["upstreamCapsule"] = fixture._identity(fixture.paths["capsule"])
+            _write_json(preregistration, prereg)
+            with self.assertRaisesRegex(
+                ValueError, "omega-decision-v3 capsule field inventory changed"
+            ):
                 fixture.g6.verify_canonical_namespace()
 
     def test_prior_forbidden_overlap_is_rejected_by_fresh_verifier(self) -> None:

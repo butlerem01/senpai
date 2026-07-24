@@ -210,8 +210,11 @@
       "gameResultsRead": false,
       "heldOutTargetsDecodedByGeneration6AtClosure": 0,
       "plannedProjectionProducerAndPathsFrozenBeforeTeacher": true,
+      "prelabelSealBindsInitializerAuthority": true,
+      "prelabelSealBindsTerminalClassifierAndPriorForbiddenRegistry": true,
       "priorForbiddenCatalogFrozenBeforeTeacher": true,
       "staticHceCompletedBeforeTeacherTargets": true,
+      "teacherClaimBindsCompletedStaticHceReceipt": true,
       "terminalClassifierLineageFrozenBeforeTeacher": true
     },
     "downstreamHeldOutVerification": "opaque structural routing only",
@@ -242,12 +245,18 @@
         "kind": "omega-decision-v3-verifier-options",
         "mode": "--verify-omega-decision-v3-capsule",
         "profileId": "king-state-v6-move-decision-v1",
+        "requiredPriorForbiddenSourceIds": [
+          "G3",
+          "G4",
+          "G5"
+        ],
         "requiredSemanticReplays": [
           "initializer selection, embedded health, source closure, and model cross-links",
           "terminal rules manifest/transcript/completion and pre-teacher exclusions",
           "every prior-forbidden manifest/catalog and zero current overlap",
           "component-map coverage and whole-component split assignment",
-          "teacher lock/attempt ledger/completion coverage and budgets",
+          "pre-target static-HCE claim, exact completion receipt, and fresh engine replay",
+          "teacher claim/attempt ledger/completion coverage and budgets",
           "planned projection producer/path against realized corpus/manifest"
         ],
         "resultInformationRead": false,
@@ -257,15 +266,17 @@
       "receiptMaterializedInAuthority": true
     },
     "preTargetHceClaimKind": "omega-decision-v3-pretarget-hce-claim",
+    "preTargetHceCompletionKind": "omega-decision-v3-pretarget-hce-completion",
+    "priorForbiddenRegistryKind": "omega-decision-v3-prior-forbidden-registry",
     "requiredCapsuleKind": "omega-decision-v3-capsule-closure",
     "requiredCrossChecks": [
       "source root/group, child id/OFEN, phase, side",
       "independent component and whole-component split projection",
       "fresh terminal rules manifest/transcript/completion coverage replay",
-      "fresh semantic replay of every prior-forbidden catalog with zero overlap",
+      "complete required-source registry and fresh semantic replay of every prior-forbidden catalog with zero overlap",
       "planned projection producer/corpus/manifest against realized projection",
       "teacher claim, engine, runner, options, budget, order, ledger, and completion replay",
-      "controlled pre-target HCE claim/transcript and fresh engine replay",
+      "controlled pre-target HCE claim/completion/transcript, chronology, and fresh engine replay",
       "fixed prior-promoted initializer catalog or deterministic fallback",
       "semantic G5 success/failure/abort closure without requiring G5 success",
       "exact projection and closure identities"
