@@ -1,0 +1,337 @@
+{
+  "canonicalNamespace": {
+    "artifactPathInventory": {
+      "sha256": "aa88f8a1df446e166ebda78077e1599ff821d43edd1f3250aaa27d59e14c9c52",
+      "slots": 86
+    },
+    "caseFoldCollisionsAccepted": false,
+    "preregistration": "00-preregistration.json",
+    "publishMode": "descriptor-verified O_EXCL append-only bundles",
+    "root": "derived immutably from this source repository",
+    "stageOrder": [
+      "materialize-canonical-authority",
+      "train-primary-G6A",
+      "train-primary-G6B",
+      "train-primary-G6C",
+      "evaluate-validation-I0",
+      "evaluate-validation-G6A",
+      "evaluate-validation-G6B",
+      "evaluate-validation-G6C",
+      "select-primary",
+      "train-selected-robustness",
+      "evaluate-selected-robustness",
+      "seal-robustness",
+      "arm-heldout",
+      "consume-heldout-once-and-close"
+    ],
+    "symlinkJunctionReparseHardlinkSpecialAccepted": false,
+    "unknownFutureOrAlternateArtifactsAccepted": false
+  },
+  "formalApi": [
+    "materialize_canonical_authority()",
+    "train_primary(G6A|G6B|G6C)",
+    "evaluate_validation(I0|G6A|G6B|G6C)",
+    "select_primary()",
+    "train_robustness_selected()",
+    "evaluate_robustness_selected()",
+    "seal_robustness()",
+    "arm_heldout()",
+    "consume_heldout_once()"
+  ],
+  "formalApiForbiddenInputs": [
+    "output path",
+    "model path",
+    "root objects",
+    "predictions",
+    "metric report",
+    "health boolean",
+    "selection decision"
+  ],
+  "heldOut": {
+    "claimBeforeFirstTargetDecode": true,
+    "claimOnlyCrashRetryPermitted": false,
+    "closureIsTerminal": true,
+    "formalApiRawRootAccess": false,
+    "internalVerifierObjectBoundary": "trusted in-process implementation; not part of the formal API",
+    "models": [
+      "I0",
+      "selected primary only"
+    ],
+    "output": "eight-cell and macro aggregates only",
+    "rawRootsChildrenOfensPredictionsPerRootMetricsEmitted": false,
+    "spentForFutureGenerations": true
+  },
+  "ioHardening": {
+    "descriptorBackedSingleSnapshotParsing": true,
+    "duplicateJsonKeysAccepted": false,
+    "freshPinnedUpstreamSemanticReplay": true,
+    "publisherDescriptorAndFinalPathCompared": true,
+    "recursiveTypeExactComparison": true,
+    "runtimeAndCompiledDependenciesFrozen": true,
+    "subprocessDependenciesSnapshottedBeforeAndAfter": true
+  },
+  "kind": "omega-nnue-king-state-v6-training-protocol",
+  "labelProjection": {
+    "childSide": "opposite parentSideToMove",
+    "childrenPerRoot": 4,
+    "exactFieldInventory": [
+      "childId",
+      "childOfen",
+      "deepRank",
+      "deepRegretCp",
+      "deepScoreCpChildStm",
+      "deepScoreCpRoot",
+      "kind",
+      "leakageComponentId",
+      "parentSideToMove",
+      "phase",
+      "rootId",
+      "schemaVersion",
+      "split"
+    ],
+    "kind": "omega-nnue-king-state-v6-decision-label",
+    "regretRangeInclusiveCp": [
+      0,
+      2000000
+    ],
+    "rootChildScoreSign": "exact negation",
+    "schemaVersion": 1,
+    "scoreRangeInclusiveCp": [
+      -1000000,
+      1000000
+    ],
+    "scoreType": "exact JSON integer; booleans/floats forbidden"
+  },
+  "profileId": "king-state-v6-move-decision-v1",
+  "schemaVersion": 1,
+  "status": "single-lineage-replayable-generation6-protocol",
+  "training": {
+    "actualBatchOrderTranscript": {
+      "batchContent": "canonical ordered full label rows followed by canonical ordered HCE rows",
+      "exactFieldInventory": [
+        "batchContentSha256",
+        "batchIndex",
+        "candidateId",
+        "childIds",
+        "epoch",
+        "kind",
+        "modelId",
+        "optimizerStep",
+        "profileId",
+        "purpose",
+        "qatEnabled",
+        "recipe",
+        "rootIds",
+        "schemaVersion",
+        "seed"
+      ],
+      "freshReplayRequired": true,
+      "kind": "omega-nnue-king-state-v6-actual-batch-order",
+      "precomputedExpectedDigestInCommandOrPrelaunchClaim": false,
+      "publicationPoint": "append row only after optimizer step consumes ordered complete batch"
+    },
+    "batchOrderDigestRequired": true,
+    "candidateRecipes": {
+      "G6A": {
+        "listwiseSoftmaxWeight": 0.15,
+        "nearEqualTopSetWeight": 0.15
+      },
+      "G6B": {
+        "listwiseSoftmaxWeight": 0.3,
+        "nearEqualTopSetWeight": 0.3
+      },
+      "G6C": {
+        "listwiseSoftmaxWeight": 0.45,
+        "nearEqualTopSetWeight": 0.45
+      }
+    },
+    "formalCommandInputBoundary": "train-only corpus and train-only static HCE",
+    "heldOutTargetsProvidedToTrainerCommand": false,
+    "initializerAuthority": {
+      "fallbackProtocol": {
+        "architecture": "king-state-v6-move-decision-initializer-v1",
+        "g6TargetRowsDecoded": 0,
+        "gameResultsRead": false,
+        "generator": "pinned upstream initializer verifier",
+        "seed": 2026072400,
+        "selectionRule": "use only when no catalog entry is independently promoted"
+      },
+      "g5FailureAbortIsVerifiedButNotFatal": true,
+      "orderedCatalog": [
+        "G5",
+        "G2-K2"
+      ],
+      "rule": "first semantically verified independently promoted healthy compatible model; otherwise exact fallback",
+      "selectionModes": [
+        "promoted-prior",
+        "deterministic-fallback"
+      ]
+    },
+    "initializerRule": "all primary and robustness runs start from exact I0",
+    "objective": {
+      "listwise": {
+        "teacherLogit": "-deepRegretCp / temperature",
+        "temperatureCp": 200.0
+      },
+      "nearEqualTopSet": {
+        "maximumRegretCpInclusive": 25
+      },
+      "pointwise": {
+        "deltaNormalized": 2.0,
+        "loss": "Huber on clipped deep-HCE residual",
+        "normalizerCp": 100.0,
+        "residualClipCp": 2000.0
+      }
+    },
+    "optimizerProtocol": {
+      "batchOrderDerivation": "per epoch SHA-256(seed|epoch|index), first 8 bytes little-endian, NumPy PCG64 permutation of ascending rootId",
+      "checkpointRule": "final epoch only; deployment health and frozen validation are external",
+      "completeRootDivisibilityRequired": true,
+      "epochs": 48,
+      "firstQatEpoch": 37,
+      "learningRate": 0.003,
+      "optimizer": "Adam",
+      "qatEpochs": 12,
+      "qatLearningRateScale": 0.1,
+      "rootsPerBatch": 64
+    },
+    "primarySeedBase": 2026072401,
+    "robustnessSeedBase": 2026072402,
+    "resultBlindnessTrustBoundary": "exact hash-pinned separately reviewed trainer runner; formal command and prelaunch claim provide no validation/held-out targets or precomputed expected batch digest",
+    "runtimeManifestRequired": true,
+    "seedDerivation": "SHA-256 of UTF-8 '<base-seed>|<purpose>|<candidate-id>'; first eight digest bytes as unsigned little-endian",
+    "trainerFilesystemIsolationProvidedByOrchestrator": false,
+    "validationTargetsProvidedToTrainerCommand": false
+  },
+  "upstreamAuthority": {
+    "canonicalRelativePath": "build-msvc/data-generation/omega-decision-v3/capsule.closure.json",
+    "closureDeclaration": {
+      "componentAndSplitMapFrozenBeforeTeacher": true,
+      "gameResultsRead": false,
+      "heldOutTargetsDecodedByGeneration6AtClosure": 0,
+      "plannedProjectionProducerAndPathsFrozenBeforeTeacher": true,
+      "priorForbiddenCatalogFrozenBeforeTeacher": true,
+      "staticHceCompletedBeforeTeacherTargets": true,
+      "terminalClassifierLineageFrozenBeforeTeacher": true
+    },
+    "downstreamHeldOutVerification": "opaque structural routing only",
+    "freshVerifier": {
+      "canonicalRelativePath": "tools/omega_nnue/verify_omega_decision_v3_upstream.py",
+      "options": {
+        "initializerPolicy": {
+          "fallbackProtocol": {
+            "architecture": "king-state-v6-move-decision-initializer-v1",
+            "g6TargetRowsDecoded": 0,
+            "gameResultsRead": false,
+            "generator": "pinned upstream initializer verifier",
+            "seed": 2026072400,
+            "selectionRule": "use only when no catalog entry is independently promoted"
+          },
+          "orderedCatalog": [
+            "G5",
+            "G2-K2"
+          ],
+          "requireFailureOrAbortClosureForSkippedEntry": true,
+          "requireFirstIndependentlyPromotedEntry": true,
+          "requireFreshHealthForPromotedEntry": true,
+          "selectionModes": [
+            "promoted-prior",
+            "deterministic-fallback"
+          ]
+        },
+        "kind": "omega-decision-v3-verifier-options",
+        "mode": "--verify-omega-decision-v3-capsule",
+        "profileId": "king-state-v6-move-decision-v1",
+        "requiredSemanticReplays": [
+          "initializer selection, embedded health, source closure, and model cross-links",
+          "terminal rules manifest/transcript/completion and pre-teacher exclusions",
+          "every prior-forbidden manifest/catalog and zero current overlap",
+          "component-map coverage and whole-component split assignment",
+          "teacher lock/attempt ledger/completion coverage and budgets",
+          "planned projection producer/path against realized corpus/manifest"
+        ],
+        "resultInformationRead": false,
+        "schemaVersion": 1,
+        "stdout": "one exact JSON omega-decision-v3 fresh-verification object"
+      },
+      "receiptMaterializedInAuthority": true
+    },
+    "preTargetHceClaimKind": "omega-decision-v3-pretarget-hce-claim",
+    "requiredCapsuleKind": "omega-decision-v3-capsule-closure",
+    "requiredCrossChecks": [
+      "source root/group, child id/OFEN, phase, side",
+      "independent component and whole-component split projection",
+      "fresh terminal rules manifest/transcript/completion coverage replay",
+      "fresh semantic replay of every prior-forbidden catalog with zero overlap",
+      "planned projection producer/corpus/manifest against realized projection",
+      "teacher claim, engine, runner, options, budget, order, ledger, and completion replay",
+      "controlled pre-target HCE claim/transcript and fresh engine replay",
+      "fixed prior-promoted initializer catalog or deterministic fallback",
+      "semantic G5 success/failure/abort closure without requiring G5 success",
+      "exact projection and closure identities"
+    ],
+    "targetFreeRoutingKind": "omega-decision-v3-target-free-routing",
+    "teacherBudgets": {
+      "childrenPerRoot": 4,
+      "deepNodes": 50000,
+      "maximumAttempts": 3,
+      "shallowNodes": 2000,
+      "timeoutSeconds": 180,
+      "workers": 4
+    },
+    "teacherClaimKind": "omega-decision-v3-teacher-claim",
+    "teacherCompletionKind": "omega-decision-v3-teacher-completion"
+  },
+  "validation": {
+    "aggregation": "equal mean of eight phase-by-root-side cells; equal complete roots within cell",
+    "candidateTiePriority": [
+      "G6A",
+      "G6B",
+      "G6C"
+    ],
+    "cells": [
+      "opening:w",
+      "opening:b",
+      "middlegame:w",
+      "middlegame:b",
+      "late:w",
+      "late:b",
+      "endgame:w",
+      "endgame:b"
+    ],
+    "gameResultsRead": false,
+    "health": {
+      "callerBooleanAccepted": false,
+      "freshReplayRequiredAtSelection": true,
+      "thresholds": {
+        "maximumAbsResidualCp": 2000,
+        "requireExpectedNetworkBytes": true,
+        "requireFinitePredictions": true,
+        "requireQuantizationRoundTripExact": true,
+        "requireRuntimeParity": true
+      }
+    },
+    "lexicographicOrder": [
+      "maximum macro top-set accuracy",
+      "minimum macro chosen-move regret cp",
+      "minimum macro listwise cross-entropy",
+      "minimum macro pointwise clipped-residual Huber",
+      "fixed candidate priority G6A,G6B,G6C"
+    ],
+    "metrics": [
+      "topSetAccuracy",
+      "meanChosenMoveRegretCp",
+      "listwiseCrossEntropy",
+      "pointwiseHuber"
+    ],
+    "networkInference": "fresh pinned runtime replay over canonical OFEN order",
+    "nonRegressionGates": {
+      "maximumCellChosenMoveRegretIncreaseCp": 5.0,
+      "maximumCellTopSetAccuracyRegression": 0.01,
+      "maximumMacroChosenMoveRegretIncreaseCp": 0.0,
+      "maximumMacroListwiseCrossEntropyIncrease": 0.0,
+      "maximumMacroPointwiseHuberIncrease": 0.0,
+      "maximumMacroTopSetAccuracyRegression": 0.0
+    }
+  }
+}
