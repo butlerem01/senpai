@@ -28,6 +28,30 @@ def _write_json(path: Path, value: object) -> None:
     path.write_bytes(pipeline._canonical_json(value))
 
 
+class SyntheticPriorCatalogAuthority:
+    """Target-opaque semantic replay stand-in for synthetic path fixtures."""
+
+    def __init__(self, events: list[tuple[str, bool, str]] | None = None) -> None:
+        self.events = events
+
+    def verify_catalog_groups(
+        self,
+        groups,
+        *,
+        full_replay: bool,
+        plan_created_utc: str,
+    ) -> list[dict]:
+        if self.events is not None:
+            self.events.append(("prior", full_replay, plan_created_utc))
+        return [
+            {
+                "coveredSourceIds": list(group["coveredSourceIds"]),
+                "manifest": dict(group["manifest"]),
+            }
+            for group in groups
+        ]
+
+
 class PlanFixture:
     def __init__(self, root: Path) -> None:
         self.root = root.resolve()
@@ -41,7 +65,7 @@ class PlanFixture:
                 "history-sampler.dll", "classifier-bundle.json",
                 "classifier.dll", "dotnet.exe", "runtime.json",
                 "ChessLib.dll", "teacher.exe", "python.exe",
-                "prior-g3.json", "prior-g4g5.json",
+                "prior-g3g4.json", "prior-g5.json",
             )
         ):
             path = (self.external / name).resolve()
@@ -60,8 +84,8 @@ class PlanFixture:
             "classifierRuntimeManifest": str(self.files["runtime.json"]),
             "chessLibAssembly": str(self.files["ChessLib.dll"]),
             "priorForbiddenGroups": [
-                {"coveredSourceIds": ["G3"], "manifest": str(self.files["prior-g3.json"])},
-                {"coveredSourceIds": ["G4", "G5"], "manifest": str(self.files["prior-g4g5.json"])},
+                {"coveredSourceIds": ["G3", "G4"], "manifest": str(self.files["prior-g3g4.json"])},
+                {"coveredSourceIds": ["G5"], "manifest": str(self.files["prior-g5.json"])},
             ],
             "teacherEngine": str(self.files["teacher.exe"]),
             "staticHceExecutable": str(Path(sys.executable).resolve()),
@@ -73,7 +97,56 @@ class PlanFixture:
         return pipeline.publish_plan(self.inputs, self.plan, created_utc=TIME)
 
 
+class ExactPriorCatalogLoaderTests(unittest.TestCase):
+    def test_final_pin_executes_only_under_the_private_exact_loader(self) -> None:
+        authority = pipeline._load_exact_reviewed("priorCatalog")
+        self.assertTrue(callable(authority.verify_catalog_groups))
+        self.assertTrue(
+            authority.__name__.startswith("_omega_decision_v3_pipeline_priorCatalog_")
+        )
+        self.assertIsNot(
+            sys.modules.get("omega_decision_v3_prior_catalog"), authority
+        )
+        self.assertEqual(
+            pipeline._identity(Path(authority.__file__)),
+            {
+                "path": str(
+                    (
+                        pipeline._tool_dir()
+                        / "omega_decision_v3_prior_catalog.py"
+                    ).resolve()
+                ),
+                "bytes": 56_580,
+                "sha256": "c4eecaa481dbc1f4694fcee7dc4ec5954c7a23fb2148c3e155a55c409fe5f870",
+            },
+        )
+
+
 class PipelinePlanTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.prior_events: list[tuple[str, bool, str]] = []
+        authority = SyntheticPriorCatalogAuthority(self.prior_events)
+        real_loader = pipeline._load_exact_reviewed
+
+        def load_exact(key: str):
+            if key == "priorCatalog":
+                return authority
+            return real_loader(key)
+
+        self.exact_loader = mock.patch.object(
+            pipeline, "_load_exact_reviewed", side_effect=load_exact
+        )
+        self.exact_loader.start()
+
+    def tearDown(self) -> None:
+        self.exact_loader.stop()
+
+    def test_capsule_path_matches_generation6_trainer_contract(self) -> None:
+        self.assertEqual(
+            pipeline.CANONICAL_RELATIVE_PATHS["capsule"],
+            "capsule.closure.json",
+        )
+
     def test_plan_freezes_exact_stop_gated_runbook_without_targets(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = PlanFixture(Path(directory))
@@ -104,6 +177,96 @@ class PipelinePlanTests(unittest.TestCase):
             self.assertEqual(teacher["argv"][1:3], ["-I", "-B"])
             self.assertIn("resumeArgv", teacher)
 
+    def test_full_semantic_replay_precedes_plan_publication(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = PlanFixture(Path(directory))
+            events: list[tuple[str, bool | None, str]] = []
+            authority = SyntheticPriorCatalogAuthority(events)
+            real_exclusive_json = pipeline._exclusive_json
+
+            def publish(path: Path, value: object) -> None:
+                events.append(("publish", None, str(path)))
+                real_exclusive_json(path, value)
+
+            with mock.patch.object(
+                pipeline, "_load_exact_reviewed", return_value=authority
+            ), mock.patch.object(
+                pipeline, "_exclusive_json", side_effect=publish
+            ):
+                fixture.publish()
+            full = events.index(("prior", True, TIME))
+            publication = next(
+                index for index, event in enumerate(events) if event[0] == "publish"
+            )
+            self.assertLess(full, publication)
+
+    def test_plan_publication_is_fail_closed_on_semantic_replay_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = PlanFixture(Path(directory))
+            failing = types.SimpleNamespace(
+                verify_catalog_groups=mock.Mock(
+                    side_effect=ValueError("injected prior semantic failure")
+                )
+            )
+            with mock.patch.object(
+                pipeline, "_load_exact_reviewed", return_value=failing
+            ):
+                with self.assertRaisesRegex(ValueError, "prior semantic failure"):
+                    fixture.publish()
+            self.assertFalse(fixture.plan.exists())
+            self.assertEqual(list(fixture.authority.rglob("*")), [])
+
+    def test_plan_requires_the_exact_private_prior_authority(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = PlanFixture(Path(directory))
+            with mock.patch.object(
+                pipeline,
+                "_load_exact_reviewed",
+                side_effect=RuntimeError("injected exact dependency failure"),
+            ) as exact_loader:
+                with self.assertRaisesRegex(RuntimeError, "exact dependency failure"):
+                    fixture.publish()
+            exact_loader.assert_called_once_with("priorCatalog")
+            self.assertFalse(fixture.plan.exists())
+
+    def test_plan_requires_a_final_matching_prior_dependency_record(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = PlanFixture(Path(directory))
+            dependencies = pipeline._dependency_records()
+            dependencies["priorCatalog"] = {
+                **dependencies["priorCatalog"],
+                "pinFinalized": False,
+                "matches": False,
+            }
+            with mock.patch.object(
+                pipeline, "_dependency_records", return_value=dependencies
+            ), mock.patch.object(
+                pipeline, "_load_exact_reviewed"
+            ) as exact_loader:
+                with self.assertRaisesRegex(RuntimeError, "not final and matching"):
+                    fixture.publish()
+            exact_loader.assert_not_called()
+            self.assertFalse(fixture.plan.exists())
+
+    def test_prior_catalog_pin_matches_the_final_reviewed_file(self) -> None:
+        filename, expected_bytes, expected_sha256 = pipeline.REVIEWED_PINS[
+            "priorCatalog"
+        ]
+        self.assertEqual(filename, "omega_decision_v3_prior_catalog.py")
+        self.assertEqual(expected_bytes, 56_580)
+        self.assertEqual(
+            expected_sha256,
+            "c4eecaa481dbc1f4694fcee7dc4ec5954c7a23fb2148c3e155a55c409fe5f870",
+        )
+        self.assertEqual(
+            pipeline._identity(pipeline._tool_dir() / filename),
+            {
+                "path": str((pipeline._tool_dir() / filename).resolve()),
+                "bytes": expected_bytes,
+                "sha256": expected_sha256,
+            },
+        )
+
     def test_plan_resume_is_exact_and_does_not_rewrite(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = PlanFixture(Path(directory))
@@ -130,7 +293,16 @@ class PipelinePlanTests(unittest.TestCase):
             fixture.inputs_document["priorForbiddenGroups"][0]["coveredSourceIds"] = ["G4"]
             fixture.inputs_document["priorForbiddenGroups"][1]["coveredSourceIds"] = ["G3", "G5"]
             _write_json(fixture.inputs, fixture.inputs_document)
-            with self.assertRaisesRegex(ValueError, "exactly G3,G4,G5"):
+            with self.assertRaisesRegex(ValueError, "exact semantic authorities"):
+                fixture.publish()
+
+    def test_plan_rejects_the_misleading_g3_then_g4g5_grouping(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = PlanFixture(Path(directory))
+            fixture.inputs_document["priorForbiddenGroups"][0]["coveredSourceIds"] = ["G3"]
+            fixture.inputs_document["priorForbiddenGroups"][1]["coveredSourceIds"] = ["G4", "G5"]
+            _write_json(fixture.inputs, fixture.inputs_document)
+            with self.assertRaisesRegex(ValueError, "exact semantic authorities"):
                 fixture.publish()
 
     def test_plan_rejects_substituted_hce_or_verifier_executable(self) -> None:
@@ -152,6 +324,14 @@ class PipelinePlanTests(unittest.TestCase):
             fixture.plan.write_bytes(pipeline._canonical_json(value))
             with self.assertRaisesRegex(ValueError, "runbook changed"):
                 pipeline.verify_plan(fixture.plan)
+
+    def test_verify_plan_rechecks_prior_lineage_without_full_replay(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = PlanFixture(Path(directory))
+            fixture.publish()
+            self.prior_events.clear()
+            pipeline.verify_plan(fixture.plan)
+            self.assertEqual(self.prior_events, [("prior", False, TIME)])
 
     def test_verify_plan_rejects_status_not_derived_from_exact_pins(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -216,12 +396,16 @@ class PipelinePlanTests(unittest.TestCase):
                     "38d81f665d0bccb4939e3a1707b7dbfbe4c9c29795e0699f51d92bf30af94be0",
                 ),
                 "verifierImplementation": (
-                    151_065,
-                    "e0704ade94df4c7d957413101f45fed8ec3c2d2662a7a81e9dfabffa9be10576",
+                    154_746,
+                    "6144469a45c481f55c73718b12154f64333d6fa17c81a39d8e9cb570f6ea6907",
                 ),
                 "verifierRunner": (
                     4_856,
-                    "5f6fb24275d7dc71eb6fa3ef757a1b3ef789211ad3c4346cade941dd63c85300",
+                    "0b434c3ab3275cb4598e12bc955723c5cdc5662bb6429a7a155acdbb85c771b6",
+                ),
+                "priorCatalog": (
+                    56_580,
+                    "c4eecaa481dbc1f4694fcee7dc4ec5954c7a23fb2148c3e155a55c409fe5f870",
                 ),
             }
             for name, (size, sha256) in expected.items():
@@ -232,13 +416,29 @@ class PipelinePlanTests(unittest.TestCase):
                 self.assertEqual(record["expectedSha256"], sha256)
                 self.assertEqual(record["actual"]["bytes"], size)
                 self.assertEqual(record["actual"]["sha256"], sha256)
+            pipeline._require_dependencies(plan, tuple(expected))
             self.assertTrue(
                 all(
                     record["pinFinalized"] is True and record["matches"] is True
                     for record in plan["dependencies"].values()
                 )
             )
-            pipeline._require_dependencies(plan, tuple(expected))
+            prior_filename, prior_size, prior_sha256 = pipeline.REVIEWED_PINS[
+                "priorCatalog"
+            ]
+            self.assertEqual(
+                prior_filename, "omega_decision_v3_prior_catalog.py"
+            )
+            prior = plan["dependencies"]["priorCatalog"]
+            self.assertEqual(prior_size, 56_580)
+            self.assertEqual(
+                prior_sha256,
+                "c4eecaa481dbc1f4694fcee7dc4ec5954c7a23fb2148c3e155a55c409fe5f870",
+            )
+            self.assertIs(prior["pinFinalized"], True)
+            self.assertIs(prior["matches"], True)
+            self.assertEqual(prior["expectedBytes"], prior_size)
+            self.assertEqual(prior["expectedSha256"], prior_sha256)
 
     def test_authority_substitution_fails_before_pretarget_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -266,6 +466,98 @@ class PipelinePlanTests(unittest.TestCase):
                 "preTargetHceClaim",
             ):
                 self.assertFalse(Path(plan["paths"][name]).exists())
+
+    def test_full_replay_failure_precedes_every_pretarget_publication(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = PlanFixture(Path(directory))
+            plan = fixture.publish()
+            with mock.patch.object(
+                pipeline, "verify_plan", return_value=plan
+            ), mock.patch.object(
+                pipeline, "_require_dependencies"
+            ), mock.patch.object(
+                pipeline,
+                "_verify_prior_catalog_groups",
+                side_effect=ValueError("injected pretarget catalog failure"),
+            ) as semantic, mock.patch.object(
+                pipeline, "_import_authorities"
+            ) as imports:
+                with self.assertRaisesRegex(ValueError, "pretarget catalog failure"):
+                    pipeline.claim_stage(fixture.plan, "pretarget", created_utc=TIME)
+            semantic.assert_called_once_with(
+                plan["priorForbiddenGroups"],
+                plan_created_utc=TIME,
+                full_replay=True,
+            )
+            imports.assert_not_called()
+            for name in (
+                "priorForbiddenRegistry", "prelabelSeal", "staticHceOptions",
+                "preTargetHceClaim",
+            ):
+                self.assertFalse(Path(plan["paths"][name]).exists())
+
+    def test_full_replay_failure_precedes_hce_and_teacher_target_work(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = PlanFixture(Path(directory))
+            plan = fixture.publish()
+            for action in (
+                lambda: pipeline.materialize_hce(fixture.plan),
+                lambda: pipeline.claim_stage(
+                    fixture.plan, "teacher", created_utc=TIME
+                ),
+            ):
+                with self.subTest(action=action):
+                    with mock.patch.object(
+                        pipeline, "verify_plan", return_value=plan
+                    ), mock.patch.object(
+                        pipeline, "_require_dependencies"
+                    ), mock.patch.object(
+                        pipeline,
+                        "_verify_prior_catalog_groups",
+                        side_effect=ValueError("injected target-work catalog failure"),
+                    ) as semantic, mock.patch.object(
+                        pipeline, "_import_authorities"
+                    ) as imports:
+                        with self.assertRaisesRegex(
+                            ValueError, "target-work catalog failure"
+                        ):
+                            action()
+                    semantic.assert_called_once_with(
+                        plan["priorForbiddenGroups"],
+                        plan_created_utc=TIME,
+                        full_replay=True,
+                    )
+                    imports.assert_not_called()
+            self.assertFalse(Path(plan["paths"]["staticHceTranscript"]).exists())
+            self.assertFalse(Path(plan["paths"]["teacherOptions"]).exists())
+            self.assertFalse(Path(plan["paths"]["teacherClaim"]).exists())
+
+    def test_capsule_finalization_requires_a_fresh_full_prior_replay(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = PlanFixture(Path(directory))
+            plan = fixture.publish()
+            with mock.patch.object(
+                pipeline, "verify_plan", return_value=plan
+            ), mock.patch.object(
+                pipeline, "_require_dependencies"
+            ), mock.patch.object(
+                pipeline,
+                "_verify_prior_catalog_groups",
+                side_effect=ValueError("injected capsule catalog failure"),
+            ) as semantic, mock.patch.object(
+                pipeline, "_import_authorities"
+            ) as imports:
+                with self.assertRaisesRegex(ValueError, "capsule catalog failure"):
+                    pipeline.finalize_stage(
+                        fixture.plan, "capsule", created_utc=TIME
+                    )
+            semantic.assert_called_once_with(
+                plan["priorForbiddenGroups"],
+                plan_created_utc=TIME,
+                full_replay=True,
+            )
+            imports.assert_not_called()
+            self.assertFalse(Path(plan["paths"]["capsule"]).exists())
 
     def test_teacher_claim_gate_checks_completed_hce_first(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -387,6 +679,8 @@ class MaterializeHceTests(unittest.TestCase):
                 "paths": {name: str(path) for name, path in paths.items()},
                 "bindings": {"staticHceExecutable": {"path": str(root / "python"), "bytes": 1, "sha256": "0" * 64}},
                 "dependencies": {"evaluatorRunner": {"actual": {"path": str(root / "runner"), "bytes": 1, "sha256": "0" * 64}}},
+                "priorForbiddenGroups": [],
+                "createdUtc": TIME,
             }
 
             class FakeTrainer:
@@ -399,6 +693,8 @@ class MaterializeHceTests(unittest.TestCase):
 
             with mock.patch.object(pipeline, "verify_plan", return_value=plan), mock.patch.object(
                 pipeline, "_require_dependencies"
+            ), mock.patch.object(
+                pipeline, "_verify_prior_catalog_groups"
             ), mock.patch.object(
                 pipeline, "_import_authorities", return_value=(FakeTrainer, object(), object(), object())
             ):
@@ -414,7 +710,11 @@ class ProjectionTests(unittest.TestCase):
                 name: (root / relative).resolve()
                 for name, relative in pipeline.CANONICAL_RELATIVE_PATHS.items()
             }
-            plan = {"paths": {name: str(path) for name, path in paths.items()}}
+            plan = {
+                "paths": {name: str(path) for name, path in paths.items()},
+                "priorForbiddenGroups": [],
+                "createdUtc": TIME,
+            }
             calls: list[str] = []
             projected = {"schemaVersion": 1, "kind": "exact-projected-row", "childId": "c"}
 
@@ -453,6 +753,8 @@ class ProjectionTests(unittest.TestCase):
 
             with mock.patch.object(pipeline, "verify_plan", return_value=plan), mock.patch.object(
                 pipeline, "_require_dependencies"
+            ), mock.patch.object(
+                pipeline, "_verify_prior_catalog_groups"
             ), mock.patch.object(
                 pipeline, "_import_authorities", return_value=(None, None, FakeTeacher, None)
             ), mock.patch.object(
@@ -552,6 +854,8 @@ class PublicationBoundaryTests(unittest.TestCase):
                     "verifierRunner": {"actual": {"path": str(root / "runner")}},
                     "evaluatorRunner": {"actual": {"path": str(root / "evaluator")}},
                 },
+                "priorForbiddenGroups": [],
+                "createdUtc": TIME,
             }
             calls: list[str] = []
 
@@ -575,6 +879,8 @@ class PublicationBoundaryTests(unittest.TestCase):
             fake_verifier = types.SimpleNamespace(VERIFIER_OPTIONS=options)
             with mock.patch.object(pipeline, "verify_plan", return_value=plan), mock.patch.object(
                 pipeline, "_require_dependencies"
+            ), mock.patch.object(
+                pipeline, "_verify_prior_catalog_groups"
             ), mock.patch.object(
                 pipeline, "_import_authorities",
                 return_value=(FakeTrainer, FakeRouting, FakeTeacher, FakeTerminal),

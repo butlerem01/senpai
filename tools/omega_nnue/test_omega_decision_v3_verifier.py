@@ -13,7 +13,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
+from unittest import mock
 
 
 MODULE_PATH = Path(__file__).resolve().with_name("omega_decision_v3_verifier.py")
@@ -191,6 +193,10 @@ def _fixed_quota_inventories() -> tuple[dict, dict]:
 class VerifierTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
+        # Mirror the production entry point: the prior-catalog authority must
+        # establish the frozen G5 runtime contract before any test can load a
+        # NumPy-bearing verifier dependency.
+        cls.prior_catalog_dependency = verifier._load_pinned("priorCatalog")
         cls.fallback_temporary = tempfile.TemporaryDirectory(
             prefix="omega-decision-v3-fallback-fixture-"
         )
@@ -241,10 +247,190 @@ class VerifierTests(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             verifier.publish_verifier_options(output)
 
+    def test_prior_catalog_uses_final_exact_private_authority(self) -> None:
+        dependency = self.prior_catalog_dependency
+        filename, expected_bytes, expected_sha256 = verifier.DEPENDENCY_PINS[
+            "priorCatalog"
+        ]
+        self.assertEqual(filename, "omega_decision_v3_prior_catalog.py")
+        self.assertEqual(dependency.identity["bytes"], expected_bytes)
+        self.assertEqual(dependency.identity["sha256"], expected_sha256)
+        self.assertEqual(
+            dependency.module.__name__,
+            verifier._PINNED_MODULE_PREFIX + "priorCatalog",
+        )
+        self.assertTrue(callable(dependency.module.verify_catalog_groups))
+        self.assertIs(
+            sys.modules[dependency.module.__name__], dependency.module
+        )
+
+    def test_prior_catalog_private_slot_substitution_fails_closed(self) -> None:
+        dependency = self.prior_catalog_dependency
+        private_name = dependency.module.__name__
+        self.assertIs(sys.modules[private_name], dependency.module)
+        sys.modules[private_name] = types.ModuleType("substituted-prior-catalog")
+        try:
+            with self.assertRaisesRegex(RuntimeError, "private module was substituted"):
+                verifier._load_pinned("priorCatalog")
+        finally:
+            sys.modules[private_name] = dependency.module
+
     def test_contract_alignment_uses_exact_reviewed_sources(self) -> None:
         trainer, teacher = verifier._verify_contract_alignment()
         self.assertEqual(trainer.UPSTREAM_VERIFIER_OPTIONS, verifier.VERIFIER_OPTIONS)
         self.assertEqual(teacher.BUDGETS, verifier.TEACHER_BUDGETS)
+
+    def test_verify_capsule_loads_prior_catalog_before_contract_alignment(self) -> None:
+        events: list[str] = []
+
+        def load(name: str) -> verifier.PinnedModule:
+            events.append(f"load:{name}")
+            return verifier.PinnedModule({}, types.ModuleType("prior-catalog-test"))
+
+        def align() -> tuple[types.ModuleType, types.ModuleType]:
+            events.append("contract-alignment")
+            raise RuntimeError("stop after ordering boundary")
+
+        with mock.patch.object(verifier, "_load_pinned", side_effect=load), mock.patch.object(
+            verifier, "_verify_contract_alignment", side_effect=align
+        ):
+            with self.assertRaisesRegex(RuntimeError, "ordering boundary"):
+                verifier.verify_capsule(
+                    self.root / "capsule.json",
+                    self.root / "options.json",
+                    self.root / "initializer.json",
+                )
+        self.assertEqual(events, ["load:priorCatalog", "contract-alignment"])
+
+    def test_pinned_loader_rejects_private_module_substitution(self) -> None:
+        source = self.root / "slot-authority.py"
+        source.write_text("VALUE = 17\n", encoding="utf-8")
+        identity = verifier._identity(source)
+        logical_name = "privateSlotTest"
+        private_name = verifier._PINNED_MODULE_PREFIX + logical_name
+        original_dependency_path = verifier._dependency_path
+        previous_slot = sys.modules.get(private_name)
+        previous_cache = verifier._PINNED_CACHE.pop(logical_name, None)
+        verifier.DEPENDENCY_PINS[logical_name] = (
+            source.name,
+            identity["bytes"],
+            identity["sha256"],
+        )
+
+        def dependency_path(filename: str) -> Path:
+            if filename == source.name:
+                return source
+            return original_dependency_path(filename)
+
+        try:
+            with mock.patch.object(verifier, "_dependency_path", side_effect=dependency_path):
+                sys.modules[private_name] = types.ModuleType("preloaded-attacker")
+                with self.assertRaisesRegex(RuntimeError, "private module was preloaded"):
+                    verifier._load_pinned(logical_name)
+
+                del sys.modules[private_name]
+                loaded = verifier._load_pinned(logical_name)
+                self.assertEqual(loaded.module.VALUE, 17)
+                sys.modules[private_name] = types.ModuleType("cached-attacker")
+                with self.assertRaisesRegex(RuntimeError, "private module was substituted"):
+                    verifier._load_pinned(logical_name)
+        finally:
+            verifier._PINNED_CACHE.pop(logical_name, None)
+            verifier.DEPENDENCY_PINS.pop(logical_name, None)
+            sys.modules.pop(private_name, None)
+            if previous_cache is not None:
+                verifier._PINNED_CACHE[logical_name] = previous_cache
+            if previous_slot is not None:
+                sys.modules[private_name] = previous_slot
+
+    def test_swapped_self_consistent_registry_fails_before_routing_replay(self) -> None:
+        producer = self.root / "registry-producer.py"
+        producer.write_text("# registry producer\n", encoding="utf-8")
+        g34_manifest = self.root / "g34.manifest.json"
+        g5_manifest = self.root / "g5.manifest.json"
+        _write_json(g34_manifest, {"authority": "G3+G4"})
+        _write_json(g5_manifest, {"authority": "G5"})
+        g34_identity = verifier._identity(g34_manifest)
+        g5_identity = verifier._identity(g5_manifest)
+        created_utc = _timestamp(1)
+        registry_path = self.root / "prior-forbidden.registry.json"
+        registry = {
+            "schemaVersion": 1,
+            "kind": verifier.FORBIDDEN_REGISTRY_KIND,
+            "profileId": verifier.PROFILE_ID,
+            "status": "frozen-complete-prior-source-registry",
+            "createdUtc": created_utc,
+            "requiredSourceIds": list(verifier.PRIOR_SOURCE_IDS),
+            "catalogs": [
+                {"coveredSourceIds": ["G5"], "manifest": g5_identity},
+                {
+                    "coveredSourceIds": ["G3", "G4"],
+                    "manifest": g34_identity,
+                },
+            ],
+            "producer": verifier._identity(producer),
+            "targetFieldsDecodedAtSeal": 0,
+            "resultInformationRead": False,
+            "finalStageSeal": True,
+        }
+        _write_json(registry_path, registry)
+        capsule = {
+            # The capsule agrees with the forged registry, so only independent
+            # authority replay can reject the swapped partition at this point.
+            "priorForbiddenCatalogs": [g5_identity, g34_identity],
+        }
+        identities = {"priorForbiddenRegistry": verifier._identity(registry_path)}
+        events: list[str] = []
+        prior_catalog = self.prior_catalog_dependency.module
+        real_verify_catalog_groups = prior_catalog.verify_catalog_groups
+        routing = types.ModuleType("routing-authority-test")
+
+        def verify_catalog_groups(
+            groups: object,
+            *,
+            full_replay: bool,
+            plan_created_utc: str,
+        ) -> list[dict]:
+            events.append("prior-catalog-full-replay")
+            self.assertIs(full_replay, True)
+            self.assertEqual(plan_created_utc, created_utc)
+            self.assertEqual(
+                [entry["coveredSourceIds"] for entry in groups],
+                [["G5"], ["G3", "G4"]],
+            )
+            return real_verify_catalog_groups(
+                groups,
+                full_replay=full_replay,
+                plan_created_utc=plan_created_utc,
+            )
+
+        def load_forbidden(_paths: object) -> None:
+            events.append("routing-replay")
+            raise AssertionError("routing replay ran before catalog authority rejection")
+
+        routing._load_forbidden = load_forbidden
+        real_load_pinned = verifier._load_pinned
+
+        def load(name: str) -> verifier.PinnedModule:
+            if name == "routing":
+                return verifier.PinnedModule({}, routing)
+            return real_load_pinned(name)
+
+        with (
+            verifier.AuthorityDatabase() as database,
+            mock.patch.object(verifier, "_load_pinned", side_effect=load),
+            mock.patch.object(
+                prior_catalog,
+                "verify_catalog_groups",
+                side_effect=verify_catalog_groups,
+            ),
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                "ordered as \\[G3,G4\\] existing v2 plus \\[G5\\]",
+            ):
+                verifier._verify_forbidden(capsule, identities, {}, database)
+        self.assertEqual(events, ["prior-catalog-full-replay"])
 
     def test_canonical_wrapper_loads_exact_verifier_and_sets_runner(self) -> None:
         spec = importlib.util.spec_from_file_location(
@@ -847,6 +1033,7 @@ class RealProducerIntegrationTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
+        cls.prior_catalog_dependency = verifier._load_pinned("priorCatalog")
         cls.fallback_temporary = tempfile.TemporaryDirectory(
             prefix="omega-decision-v3-real-fallback-fixture-"
         )

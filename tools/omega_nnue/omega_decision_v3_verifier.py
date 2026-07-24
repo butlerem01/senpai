@@ -317,6 +317,14 @@ DEPENDENCY_PINS: dict[str, tuple[str, int | None, str | None]] = {
         133_260,
         "ed327826154256137694b955aaf23ede07c91374ea665be48df55360f858e25c",
     ),
+    # The prior-catalog authority intentionally executes the frozen G5 runtime
+    # contract before NumPy can enter the process, so verify_capsule loads this
+    # finalized descriptor-stable identity before every NumPy-bearing module.
+    "priorCatalog": (
+        "omega_decision_v3_prior_catalog.py",
+        56_580,
+        "c4eecaa481dbc1f4694fcee7dc4ec5954c7a23fb2148c3e155a55c409fe5f870",
+    ),
     "initializerGenerator": (
         "omega_decision_v3_initializer.py",
         19_564,
@@ -839,10 +847,17 @@ class PinnedModule:
 
 
 _PINNED_CACHE: dict[str, PinnedModule] = {}
+_PINNED_MODULE_PREFIX = "_omega_decision_v3_verifier_pinned_"
 
 
 def _dependency_path(filename: str) -> Path:
     return Path(__file__).resolve().parent / filename
+
+
+def _pinned_module_name(name: str) -> str:
+    if name not in DEPENDENCY_PINS:
+        raise RuntimeError(f"unknown pinned dependency {name!r}")
+    return _PINNED_MODULE_PREFIX + name
 
 
 def _verifier_runner_path() -> Path:
@@ -882,15 +897,18 @@ def _pinned_dependency_snapshot(
 
 
 def _load_pinned(name: str) -> PinnedModule:
+    module_name = _pinned_module_name(name)
     cached = _PINNED_CACHE.get(name)
     if cached is not None:
+        if sys.modules.get(module_name) is not cached.module:
+            raise RuntimeError(f"pinned dependency {name} private module was substituted")
         if _identity(Path(str(cached.identity["path"])), name) != dict(cached.identity):
             raise ValueError(f"pinned dependency {name} changed after load")
         return cached
-    filename, _, _ = DEPENDENCY_PINS[name]
-    path = _dependency_path(filename)
+    if module_name in sys.modules:
+        raise RuntimeError(f"pinned dependency {name} private module was preloaded")
     identity, payload = _pinned_dependency_snapshot(name)
-    module_name = f"_omega_decision_v3_verifier_pinned_{name}"
+    path = Path(str(identity["path"]))
     module = types.ModuleType(module_name)
     module.__file__ = identity["path"]
     module.__package__ = ""
@@ -898,11 +916,19 @@ def _load_pinned(name: str) -> PinnedModule:
     module.__spec__ = None
     original_import = builtins.__import__
     pinned_imports: dict[str, types.ModuleType] = {}
+    deferred_pinned_imports: dict[str, str] = {}
     if name == "routing":
         pinned_imports = {
             "omega_nnue": _load_pinned("omegaNnue").module,
             "select_screen": _load_pinned("selectScreen").module,
         }
+    elif name == "priorCatalog":
+        # A finalized adapter may import the routing authority by its public
+        # source name.  Resolve that name only to this verifier's exact private
+        # module; never consult a caller-controlled public sys.modules entry.
+        # Resolution stays lazy so the current authority can execute its G5
+        # runtime contract before any NumPy-bearing routing dependency.
+        deferred_pinned_imports = {"omega_decision_v3_routing": "routing"}
     elif name == "selectScreen":
         pinned_imports = {"omega_nnue": _load_pinned("omegaNnue").module}
 
@@ -915,6 +941,8 @@ def _load_pinned(name: str) -> PinnedModule:
     ) -> Any:
         if level == 0 and import_name in pinned_imports:
             return pinned_imports[import_name]
+        if level == 0 and import_name in deferred_pinned_imports:
+            return _load_pinned(deferred_pinned_imports[import_name]).module
         return original_import(import_name, globals, locals, fromlist, level)
 
     execution_builtins = dict(vars(builtins))
@@ -923,13 +951,16 @@ def _load_pinned(name: str) -> PinnedModule:
     sys.modules[module_name] = module
     try:
         exec(compile(payload, str(path), "exec", dont_inherit=True), module.__dict__)
+        if sys.modules.get(module_name) is not module:
+            raise RuntimeError(f"pinned dependency {name} replaced its private module")
+        if _identity(path, f"{name} dependency") != identity:
+            raise ValueError(f"pinned dependency {name} changed while loaded")
     except BaseException:
-        sys.modules.pop(module_name, None)
+        if sys.modules.get(module_name) is module:
+            del sys.modules[module_name]
         raise
     result = PinnedModule(identity, module)
     _PINNED_CACHE[name] = result
-    if _identity(path, f"{name} dependency") != identity:
-        raise ValueError(f"pinned dependency {name} changed while loaded")
     return result
 
 
@@ -2421,6 +2452,42 @@ def _verify_forbidden(
         raise ValueError("prior-forbidden registry header changed")
     _parse_timestamp(registry["createdUtc"], "prior-forbidden registry createdUtc")
     _verified_identity(registry["producer"], "prior-forbidden registry producer")
+
+    # This is an independent completeness boundary, not a second spelling of
+    # routing's manifest replay.  The exactly pinned catalog authority fixes
+    # both group partition/order and the seven-source lexical reconstruction.
+    # It must run before routing sees a manifest and before any target-bearing
+    # verification stage is allowed to progress.
+    prior_catalog_module = _load_pinned("priorCatalog").module
+    verified_groups = prior_catalog_module.verify_catalog_groups(
+        registry["catalogs"],
+        full_replay=True,
+        plan_created_utc=registry["createdUtc"],
+    )
+    expected_group_sources = (["G3", "G4"], ["G5"])
+    if type(verified_groups) is not list or len(verified_groups) != 2:
+        raise ValueError("prior-catalog authority returned a non-canonical grouping")
+    authority_manifests: list[dict[str, Any]] = []
+    for index, (entry, expected_sources) in enumerate(
+        zip(verified_groups, expected_group_sources)
+    ):
+        if type(entry) is not dict:
+            raise ValueError(f"prior-catalog authority group {index} is not an object")
+        _exact_keys(
+            entry,
+            FORBIDDEN_REGISTRY_ENTRY_FIELDS,
+            f"prior-catalog authority group {index}",
+        )
+        if entry["coveredSourceIds"] != expected_sources:
+            raise ValueError(
+                "prior catalogs must be ordered exactly as [G3,G4] then [G5]"
+            )
+        authority_manifests.append(
+            _identity_shape(
+                entry["manifest"], f"prior-catalog authority manifest {index}"
+            )
+        )
+
     sources: list[str] = []
     manifests: list[dict[str, Any]] = []
     seen_paths: set[str] = set()
@@ -2454,8 +2521,10 @@ def _verify_forbidden(
         seen_inodes.add(inode)
         sources.extend(covered)
         manifests.append(identity)
-    if sources != list(PRIOR_SOURCE_IDS) or not _type_exact_equal(
-        manifests, capsule["priorForbiddenCatalogs"]
+    if (
+        sources != list(PRIOR_SOURCE_IDS)
+        or not _type_exact_equal(authority_manifests, manifests)
+        or not _type_exact_equal(manifests, capsule["priorForbiddenCatalogs"])
     ):
         raise ValueError("prior-forbidden registry coverage/catalog order changed")
 
@@ -3466,6 +3535,10 @@ def verify_capsule(
     options_path: Path,
     initializer_manifest_path: Path,
 ) -> dict[str, Any]:
+    # The prior-catalog authority's frozen G5 runtime contract must execute
+    # before trainer/routing imports can bring NumPy into this process.  The
+    # later forbidden gate reloads only this authenticated cached module.
+    _load_pinned("priorCatalog")
     _, teacher_module = _verify_contract_alignment()
     options, options_identity = _read_document(options_path, "verifier options")
     if not _type_exact_equal(options, VERIFIER_OPTIONS):

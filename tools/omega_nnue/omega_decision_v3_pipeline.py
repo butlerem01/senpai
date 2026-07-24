@@ -182,13 +182,18 @@ REVIEWED_PINS: dict[str, tuple[str, int | None, str | None]] = {
     ),
     "verifierImplementation": (
         "omega_decision_v3_verifier.py",
-        151_065,
-        "e0704ade94df4c7d957413101f45fed8ec3c2d2662a7a81e9dfabffa9be10576",
+        154_746,
+        "6144469a45c481f55c73718b12154f64333d6fa17c81a39d8e9cb570f6ea6907",
     ),
     "verifierRunner": (
         "verify_omega_decision_v3_upstream.py",
         4_856,
-        "5f6fb24275d7dc71eb6fa3ef757a1b3ef789211ad3c4346cade941dd63c85300",
+        "0b434c3ab3275cb4598e12bc955723c5cdc5662bb6429a7a155acdbb85c771b6",
+    ),
+    "priorCatalog": (
+        "omega_decision_v3_prior_catalog.py",
+        56_580,
+        "c4eecaa481dbc1f4694fcee7dc4ec5954c7a23fb2148c3e155a55c409fe5f870",
     ),
 }
 _LOADED_EXACT: dict[str, tuple[types.ModuleType, dict[str, Any]]] = {}
@@ -249,7 +254,7 @@ CANONICAL_RELATIVE_PATHS: Mapping[str, str] = {
     "labelManifest": "70-projection/decision-v3.label-manifest.json",
     "staticHceManifest": "70-projection/static-hce.manifest.json",
     "verifierOptions": "80-capsule/verifier.options.json",
-    "capsule": "80-capsule/decision-v3.capsule.json",
+    "capsule": "capsule.closure.json",
     "verificationReceipt": "80-capsule/decision-v3.verification.json",
 }
 
@@ -612,7 +617,10 @@ def _require_dependencies(plan: Mapping[str, Any], names: Sequence[str]) -> None
 
 
 def _derived_plan_status(dependencies: Mapping[str, Any]) -> str:
-    required = ("terminal", "routing", "teacher", "evaluatorRunner")
+    required = (
+        "terminal", "routing", "teacher", "evaluatorRunner",
+        "priorCatalog",
+    )
     ready = all(
         type(dependencies.get(name)) is dict
         and dependencies[name].get("pinFinalized") is True
@@ -759,17 +767,27 @@ def expected_plan(inputs_path: Path, *, created_utc: str) -> dict[str, Any]:
     if type(groups_value) is not list or not groups_value:
         raise ValueError("pipeline inputs have no prior-forbidden groups")
     groups: list[dict[str, Any]] = []
-    flattened: list[str] = []
     for index, value in enumerate(groups_value):
         _exact_keys(value, FORBIDDEN_GROUP_FIELDS, f"prior-forbidden group {index}")
         sources = value["coveredSourceIds"]
         if type(sources) is not list or not sources or any(type(item) is not str or not item for item in sources):
             raise ValueError("prior-forbidden source IDs changed")
-        flattened.extend(sources)
         groups.append({"coveredSourceIds": list(sources), "manifest": _identity(Path(value["manifest"]))})
-    if flattened != ["G3", "G4", "G5"]:
-        raise ValueError("prior-forbidden groups must cover exactly G3,G4,G5 in order")
+    if [group["coveredSourceIds"] for group in groups] != [
+        ["G3", "G4"],
+        ["G5"],
+    ]:
+        raise ValueError(
+            "prior-forbidden groups must bind exact semantic authorities "
+            "[G3,G4] then [G5]"
+        )
     dependencies = _dependency_records()
+    _require_dependencies(
+        {"dependencies": dependencies}, ("priorCatalog",)
+    )
+    _verify_prior_catalog_groups(
+        groups, plan_created_utc=created_utc, full_replay=True
+    )
     _assert_distinct_bound_inputs(bindings, groups, path_map)
     status = _derived_plan_status(dependencies)
     return {
@@ -862,7 +880,7 @@ def verify_plan(path: Path) -> dict[str, Any]:
         _verify_identity(identity, f"pipeline binding {name}")
     if type(document["priorForbiddenGroups"]) is not list:
         raise ValueError("pipeline prior-forbidden group inventory changed")
-    covered_sources: list[str] = []
+    covered_groups: list[list[str]] = []
     for index, group in enumerate(document["priorForbiddenGroups"]):
         _exact_keys(group, FORBIDDEN_GROUP_FIELDS, f"plan prior group {index}")
         sources = group["coveredSourceIds"]
@@ -871,10 +889,16 @@ def verify_plan(path: Path) -> dict[str, Any]:
             or any(type(source) is not str or not source for source in sources)
         ):
             raise ValueError("pipeline prior-forbidden source inventory changed")
-        covered_sources.extend(sources)
+        covered_groups.append(list(sources))
         _verify_identity(group["manifest"], f"plan prior manifest {index}")
-    if covered_sources != ["G3", "G4", "G5"]:
+    if covered_groups != [["G3", "G4"], ["G5"]]:
         raise ValueError("pipeline prior-forbidden groups changed")
+    _require_dependencies(document, ("priorCatalog",))
+    _verify_prior_catalog_groups(
+        document["priorForbiddenGroups"],
+        plan_created_utc=document["createdUtc"],
+        full_replay=False,
+    )
     _assert_distinct_bound_inputs(
         document["bindings"], document["priorForbiddenGroups"], expected_paths
     )
@@ -988,6 +1012,32 @@ def _load_exact_reviewed(key: str) -> types.ModuleType:
         raise
 
 
+def _verify_prior_catalog_groups(
+    groups: Sequence[Mapping[str, Any]],
+    *,
+    plan_created_utc: str,
+    full_replay: bool,
+) -> list[dict[str, Any]]:
+    """Invoke the exact prior-catalog authority without interpreting targets."""
+
+    authority = _load_exact_reviewed("priorCatalog")
+    normalized = authority.verify_catalog_groups(
+        groups,
+        full_replay=full_replay,
+        plan_created_utc=plan_created_utc,
+    )
+    expected = [
+        {
+            "coveredSourceIds": list(group["coveredSourceIds"]),
+            "manifest": dict(group["manifest"]),
+        }
+        for group in groups
+    ]
+    if not _type_exact_equal(normalized, expected):
+        raise ValueError("prior-catalog semantic authority normalized bindings changed")
+    return normalized
+
+
 def _import_authorities(
     required: Sequence[str] = ("trainerAuthority", "routing", "teacher", "terminal"),
 ) -> tuple[Any | None, Any | None, Any | None, Any | None]:
@@ -1056,7 +1106,12 @@ def claim_stage(plan_path: Path, stage: str, *, created_utc: str) -> dict[str, A
         _require_dependencies(
             plan,
             ("terminal", "routing", "trainerAuthority", "initializerGenerator",
-             "verifierImplementation", "evaluatorRunner"),
+             "verifierImplementation", "evaluatorRunner", "priorCatalog"),
+        )
+        _verify_prior_catalog_groups(
+            plan["priorForbiddenGroups"],
+            plan_created_utc=plan["createdUtc"],
+            full_replay=True,
         )
         trainer, routing, _, _ = _import_authorities(
             ("trainerAuthority", "routing")
@@ -1114,7 +1169,14 @@ def claim_stage(plan_path: Path, stage: str, *, created_utc: str) -> dict[str, A
         )
         return hce_claim
     if stage == "teacher":
-        _require_dependencies(plan, ("teacher", "trainerAuthority"))
+        _require_dependencies(
+            plan, ("teacher", "trainerAuthority", "priorCatalog")
+        )
+        _verify_prior_catalog_groups(
+            plan["priorForbiddenGroups"],
+            plan_created_utc=plan["createdUtc"],
+            full_replay=True,
+        )
         trainer, _, teacher, _ = _import_authorities(
             ("trainerAuthority", "teacher")
         )
@@ -1141,7 +1203,14 @@ def claim_stage(plan_path: Path, stage: str, *, created_utc: str) -> dict[str, A
 
 def materialize_hce(plan_path: Path) -> dict[str, Any]:
     plan = verify_plan(plan_path)
-    _require_dependencies(plan, ("trainerAuthority", "evaluatorRunner"))
+    _require_dependencies(
+        plan, ("trainerAuthority", "evaluatorRunner", "priorCatalog")
+    )
+    _verify_prior_catalog_groups(
+        plan["priorForbiddenGroups"],
+        plan_created_utc=plan["createdUtc"],
+        full_replay=True,
+    )
     paths = _paths(plan)
     trainer, _, _, _ = _import_authorities(("trainerAuthority",))
     assert trainer is not None
@@ -1174,7 +1243,12 @@ def materialize_projection(plan_path: Path, *, created_utc: str) -> dict[str, An
     """Publish only the exact projection defined by the pinned teacher authority."""
 
     plan = verify_plan(plan_path)
-    _require_dependencies(plan, ("teacher",))
+    _require_dependencies(plan, ("teacher", "priorCatalog"))
+    _verify_prior_catalog_groups(
+        plan["priorForbiddenGroups"],
+        plan_created_utc=plan["createdUtc"],
+        full_replay=True,
+    )
     paths = _paths(plan)
     _, _, teacher, _ = _import_authorities(("teacher",))
     assert teacher is not None
@@ -1757,7 +1831,14 @@ def finalize_stage(
         _require_routing_inventory(routing, paths)
         return document
     if stage == "pretarget":
-        _require_dependencies(plan, ("trainerAuthority", "evaluatorRunner"))
+        _require_dependencies(
+            plan, ("trainerAuthority", "evaluatorRunner", "priorCatalog")
+        )
+        _verify_prior_catalog_groups(
+            plan["priorForbiddenGroups"],
+            plan_created_utc=plan["createdUtc"],
+            full_replay=True,
+        )
         trainer, _, _, _ = _import_authorities(("trainerAuthority",))
         assert trainer is not None
         if type(created_utc) is not str:
@@ -1772,7 +1853,12 @@ def finalize_stage(
         _publish_or_verify(paths["preTargetHceCompletion"], expected, "pre-target HCE completion")
         return trainer._verify_upstream_hce_completion(paths["preTargetHceCompletion"], **{k: v for k, v in kwargs.items() if k != "created_utc"})
     if stage == "teacher":
-        _require_dependencies(plan, ("teacher",))
+        _require_dependencies(plan, ("teacher", "priorCatalog"))
+        _verify_prior_catalog_groups(
+            plan["priorForbiddenGroups"],
+            plan_created_utc=plan["createdUtc"],
+            full_replay=True,
+        )
         _, _, teacher, _ = _import_authorities(("teacher",))
         assert teacher is not None
         return teacher.finalize_teacher(
@@ -1783,7 +1869,13 @@ def finalize_stage(
     if stage == "capsule":
         _require_dependencies(
             plan, ("terminal", "routing", "teacher", "evaluatorRunner", "trainerAuthority",
-                   "initializerGenerator", "verifierImplementation", "verifierRunner"),
+                   "initializerGenerator", "verifierImplementation", "verifierRunner",
+                   "priorCatalog"),
+        )
+        _verify_prior_catalog_groups(
+            plan["priorForbiddenGroups"],
+            plan_created_utc=plan["createdUtc"],
+            full_replay=True,
         )
         trainer, routing, teacher, terminal = _import_authorities()
         assert all(item is not None for item in (trainer, routing, teacher, terminal))
