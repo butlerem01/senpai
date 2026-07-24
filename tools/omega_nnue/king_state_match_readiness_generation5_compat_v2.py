@@ -20,6 +20,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import stat
 import subprocess
 import sys
 import tempfile
@@ -62,6 +63,7 @@ AUTHORIZATION_FIELDS = frozenset(
         "suiteSeal",
         "preauthorizationState",
         "offlineReport",
+        "offlineLifetimeClaim",
         "offlineMatchAuthorization",
         "selectedNetwork",
         "selectedManifest",
@@ -105,6 +107,237 @@ PROTOCOL_PATH = (
     / "validation"
     / "omega-nnue-king-state-v5-color-compat-protocol.json"
 )
+EARLY_TERMINAL_ROOT = (
+    REPO / "build-msvc" / "king-state-v5-early-terminal-v1"
+)
+EARLY_TERMINAL_PROTOCOL = (
+    REPO / "validation" / "omega-nnue-king-state-v5-early-terminal-protocol.json"
+)
+AUTHORITY_LIFECYCLE_LOCK = (
+    REPO
+    / "build-msvc"
+    / "king-state-v5-authority-lifecycle-v1"
+    / "authority.lock"
+)
+OFFLINE_LIFETIME_CLAIM = (
+    REPO
+    / "build-msvc"
+    / "king-state-v5"
+    / "offline"
+    / "evaluation-lifetime.claim.json"
+)
+OFFLINE_ACCESS_CLAIM = REPO / "build-msvc/king-state-v5/offline/access-claim.json"
+OFFLINE_REPORT = REPO / "build-msvc/king-state-v5/offline/report.json"
+EARLY_PROTOCOL_KIND = "omega-nnue-king-state-v5-early-terminal-protocol"
+EARLY_PROTOCOL_ID = "king-state-v5-early-terminal-v1"
+G5_PROFILE_ID = "king-state-v5-omega-decision-v2"
+LIFETIME_CLAIM_KIND = "omega-nnue-king-state-v5-offline-evaluation-lifetime-claim"
+FILE_ATTRIBUTE_REPARSE_POINT = 0x0400
+
+
+def _reject_early_terminal_authority() -> None:
+    """Make an additive pre-match terminal closure irrevocable.
+
+    Any entry at the canonical root, including a partial publication, blocks
+    compatibility authorization and verification.  Preregistration and suite
+    sealing remain target blind and may precede this check.
+    """
+
+    if os.path.lexists(EARLY_TERMINAL_ROOT):
+        raise ValueError(
+            "Generation-5 early-terminal authority blocks compatibility authorization"
+        )
+
+
+def _is_reparse(info: os.stat_result) -> bool:
+    return bool(
+        getattr(info, "st_file_attributes", 0) & FILE_ATTRIBUTE_REPARSE_POINT
+    )
+
+
+def _lexical_absolute(path: Path) -> Path:
+    return Path(os.path.abspath(os.path.expanduser(os.fspath(path))))
+
+
+def _private_regular(info: os.stat_result) -> bool:
+    return (
+        stat.S_ISREG(info.st_mode)
+        and not stat.S_ISLNK(info.st_mode)
+        and not _is_reparse(info)
+        and getattr(info, "st_nlink", 1) == 1
+    )
+
+
+def _file_state(info: os.stat_result) -> tuple[int, int, int, int | None, int]:
+    return (
+        info.st_dev,
+        info.st_ino,
+        info.st_size,
+        getattr(info, "st_mtime_ns", None),
+        getattr(info, "st_nlink", 1),
+    )
+
+
+def _safe_lexical_parent(path: Path) -> Path:
+    lexical = _lexical_absolute(path)
+    cursor = lexical.parent
+    existing: list[Path] = []
+    while True:
+        if os.path.lexists(cursor):
+            existing.append(cursor)
+        if cursor.parent == cursor:
+            break
+        cursor = cursor.parent
+    for item in reversed(existing):
+        info = os.lstat(item)
+        if stat.S_ISLNK(info.st_mode) or _is_reparse(info):
+            raise ValueError(f"path traverses a link or junction: {item}")
+        if not stat.S_ISDIR(info.st_mode):
+            raise ValueError(f"path parent is not a directory: {item}")
+    return lexical
+
+
+def _private_snapshot(path: Path, label: str) -> tuple[dict[str, Any], bytes]:
+    path = _safe_lexical_parent(path)
+    before = os.lstat(path)
+    if not _private_regular(before):
+        raise ValueError(f"{label} is not one private regular file")
+    descriptor = os.open(
+        path,
+        os.O_RDONLY
+        | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_NOFOLLOW", 0),
+    )
+    try:
+        opened = os.fstat(descriptor)
+        if (
+            not _private_regular(opened)
+            or (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino)
+        ):
+            raise ValueError(f"{label} changed before descriptor open")
+        digest = hashlib.sha256()
+        chunks: list[bytes] = []
+        remaining = opened.st_size
+        while remaining:
+            block = os.read(descriptor, min(1024 * 1024, remaining))
+            if not block:
+                raise ValueError(f"{label} ended before its descriptor size")
+            chunks.append(block)
+            digest.update(block)
+            remaining -= len(block)
+        if (
+            _file_state(os.fstat(descriptor)) != _file_state(opened)
+            or _file_state(os.lstat(path)) != _file_state(before)
+        ):
+            raise ValueError(f"{label} changed while read")
+    finally:
+        os.close(descriptor)
+    payload = b"".join(chunks)
+    return {
+        "path": str(path),
+        "bytes": len(payload),
+        "sha256": digest.hexdigest(),
+    }, payload
+
+
+class _AuthorityLifecycleLock:
+    LOCK_OFFSET = 1 << 30
+
+    def __init__(self, descriptor: int) -> None:
+        self.descriptor = descriptor
+        self.locked = False
+        self.lock_offset = 0
+
+    def acquire(self) -> None:
+        self.lock_offset = self.LOCK_OFFSET
+        os.lseek(self.descriptor, self.lock_offset, os.SEEK_SET)
+        if os.name == "nt":
+            import msvcrt
+
+            try:
+                msvcrt.locking(self.descriptor, msvcrt.LK_NBLCK, 1)
+            except OSError as error:
+                raise RuntimeError(
+                    "Generation-5 authority lifecycle lock is active"
+                ) from error
+        else:
+            import fcntl
+
+            try:
+                fcntl.flock(self.descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError as error:
+                raise RuntimeError(
+                    "Generation-5 authority lifecycle lock is active"
+                ) from error
+        self.locked = True
+
+    def close(self) -> None:
+        if self.locked:
+            os.lseek(self.descriptor, self.lock_offset, os.SEEK_SET)
+            if os.name == "nt":
+                import msvcrt
+
+                msvcrt.locking(self.descriptor, msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(self.descriptor, fcntl.LOCK_UN)
+            self.locked = False
+        os.close(self.descriptor)
+
+    def __enter__(self) -> "_AuthorityLifecycleLock":
+        return self
+
+    def __exit__(self, *_args: Any) -> None:
+        self.close()
+
+
+def _open_authority_lifecycle_lock(path: Path) -> _AuthorityLifecycleLock:
+    path = _safe_lexical_parent(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _safe_lexical_parent(path)
+    before: os.stat_result | None = None
+    if os.path.lexists(path):
+        before = os.lstat(path)
+        if not _private_regular(before):
+            raise ValueError("authority lifecycle lock is not one private regular file")
+    descriptor = os.open(
+        path,
+        os.O_RDWR
+        | os.O_CREAT
+        | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_NOFOLLOW", 0),
+        0o600,
+    )
+    lock = _AuthorityLifecycleLock(descriptor)
+    try:
+        opened = os.fstat(descriptor)
+        current = os.lstat(path)
+        if (
+            not _private_regular(opened)
+            or _file_state(opened) != _file_state(current)
+            or (
+                before is not None
+                and (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino)
+            )
+        ):
+            raise ValueError("authority lifecycle lock changed before descriptor open")
+        if opened.st_size == 0:
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            os.write(descriptor, b"L")
+            os.fsync(descriptor)
+        elif opened.st_size != 1:
+            raise ValueError("authority lifecycle lock marker changed")
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        if os.read(descriptor, 1) != b"L":
+            raise ValueError("authority lifecycle lock marker changed")
+        lock.acquire()
+        if _file_state(os.fstat(descriptor)) != _file_state(os.lstat(path)):
+            raise ValueError("authority lifecycle lock changed while acquired")
+        return lock
+    except BaseException:
+        lock.close()
+        raise
 
 
 def _unique_object(pairs: Sequence[tuple[str, Any]]) -> dict[str, Any]:
@@ -227,6 +460,21 @@ def _parse_utc(value: Any, label: str) -> datetime:
     return parsed
 
 
+def _parse_chronology_utc(value: Any, label: str) -> datetime:
+    if type(value) is not str or not value or value != value.strip():
+        raise ValueError(f"{label} is invalid")
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as error:
+        raise ValueError(f"{label} is invalid") from error
+    if parsed.tzinfo is None or parsed.utcoffset() != timezone.utc.utcoffset(None):
+        raise ValueError(f"{label} is not UTC")
+    canonical = parsed.astimezone(timezone.utc)
+    if canonical.isoformat().replace("+00:00", "Z") != value:
+        raise ValueError(f"{label} is not canonical UTC")
+    return canonical
+
+
 def _require_utc_at_or_after(
     later: Any,
     earlier: Any,
@@ -239,6 +487,222 @@ def _require_utc_at_or_after(
     if later_value < earlier_value:
         raise ValueError(f"{later_label} predates {earlier_label}")
     return later_value, earlier_value
+
+
+def _authority_path(value: Any, label: str) -> Path:
+    if type(value) is not str or not value or value != value.strip():
+        raise ValueError(f"{label} is not a nonempty path")
+    raw = Path(value)
+    if raw.is_absolute() or ".." in raw.parts:
+        raise ValueError(f"{label} escapes the repository")
+    root = _lexical_absolute(REPO)
+    path = _safe_lexical_parent(root / raw)
+    if path != root and root not in path.parents:
+        raise ValueError(f"{label} escapes the repository")
+    return path
+
+
+def _strict_private_json(path: Path, label: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    record, payload = _private_snapshot(path, label)
+    try:
+        value = json.loads(
+            payload.decode("utf-8"),
+            object_pairs_hook=_unique_object,
+            parse_constant=lambda token: (_ for _ in ()).throw(
+                ValueError(f"non-finite JSON token {token}")
+            ),
+        )
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"{label} is not strict UTF-8 JSON") from error
+    if type(value) is not dict:
+        raise ValueError(f"{label} is not a JSON object")
+    return value, record
+
+
+def _validate_heldout_lifecycle(
+    protocol: Mapping[str, Any], *, allow_placeholder: bool = False
+) -> dict[str, Any]:
+    value = protocol.get("heldOutLifecycle")
+    fields = {
+        "earlyTerminalProtocol",
+        "authorityLifecycleLock",
+        "earlyTerminalRoot",
+        "offlineLifetimeClaim",
+        "offlineAccessClaim",
+        "offlineReport",
+        "claimKind",
+        "strictChronology",
+        "canonicalChronologyUtc",
+        "guardedLauncher",
+        "directLegacyOfflineEvaluateCannotAuthorize",
+    }
+    if type(value) is not dict or set(value) != fields:
+        raise ValueError("held-out lifecycle policy fields changed")
+    expected_paths = {
+        "authorityLifecycleLock": AUTHORITY_LIFECYCLE_LOCK,
+        "earlyTerminalRoot": EARLY_TERMINAL_ROOT,
+        "offlineLifetimeClaim": OFFLINE_LIFETIME_CLAIM,
+        "offlineAccessClaim": OFFLINE_ACCESS_CLAIM,
+        "offlineReport": OFFLINE_REPORT,
+    }
+    for key, expected in expected_paths.items():
+        if _authority_path(value.get(key), f"held-out {key}") != _lexical_absolute(expected):
+            raise ValueError(f"held-out lifecycle {key} changed")
+    if (
+        value.get("claimKind") != LIFETIME_CLAIM_KIND
+        or value.get("strictChronology")
+        != ["robustness", "lifetime", "access", "report"]
+        or value.get("canonicalChronologyUtc")
+        != "python-datetime-isoformat-utc-z-round-trip"
+        or value.get("guardedLauncher")
+        != "tools/omega_nnue/king_state_generation5_early_terminal.py run-offline"
+        or value.get("directLegacyOfflineEvaluateCannotAuthorize") is not True
+    ):
+        raise ValueError("held-out lifecycle enforcement policy changed")
+    pin = _identity_shape(value.get("earlyTerminalProtocol"), "early-terminal protocol")
+    protocol_path = _authority_path(pin["path"], "early-terminal protocol path")
+    if protocol_path != _lexical_absolute(EARLY_TERMINAL_PROTOCOL):
+        raise ValueError("early-terminal protocol path changed")
+    if not (allow_placeholder and pin["bytes"] == 0):
+        document, actual = _strict_private_json(
+            protocol_path, "early-terminal lifecycle protocol"
+        )
+        if actual != {"path": str(protocol_path), "bytes": pin["bytes"], "sha256": pin["sha256"]}:
+            raise ValueError("early-terminal lifecycle protocol identity changed")
+        namespaces = document.get("namespaces")
+        if (
+            document.get("schemaVersion") != SCHEMA_VERSION
+            or document.get("kind") != EARLY_PROTOCOL_KIND
+            or document.get("protocolId") != EARLY_PROTOCOL_ID
+            or document.get("profileId") != G5_PROFILE_ID
+            or type(namespaces) is not dict
+            or namespaces.get("authorityLifecycleLock")
+            != value["authorityLifecycleLock"]
+            or namespaces.get("terminalRoot") != value["earlyTerminalRoot"]
+            or namespaces.get("offlineLifetimeClaim")
+            != value["offlineLifetimeClaim"]
+            or namespaces.get("offlineAccessClaim") != value["offlineAccessClaim"]
+            or namespaces.get("offlineReport") != value["offlineReport"]
+        ):
+            raise ValueError("early-terminal lifecycle protocol contract changed")
+    return dict(value)
+
+
+def _private_verify_identity(
+    value: Any, label: str, *, expected_path: Path | None = None
+) -> tuple[Path, dict[str, Any], bytes]:
+    record = _identity_shape(value, label)
+    raw = Path(record["path"])
+    if raw.is_absolute():
+        path = _safe_lexical_parent(raw)
+        root = _lexical_absolute(REPO)
+        if path != root and root not in path.parents:
+            raise ValueError(f"{label} escapes the repository")
+    else:
+        path = _authority_path(record["path"], f"{label} path")
+    if expected_path is not None and path != _lexical_absolute(expected_path):
+        raise ValueError(f"{label} path changed")
+    actual, payload = _private_snapshot(path, label)
+    if actual["bytes"] != record["bytes"] or actual["sha256"] != record["sha256"]:
+        raise ValueError(f"{label} bytes or SHA-256 changed")
+    return path, actual, payload
+
+
+def _verify_heldout_lifetime_authority(
+    protocol: Mapping[str, Any], report: Mapping[str, Any]
+) -> dict[str, Any]:
+    lifecycle = _validate_heldout_lifecycle(protocol)
+    protocol_path, protocol_identity, _ = _private_verify_identity(
+        lifecycle["earlyTerminalProtocol"],
+        "early-terminal lifecycle protocol",
+        expected_path=EARLY_TERMINAL_PROTOCOL,
+    )
+    lifetime_path = _authority_path(
+        lifecycle["offlineLifetimeClaim"], "offline lifetime claim path"
+    )
+    lifetime, lifetime_identity = _strict_private_json(
+        lifetime_path, "offline lifetime claim"
+    )
+    lifetime_fields = {
+        "schemaVersion",
+        "kind",
+        "profileId",
+        "createdUtc",
+        "protocol",
+        "robustness",
+        "status",
+        "resumePolicy",
+        "heldOutTargetRowsDecodedAtClaim",
+        "heldOutTargetFieldsDecodedAtClaim",
+        "resultInformationRead",
+    }
+    if set(lifetime) != lifetime_fields:
+        raise ValueError("offline lifetime claim fields changed")
+    _robustness_path, robustness_identity, robustness_payload = _private_verify_identity(
+        report.get("robustness"), "offline robustness seal"
+    )
+    _access_path, access_identity, access_payload = _private_verify_identity(
+        report.get("accessClaim"),
+        "offline access claim",
+        expected_path=_authority_path(
+            lifecycle["offlineAccessClaim"], "offline access claim policy path"
+        ),
+    )
+    robustness = json.loads(
+        robustness_payload.decode("utf-8"), object_pairs_hook=_unique_object
+    )
+    access = json.loads(access_payload.decode("utf-8"), object_pairs_hook=_unique_object)
+    if type(robustness) is not dict or type(access) is not dict:
+        raise ValueError("held-out chronology evidence is not an object")
+    expected = {
+        "schemaVersion": SCHEMA_VERSION,
+        "kind": LIFETIME_CLAIM_KIND,
+        "profileId": G5_PROFILE_ID,
+        "protocol": protocol_identity,
+        "robustness": robustness_identity,
+        "status": "claimed-before-any-held-out-target-decode",
+        "resumePolicy": "reuse this immutable claim and lifetime lock; never publish a second claim",
+        "heldOutTargetRowsDecodedAtClaim": 0,
+        "heldOutTargetFieldsDecodedAtClaim": 0,
+        "resultInformationRead": False,
+    }
+    for key, expected_value in expected.items():
+        if lifetime.get(key) != expected_value:
+            raise ValueError(f"offline lifetime claim {key} changed")
+    chronology = [
+        (
+            "robustness",
+            _parse_chronology_utc(
+                robustness.get("createdUtc"), "robustness createdUtc"
+            ),
+        ),
+        (
+            "lifetime",
+            _parse_chronology_utc(lifetime.get("createdUtc"), "lifetime createdUtc"),
+        ),
+        (
+            "access",
+            _parse_chronology_utc(access.get("createdUtc"), "access createdUtc"),
+        ),
+        (
+            "report",
+            _parse_chronology_utc(report.get("createdUtc"), "report createdUtc"),
+        ),
+    ]
+    for (earlier_name, earlier), (later_name, later) in zip(
+        chronology, chronology[1:], strict=False
+    ):
+        if not earlier < later:
+            raise ValueError(
+                "held-out authority chronology changed: "
+                f"{earlier_name} must strictly precede {later_name}"
+            )
+    # Recheck the two path-bearing report identities after all parses.
+    if report.get("robustness") != robustness_identity or report.get("accessClaim") != access_identity:
+        raise ValueError("offline report lifecycle identities changed")
+    if protocol_path != _lexical_absolute(EARLY_TERMINAL_PROTOCOL):
+        raise AssertionError("early protocol path escaped validation")
+    return lifetime_identity
 
 
 def _atomic_json(path: Path, value: Mapping[str, Any]) -> None:
@@ -523,6 +987,7 @@ def validate_protocol(
         "tools",
         "namespaces",
         "execution",
+        "heldOutLifecycle",
         "adapter",
         "rulesReplay",
         "authority",
@@ -638,11 +1103,18 @@ def validate_protocol(
         "pendingIntentMayOnlyResolveToCompletionOrTerminalAbort": True,
         "partialJsonTailRetainedAndTerminallyAborted": True,
         "abortDecisionRecoveryRequired": True,
+        "earlyTerminalRootBlocksAuthorization": True,
+        "sharedLifecycleLockCoversAuthorizationCommit": True,
+        "guardedHeldOutLifetimeClaimRequired": True,
+        "strictHeldOutChronologyRequired": True,
         "launchOnlyThrough": (
             "tools/omega_nnue/king_state_matches_generation5_compat_v2.py"
         ),
     }:
         raise ValueError("compatibility execution policy changed")
+    _validate_heldout_lifecycle(
+        value, allow_placeholder=allow_tool_placeholders
+    )
     if value.get("authority") != {
         "originalProfilePath": (
             "validation/omega-nnue-king-state-v5-preregistration.json"
@@ -669,6 +1141,10 @@ def validate_protocol(
         "postAuthorizationExactGlobalInventoryRequired": True,
         "closureBindsAuthenticatedPositionHistory": True,
         "closureBindsAllTerminalDecisions": True,
+        "mixedEarlyTerminalAndCompatibilityAuthorityRejects": True,
+        "sharedLifecycleMutexRequiredForAuthorizationCommit": True,
+        "offlineLifetimeClaimBoundIntoAuthorizationAndCoreSeal": True,
+        "strictRobustnessLifetimeAccessReportChronologyRequired": True,
         "originalFilesOrDirectoriesMayNeverBeCreatedOrModified": True,
     }:
         raise ValueError("compatibility publication policy changed")
@@ -2295,8 +2771,10 @@ def _prospective_json_identity(
     }
 
 
-def _authorize(args: argparse.Namespace) -> dict[str, Any]:
-    protocol = validate_protocol(args.protocol)
+def _authorize_locked(
+    args: argparse.Namespace, protocol: Mapping[str, Any]
+) -> dict[str, Any]:
+    _reject_early_terminal_authority()
     suite_path = args.suite_seal.resolve()
     suite = _verify_runtime_suite_provenance(suite_path, protocol)
     if suite.get("authorizable") is not True:
@@ -2324,6 +2802,7 @@ def _authorize(args: argparse.Namespace) -> dict[str, Any]:
     report, selected = readiness._load_selected_primary(offline_path)
     if identity(offline_path) != offline_before:
         raise ValueError("offline report changed during compatibility authorization")
+    lifetime_identity = _verify_heldout_lifetime_authority(protocol, report)
     network = selected["network"]
     engine = suite["engine"]
     harness = suite["omegaMatchAssembly"]
@@ -2364,6 +2843,7 @@ def _authorize(args: argparse.Namespace) -> dict[str, Any]:
         identity(suite_path),
         identity(preauthorization_path),
         offline_before,
+        lifetime_identity,
         report["selection"],
         report["robustness"],
         report["accessClaim"],
@@ -2424,6 +2904,7 @@ def _authorize(args: argparse.Namespace) -> dict[str, Any]:
         "suiteSeal": identity(suite_path),
         "preauthorizationState": identity(preauthorization_path),
         "offlineReport": offline_before,
+        "offlineLifetimeClaim": lifetime_identity,
         "offlineMatchAuthorization": copy.deepcopy(report["matchAuthorization"]),
         "selectedNetwork": network,
         "selectedManifest": selected["manifest"],
@@ -2455,6 +2936,19 @@ def _authorize(args: argparse.Namespace) -> dict[str, Any]:
     return verify_authorization(_namespace(protocol, "authorization"), runtime=True)
 
 
+def _authorize(args: argparse.Namespace) -> dict[str, Any]:
+    protocol = validate_protocol(args.protocol)
+    lifecycle_path = _authority_path(
+        protocol["heldOutLifecycle"]["authorityLifecycleLock"],
+        "authority lifecycle lock",
+    )
+    with _open_authority_lifecycle_lock(lifecycle_path):
+        # Terminal partial/root wins even if it appeared while this command was
+        # waiting for the common mutex.
+        _reject_early_terminal_authority()
+        return _authorize_locked(args, protocol)
+
+
 def verify_authorization(
     path: Path,
     *,
@@ -2462,6 +2956,7 @@ def verify_authorization(
     runtime: bool = True,
 ) -> dict[str, Any]:
     protocol = validate_protocol(protocol_path)
+    _reject_early_terminal_authority()
     path = path.resolve()
     if path != _namespace(protocol, "authorization"):
         raise ValueError("compatibility authorization path changed")
@@ -2538,6 +3033,11 @@ def verify_authorization(
         raise ValueError("authorization predates preauthorization-state evidence")
     offline_path = verify_identity(
         value.get("offlineReport"), "authorization offline report"
+    )
+    _private_verify_identity(
+        value.get("offlineLifetimeClaim"),
+        "authorization offline lifetime claim",
+        expected_path=OFFLINE_LIFETIME_CLAIM,
     )
     network = value.get("selectedNetwork")
     manifest = value.get("selectedManifest")
@@ -2660,6 +3160,9 @@ def verify_authorization(
     report, selected = readiness._load_selected_primary(offline_path)
     if identity(offline_path) != offline_before:
         raise ValueError("offline report changed during authorization replay")
+    lifetime_identity = _verify_heldout_lifetime_authority(protocol, report)
+    if value.get("offlineLifetimeClaim") != lifetime_identity:
+        raise ValueError("authorization offline lifetime authority changed")
     if selected["network"] != network or selected["manifest"] != manifest:
         raise ValueError("offline selection differs from authorization")
     if value.get("offlineMatchAuthorization") != report.get("matchAuthorization"):
@@ -2671,6 +3174,7 @@ def verify_authorization(
         identity(verify_identity(value["suiteSeal"], "pinned suite seal")),
         identity(preauthorization_path),
         offline_before,
+        lifetime_identity,
         report["selection"],
         report["robustness"],
         report["accessClaim"],

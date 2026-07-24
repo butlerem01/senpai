@@ -29,6 +29,7 @@ import sys
 from typing import Any, Mapping, Sequence
 
 import numpy as np
+import numpy._core._multiarray_umath as _numpy_compiled_core
 
 
 SCHEMA_VERSION = 1
@@ -173,6 +174,94 @@ INITIALIZER_G2_UNAVAILABLE_PROTOCOL = {
     },
     "resultInformationRead": False,
 }
+INITIALIZER_G5_EARLY_TERMINAL_AUTHORITY = {
+    "protocol": {
+        "relativePath": (
+            "validation/omega-nnue-king-state-v5-early-terminal-protocol.json"
+        ),
+        "bytes": 7_991,
+        "sha256": "ae0852673fe1b9e54a0bda182219f4268278252dd2aa9fb067b882a1e69ce352",
+    },
+    "tool": {
+        "relativePath": (
+            "tools/omega_nnue/king_state_generation5_early_terminal.py"
+        ),
+        "bytes": 75_430,
+        "sha256": "895f3aad57a2ef32aa63be897dbb357afb07be397783ce0b5d5ee54a982e6227",
+    },
+    "compatibilityAuthority": {
+        "readiness": {
+            "relativePath": (
+                "tools/omega_nnue/king_state_match_readiness_generation5_compat_v2.py"
+            ),
+            "bytes": 143_024,
+            "sha256": "84e1b67683ac75c2b34802d4ba1c960c6173f9437f52a1af1574188863b8bb10",
+        },
+        "protocol": {
+            "relativePath": (
+                "validation/omega-nnue-king-state-v5-color-compat-protocol.json"
+            ),
+            "bytes": 11_050,
+            "sha256": "47518625404ca6a3a3d1ce4fd7ee1e30d2e3600e3cc2d42adfeeac52f6599daf",
+        },
+        "preregistrationTemplate": {
+            "relativePath": (
+                "validation/omega-nnue-king-state-v5-color-compat-preregistration.template.json"
+            ),
+            "bytes": 8_831,
+            "sha256": "c2f53efd4957dccf5428f043d5eea5d74669e0b79e8bcf01639ac770a7239e1e",
+        },
+    },
+    "lifecycleContract": {
+        "authorityLifecycleLock": (
+            "build-msvc/king-state-v5-authority-lifecycle-v1/authority.lock"
+        ),
+        "offlineLifetimeClaim": (
+            "build-msvc/king-state-v5/offline/evaluation-lifetime.claim.json"
+        ),
+        "offlineAccessClaim": "build-msvc/king-state-v5/offline/access-claim.json",
+        "offlineReport": "build-msvc/king-state-v5/offline/report.json",
+        "lifetimeClaimKind": (
+            "omega-nnue-king-state-v5-offline-evaluation-lifetime-claim"
+        ),
+        "strictChronology": ["robustness", "lifetime", "access", "report"],
+        "canonicalChronologyUtc": "python-datetime-isoformat-utc-z-round-trip",
+        "guardedLauncher": (
+            "tools/omega_nnue/king_state_generation5_early_terminal.py run-offline"
+        ),
+        "sharedLifecycleLockCoversOfflineEvaluationTerminalPublicationAndCompatibilityAuthorization": True,
+        "compatibilityAuthorizationRequiresLifetimeClaim": True,
+        "directLegacyOfflineEvaluateCannotAuthorize": True,
+        "earlyTerminalRootBlocksCompatibilityAuthorization": True,
+        "lexicalDescriptorSafety": {
+            "singleLinkRegularFilesOnly": True,
+            "reparseSymlinkAndHardlinkReject": True,
+            "lexicalNoFollowDescriptorIdentityRequired": True,
+        },
+    },
+    "canonicalRoot": "build-msvc/king-state-v5-early-terminal-v1",
+    "exactFileInventory": [
+        "source-selection.seal.json",
+        "source-closure.json",
+    ],
+    "terminalClasses": [
+        "selection-no-eligible",
+        "robustness-training-failed",
+        "robustness-worker-aborted",
+        "robustness-gate-failed",
+        "heldout-gate-failed",
+        "heldout-access-aborted",
+    ],
+    "promotionStatuses": ["failed", "aborted"],
+    "freshProcessReplayRequired": True,
+    "mixedEarlyTerminalAndMatchAuthorityRejects": True,
+    "failedOrAbortedRawModel": None,
+    "failedOrAbortedHealthPassed": False,
+    "generation6TargetRowsDecoded": 0,
+    "generation6TargetValuesExported": 0,
+    "gameResultsRead": False,
+    "resultInformationRead": False,
+}
 UPSTREAM_REQUIRED_PRIOR_SOURCE_IDS = ("G3", "G4", "G5")
 UPSTREAM_ROUTING_QUOTAS_PER_PHASE_SIDE: Mapping[str, int] = {
     "train": 512,
@@ -265,12 +354,16 @@ HELDOUT_DECLARATION = (
     "before the first held-out target-bearing JSON decode"
 )
 
-REPO = Path(__file__).resolve().parents[2]
+_SOURCE_PATH = Path(
+    os.path.abspath(os.path.normpath(os.fspath(Path(__file__).expanduser())))
+)
+REPO = _SOURCE_PATH.parents[2]
 DEFAULT_NAMESPACE_ROOT = REPO / "build-msvc" / "king-state-v6"
 DEFAULT_PREREGISTRATION = DEFAULT_NAMESPACE_ROOT / "00-preregistration.json"
 PREREGISTRATION_KIND = "omega-nnue-king-state-v6-preregistration"
 TRAINING_MANIFEST_KIND = "omega-nnue-king-state-v6-training-manifest"
 INITIALIZER_MANIFEST_KIND = "omega-nnue-king-state-v6-initializer-manifest"
+INITIALIZER_CLOSURE_KIND = "omega-decision-v3-pre-g6-initializer-closure"
 HEALTH_EVIDENCE_KIND = "omega-nnue-king-state-v6-health-evidence"
 PREDICTION_ROW_KIND = "omega-nnue-king-state-v6-prediction"
 PREDICTION_MANIFEST_KIND = "omega-nnue-king-state-v6-prediction-manifest"
@@ -448,16 +541,35 @@ UPSTREAM_VERIFIER_OPTIONS = {
     "initializerPolicy": {
         "orderedCatalog": list(INITIALIZER_ORDERED_CATALOG),
         "selectionModes": list(INITIALIZER_SELECTION_MODES),
+        "canonicalClosureKind": INITIALIZER_CLOSURE_KIND,
+        "canonicalAuthorityRelativeDirectory": (
+            "build-msvc/data-generation/omega-decision-v3/40-initializer"
+        ),
+        "canonicalFilenames": {
+            "model": "initializer.nnue",
+            "selection": "initializer.selection.json",
+            "closure": "initializer.closure.json",
+            "manifest": "initializer.manifest.json",
+        },
         "fallbackProtocol": dict(INITIALIZER_FALLBACK_PROTOCOL),
         "requireFirstIndependentlyPromotedEntry": True,
         "requireFreshHealthForPromotedEntry": True,
+        "requirePromotedSourceModelPathDistinct": True,
+        "requireClosureAfterRoutingTerminalAndEverySourceDocument": True,
+        "requireExactFourFileNamespaceAtEveryDownstreamReplay": True,
+        "publisherOwnedInodeContinuityRequired": True,
         "g5OnlyPromotableSource": True,
         "requireTerminalFailureOrAbortClosureForSkippedG5": True,
+        "requireFailedAbortedRawModelNull": True,
+        "requireFailedAbortedHealthFalse": True,
+        "g5EarlyTerminalAuthority": dict(
+            INITIALIZER_G5_EARLY_TERMINAL_AUTHORITY
+        ),
         "g2UnavailableProtocol": dict(INITIALIZER_G2_UNAVAILABLE_PROTOCOL),
     },
     "requiredPriorForbiddenSourceIds": list(UPSTREAM_REQUIRED_PRIOR_SOURCE_IDS),
     "requiredSemanticReplays": [
-        "G5-only initializer promotion, embedded health, source closure, exact G2 unavailability, and model cross-links",
+        "G5-only initializer promotion or exact fresh-process pre-match early-terminal replay, exact four-path canonical authority, closure chronology, distinct copied-model payload equality, failed/aborted output sanitation, embedded health, and exact G2 unavailability",
         "terminal rules manifest/transcript/completion and pre-teacher exclusions",
         "every prior-forbidden manifest/catalog and zero current overlap",
         "component-map coverage and whole-component split assignment",
@@ -603,8 +715,13 @@ def _safe_path(path: Path, *, regular_file: bool) -> Path:
             raise ValueError(f"symlink/junction/reparse path is forbidden: {item}")
         if item == absolute:
             leaf_seen = True
-            if regular_file and not stat.S_ISREG(info.st_mode):
-                raise ValueError(f"artifact is not a regular file: {absolute}")
+            if regular_file and (
+                not stat.S_ISREG(info.st_mode)
+                or getattr(info, "st_nlink", 1) != 1
+            ):
+                raise ValueError(
+                    f"artifact is not one regular unlinked file: {absolute}"
+                )
         elif not stat.S_ISDIR(info.st_mode):
             raise ValueError(f"artifact parent is not a directory: {item}")
     if regular_file and not leaf_seen:
@@ -723,7 +840,11 @@ def _document_identity(value: Any) -> dict[str, Any]:
     return {"bytes": len(payload), "sha256": _sha256_bytes(payload)}
 
 
-def _exclusive_bytes(path: Path, payload: bytes) -> dict[str, Any]:
+def _exclusive_bytes_owned(
+    path: Path, payload: bytes
+) -> tuple[dict[str, Any], tuple[int, int]]:
+    """Publish bytes and return identity bound to the O_EXCL descriptor inode."""
+
     safe = _safe_new_file(path)
     flags = (
         os.O_WRONLY
@@ -754,6 +875,7 @@ def _exclusive_bytes(path: Path, payload: bytes) -> dict[str, Any]:
             or getattr(completed, "st_nlink", 1) != 1
         ):
             raise ValueError("published descriptor identity/content changed")
+        owned_inode = (completed.st_dev, completed.st_ino)
         os.close(descriptor)
         descriptor = -1
         _safe_existing_file(safe)
@@ -763,7 +885,16 @@ def _exclusive_bytes(path: Path, payload: bytes) -> dict[str, Any]:
         identity, actual = _snapshot_file(safe)
         if actual != payload:
             raise ValueError("published bytes changed after descriptor close")
-        return identity
+        # The inode is derived from the still-open O_EXCL descriptor above,
+        # never sampled opportunistically from the pathname after publication.
+        # A same-byte path exchange can therefore not become the inode that the
+        # caller later treats as owned by this invocation.
+        final_identity, final_inode = _identity_with_inode(safe)
+        if final_inode != owned_inode or not _type_exact_equal(
+            final_identity, identity
+        ):
+            raise ValueError("published path changed before ownership return")
+        return final_identity, owned_inode
     except BaseException:
         if descriptor >= 0:
             try:
@@ -782,6 +913,10 @@ def _exclusive_bytes(path: Path, payload: bytes) -> dict[str, Any]:
         except OSError:
             pass
         raise
+
+
+def _exclusive_bytes(path: Path, payload: bytes) -> dict[str, Any]:
+    return _exclusive_bytes_owned(path, payload)[0]
 
 
 def _exclusive_json(path: Path, value: Any) -> dict[str, Any]:
@@ -864,6 +999,29 @@ def _parse_timestamp(value: Any, label: str) -> datetime:
     if parsed.strftime("%Y-%m-%dT%H:%M:%S.%fZ") != value:
         raise ValueError(f"{label} is not canonical")
     return parsed
+
+
+def _parse_authority_timestamp(value: Any, label: str) -> datetime:
+    # Decision-v3 seals use fixed-width microseconds while G5 lifecycle seals
+    # use Python's UTC isoformat spelling.  Admit only those two canonical Z
+    # forms; never normalize a short or seventh fractional digit.
+    if type(value) is not str or re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{6})?Z", value
+    ) is None:
+        raise ValueError(f"{label} is not canonical UTC")
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as error:
+        raise ValueError(f"{label} is not a valid UTC timestamp") from error
+    if parsed.tzinfo is None or parsed.utcoffset() != timezone.utc.utcoffset(None):
+        raise ValueError(f"{label} is not UTC")
+    canonical = parsed.astimezone(timezone.utc)
+    accepted = {canonical.isoformat().replace("+00:00", "Z")}
+    if canonical.microsecond == 0:
+        accepted.add(canonical.strftime("%Y-%m-%dT%H:%M:%S.%fZ"))
+    if value not in accepted:
+        raise ValueError(f"{label} is not canonical UTC")
+    return canonical
 
 
 def _type_exact_equal(left: Any, right: Any) -> bool:
@@ -2317,9 +2475,113 @@ INITIALIZER_MANIFEST_FIELDS = frozenset(
         "fallbackProtocol",
     }
 )
+INITIALIZER_CLOSURE_FIELDS = frozenset(
+    {
+        "schemaVersion",
+        "kind",
+        "profileId",
+        "status",
+        "createdUtc",
+        "selectionSeal",
+        "selectionMode",
+        "selectedCatalogIndex",
+        "selectedModel",
+        "sourceReports",
+        "g6TargetRowsDecoded",
+        "resultInformationRead",
+        "finalStageSeal",
+    }
+)
+INITIALIZER_SOURCE_REPORT_FIELDS = frozenset(
+    {
+        "sourceId",
+        "promotionStatus",
+        "selectionSeal",
+        "closure",
+        "rawModel",
+        "healthPassed",
+        "sourceVerifier",
+        "unavailabilityEvidence",
+        "resultInformationRead",
+    }
+)
 INITIALIZER_CATALOG_ENTRY_FIELDS = frozenset(
     {"sourceId", "selectionSeal", "closure", "model", "promotionStatus"}
 )
+
+
+def _initializer_authority_paths() -> dict[str, Path]:
+    directory = _lexical_absolute(
+        _lexical_absolute(Path(__file__)).parents[2]
+        / "build-msvc/data-generation/omega-decision-v3/40-initializer"
+    )
+    authority = directory.parent
+    return {
+        "model": directory / "initializer.nnue",
+        "selection": directory / "initializer.selection.json",
+        "closure": directory / "initializer.closure.json",
+        "manifest": directory / "initializer.manifest.json",
+        "routing": authority / "30-routing/routing.completion.json",
+        "terminal": authority / "20-terminal/terminal.lineage.json",
+    }
+
+
+def _verify_initializer_namespace_inventory() -> None:
+    paths = _initializer_authority_paths()
+    expected = {
+        paths[role].name for role in ("model", "selection", "closure", "manifest")
+    }
+    directory = _safe_path(paths["model"].parent, regular_file=False)
+    if not directory.is_dir():
+        raise ValueError("initializer namespace is not a directory")
+    with os.scandir(directory) as entries:
+        actual = {entry.name for entry in entries}
+    if actual != expected:
+        raise ValueError(
+            "initializer namespace is not the exact canonical four-file inventory: "
+            f"actual={sorted(actual)} expected={sorted(expected)}"
+        )
+
+
+def _verify_initializer_chronology(
+    closure_created: datetime,
+    reports: Sequence[Mapping[str, Any]],
+) -> None:
+    paths = _initializer_authority_paths()
+    predecessors: list[tuple[Path, Mapping[str, Any] | None, str]] = [
+        (paths["routing"], None, "target-free routing completion"),
+        (paths["terminal"], None, "terminal-classifier lineage"),
+    ]
+    for index, report in enumerate(reports):
+        if type(report) is not dict or type(report.get("sourceId")) is not str:
+            raise ValueError(f"initializer chronology source report {index} changed")
+        for field in ("selectionSeal", "closure"):
+            label = f"initializer {report['sourceId']} {field}"
+            identity = report.get(field)
+            if type(identity) is not dict or set(identity) != {
+                "path",
+                "bytes",
+                "sha256",
+            } or (
+                type(identity["path"]) is not str
+                or type(identity["bytes"]) is not int
+                or type(identity["sha256"]) is not str
+            ):
+                raise ValueError(f"{label} is not an identity")
+            predecessors.append((Path(str(identity["path"])), identity, label))
+    for predecessor_path, expected_identity, label in predecessors:
+        document = _load_json(predecessor_path, label)
+        if expected_identity is not None and not _type_exact_equal(
+            _identity(predecessor_path), expected_identity
+        ):
+            raise ValueError(f"initializer chronology {label} identity changed")
+        predecessor = _parse_authority_timestamp(
+            document.get("createdUtc"), f"{label} createdUtc"
+        )
+        if closure_created <= predecessor:
+            raise ValueError(
+                "initializer closure does not follow routing, terminal, and source closures"
+            )
 PREREGISTRATION_FIELDS = frozenset(
     {
         "schemaVersion",
@@ -2503,7 +2765,10 @@ DETERMINISTIC_SUBPROCESS_ENVIRONMENT: Mapping[str, str] = {}
 
 
 def runtime_manifest_document() -> dict[str, Any]:
-    compiled_core = Path(np._core._multiarray_umath.__file__)  # type: ignore[attr-defined]
+    # NumPy 1.26 does not expose ``np._core`` on a fresh isolated import until
+    # the private compiled module has itself been imported.  Bind that module
+    # explicitly above so this identity is independent of incidental imports.
+    compiled_core = Path(_numpy_compiled_core.__file__)
     return {
         "schemaVersion": SCHEMA_VERSION,
         "kind": RUNTIME_MANIFEST_KIND,
@@ -2528,6 +2793,13 @@ def _verify_runtime_manifest(path: Path) -> dict[str, Any]:
 
 
 def _verify_initializer_manifest(path: Path, model: Path) -> dict[str, Any]:
+    canonical = _initializer_authority_paths()
+    _verify_initializer_namespace_inventory()
+    if (
+        _lexical_absolute(path) != canonical["manifest"]
+        or _lexical_absolute(model) != canonical["model"]
+    ):
+        raise ValueError("initializer authority is outside exact canonical paths")
     document = _load_json(path, "initializer manifest")
     _exact_keys(document, INITIALIZER_MANIFEST_FIELDS, "initializer manifest")
     if (
@@ -2547,15 +2819,67 @@ def _verify_initializer_manifest(path: Path, model: Path) -> dict[str, Any]:
         or len(document["orderedCatalog"]) != len(INITIALIZER_ORDERED_CATALOG)
     ):
         raise ValueError("initializer manifest changed")
-    _parse_timestamp(document["createdUtc"], "initializer createdUtc")
+    manifest_created = _parse_timestamp(
+        document["createdUtc"], "initializer createdUtc"
+    )
     _verify_identity_record(document["producer"], "initializer producer")
     _verify_identity_record(document["selectionSeal"], "initializer selection seal")
     _verify_identity_record(document["sourceClosure"], "initializer source closure")
-    for index, (entry, source_id) in enumerate(
-        zip(document["orderedCatalog"], INITIALIZER_ORDERED_CATALOG)
+    if (
+        document["selectionSeal"]["path"] != str(canonical["selection"])
+        or document["sourceClosure"]["path"] != str(canonical["closure"])
     ):
-        if not isinstance(entry, dict):
-            raise ValueError(f"initializer catalog entry {index} is not an object")
+        raise ValueError("initializer selection/closure paths are not canonical")
+    closure = _load_json(
+        Path(str(document["sourceClosure"]["path"])),
+        "initializer source closure",
+    )
+    _exact_keys(
+        closure, INITIALIZER_CLOSURE_FIELDS, "initializer source closure"
+    )
+    closure_created = _parse_timestamp(
+        closure.get("createdUtc"), "initializer source closure createdUtc"
+    )
+    if (
+        closure.get("schemaVersion") != SCHEMA_VERSION
+        or type(closure.get("schemaVersion")) is not int
+        or closure.get("kind") != INITIALIZER_CLOSURE_KIND
+        or closure.get("profileId") != PROFILE_ID
+        or closure.get("status")
+        != "frozen-pre-g6-initializer-source-closure"
+        or not _type_exact_equal(
+            closure.get("selectionSeal"), document["selectionSeal"]
+        )
+        or closure.get("selectionMode") != document["selectionMode"]
+        or not _type_exact_equal(
+            closure.get("selectedCatalogIndex"),
+            document["selectedCatalogIndex"],
+        )
+        or not _type_exact_equal(
+            closure.get("selectedModel"), document["model"]
+        )
+        or type(closure.get("sourceReports")) is not list
+        or len(closure["sourceReports"]) != len(INITIALIZER_ORDERED_CATALOG)
+        or type(closure.get("g6TargetRowsDecoded")) is not int
+        or closure["g6TargetRowsDecoded"] != 0
+        or closure.get("resultInformationRead") is not False
+        or closure.get("finalStageSeal") is not True
+        or manifest_created <= closure_created
+    ):
+        raise ValueError("initializer source closure changed")
+    _verify_initializer_chronology(closure_created, closure["sourceReports"])
+    for index, (entry, source_id, report) in enumerate(
+        zip(
+            document["orderedCatalog"],
+            INITIALIZER_ORDERED_CATALOG,
+            closure["sourceReports"],
+            strict=True,
+        )
+    ):
+        if type(entry) is not dict or type(report) is not dict:
+            raise ValueError(
+                f"initializer catalog/source report {index} is not an object"
+            )
         _exact_keys(
             entry,
             INITIALIZER_CATALOG_ENTRY_FIELDS,
@@ -2572,14 +2896,62 @@ def _verify_initializer_manifest(path: Path, model: Path) -> dict[str, Any]:
             or (source_id == "G2-K2" and entry["model"] is not None)
         ):
             raise ValueError("initializer ordered catalog changed")
+        _exact_keys(
+            report,
+            INITIALIZER_SOURCE_REPORT_FIELDS,
+            f"initializer source report {source_id}",
+        )
+        if (
+            report["sourceId"] != source_id
+            or report["promotionStatus"] != entry["promotionStatus"]
+            or not _type_exact_equal(
+                report["selectionSeal"], entry["selectionSeal"]
+            )
+            or not _type_exact_equal(report["closure"], entry["closure"])
+            or (
+                entry["promotionStatus"] == "promoted"
+                and not _type_exact_equal(report["rawModel"], entry["model"])
+            )
+            or (
+                entry["promotionStatus"] != "promoted"
+                and (entry["model"] is not None or report["rawModel"] is not None)
+            )
+            or type(report["healthPassed"]) is not bool
+            or report["healthPassed"]
+            is not (entry["promotionStatus"] == "promoted")
+            or report["resultInformationRead"] is not False
+            or (
+                source_id == "G5"
+                and report["unavailabilityEvidence"] is not None
+            )
+            or (
+                source_id == "G2-K2"
+                and type(report["unavailabilityEvidence"]) is not dict
+            )
+        ):
+            raise ValueError(
+                f"initializer source report {source_id} cross-links changed"
+            )
+        _verify_identity_record(
+            report["sourceVerifier"],
+            f"initializer source report {source_id} verifier",
+        )
+        if report["rawModel"] is not None:
+            _verify_identity_record(
+                report["rawModel"],
+                f"initializer source report {source_id} raw model",
+            )
         _verify_identity_record(
             entry["closure"], f"initializer catalog {source_id} closure"
         )
-        for optional in ("selectionSeal", "model"):
-            if entry[optional] is not None:
-                _verify_identity_record(
-                    entry[optional], f"initializer catalog {source_id} {optional}"
-                )
+        _verify_identity_record(
+            entry["selectionSeal"],
+            f"initializer catalog {source_id} selectionSeal",
+        )
+        if entry["model"] is not None:
+            _verify_identity_record(
+                entry["model"], f"initializer catalog {source_id} model"
+            )
     selected_index = document["selectedCatalogIndex"]
     if document["selectionMode"] == "promoted-prior":
         if (
@@ -2600,9 +2972,13 @@ def _verify_initializer_manifest(path: Path, model: Path) -> dict[str, Any]:
         if (
             selected["promotionStatus"] != "promoted"
             or selected_index != first_promoted
-            or not _type_exact_equal(selected["model"], document["model"])
+            or selected["model"] is None
+            or selected["model"]["path"] == document["model"]["path"]
+            or selected["model"]["bytes"] != document["model"]["bytes"]
+            or selected["model"]["sha256"] != document["model"]["sha256"]
             or not _type_exact_equal(
-                selected["closure"], document["sourceClosure"]
+                closure["sourceReports"][selected_index]["closure"],
+                selected["closure"],
             )
         ):
             raise ValueError("promoted initializer catalog cross-links changed")
@@ -2619,6 +2995,7 @@ def _verify_initializer_manifest(path: Path, model: Path) -> dict[str, Any]:
         raise ValueError(
             "fallback initializer lacks terminal G5 closure or exact G2 unavailability"
         )
+    _verify_initializer_namespace_inventory()
     return document
 
 
@@ -2630,7 +3007,7 @@ def verify_canonical_namespace() -> Generation6Registry:
     temporary repository root, so the same immutable path derivation applies.
     """
 
-    repository = Path(__file__).resolve().parents[2]
+    repository = _lexical_absolute(Path(__file__)).parents[2]
     namespace = _lexical_absolute(repository / "build-msvc" / "king-state-v6")
     preregistration = namespace / "00-preregistration.json"
     if preregistration != namespace / "00-preregistration.json":
@@ -8309,6 +8686,15 @@ def protocol_document() -> dict[str, Any]:
                 "options": upstream_verifier_options_document(),
                 "receiptMaterializedInAuthority": True,
             },
+            "verificationReceiptContinuity": {
+                "ownership": "independently-published-upstream",
+                "requiredDuringEachPreregistrationOperation": (
+                    "stable-canonical-path-bytes-and-sha256"
+                ),
+                "publisherClaimsInodeOwnership": False,
+                "inodeSerializedInPortableAuthority": False,
+                "publisherRollbackMayDeleteReceipt": False,
+            },
             "teacherBudgets": dict(UPSTREAM_TEACHER_BUDGETS),
             "routingQuotasPerPhaseSide": dict(
                 UPSTREAM_ROUTING_QUOTAS_PER_PHASE_SIDE
@@ -8403,10 +8789,29 @@ def protocol_document() -> dict[str, Any]:
             "initializerAuthority": {
                 "orderedCatalog": list(INITIALIZER_ORDERED_CATALOG),
                 "selectionModes": list(INITIALIZER_SELECTION_MODES),
+                "canonicalClosureKind": INITIALIZER_CLOSURE_KIND,
+                "canonicalAuthorityRelativeDirectory": (
+                    "build-msvc/data-generation/omega-decision-v3/40-initializer"
+                ),
+                "canonicalFilenames": {
+                    "model": "initializer.nnue",
+                    "selection": "initializer.selection.json",
+                    "closure": "initializer.closure.json",
+                    "manifest": "initializer.manifest.json",
+                },
                 "fallbackProtocol": dict(INITIALIZER_FALLBACK_PROTOCOL),
                 "rule": "use a semantically verified healthy promoted G5 model; otherwise require terminal G5 closure, exact G2 unavailability, and exact fallback",
+                "requireExactFourFileNamespaceAtEveryDownstreamReplay": True,
+                "publisherOwnedInodeContinuityRequired": True,
+                "requirePromotedSourceModelPathDistinct": True,
+                "requireClosureAfterRoutingTerminalAndEverySourceDocument": True,
                 "g5FailureAbortIsVerifiedButNotFatal": True,
                 "g5OnlyPromotableSource": True,
+                "requireFailedAbortedRawModelNull": True,
+                "requireFailedAbortedHealthFalse": True,
+                "g5EarlyTerminalAuthority": dict(
+                    INITIALIZER_G5_EARLY_TERMINAL_AUTHORITY
+                ),
                 "g2UnavailableProtocol": dict(
                     INITIALIZER_G2_UNAVAILABLE_PROTOCOL
                 ),
@@ -8740,6 +9145,7 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    _safe_existing_file(Path(__file__))
     args = _parser().parse_args(argv)
     result = _self_test() if args.command == "self-test" else protocol_document()
     print(json.dumps(result, indent=2, sort_keys=True), flush=True)

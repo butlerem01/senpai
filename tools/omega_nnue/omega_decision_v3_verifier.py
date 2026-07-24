@@ -42,6 +42,7 @@ COMPONENT_KIND = "omega-nnue-king-state-v6-component-authority"
 PRELABEL_KIND = "omega-nnue-king-state-v6-upstream-prelabel-seal"
 INITIALIZER_KIND = "omega-nnue-king-state-v6-initializer-manifest"
 INITIALIZER_SELECTION_KIND = "omega-decision-v3-pre-g6-initializer-selection"
+INITIALIZER_CLOSURE_KIND = "omega-decision-v3-pre-g6-initializer-closure"
 FORBIDDEN_REGISTRY_KIND = "omega-decision-v3-prior-forbidden-registry"
 HCE_CLAIM_KIND = "omega-decision-v3-pretarget-hce-claim"
 HCE_COMPLETION_KIND = "omega-decision-v3-pretarget-hce-completion"
@@ -181,6 +182,95 @@ G2_UNAVAILABLE_PROTOCOL = {
     "resultInformationRead": False,
 }
 
+G5_EARLY_TERMINAL_AUTHORITY = {
+    "protocol": {
+        "relativePath": (
+            "validation/omega-nnue-king-state-v5-early-terminal-protocol.json"
+        ),
+        "bytes": 7_991,
+        "sha256": "ae0852673fe1b9e54a0bda182219f4268278252dd2aa9fb067b882a1e69ce352",
+    },
+    "tool": {
+        "relativePath": (
+            "tools/omega_nnue/king_state_generation5_early_terminal.py"
+        ),
+        "bytes": 75_430,
+        "sha256": "895f3aad57a2ef32aa63be897dbb357afb07be397783ce0b5d5ee54a982e6227",
+    },
+    "compatibilityAuthority": {
+        "readiness": {
+            "relativePath": (
+                "tools/omega_nnue/king_state_match_readiness_generation5_compat_v2.py"
+            ),
+            "bytes": 143_024,
+            "sha256": "84e1b67683ac75c2b34802d4ba1c960c6173f9437f52a1af1574188863b8bb10",
+        },
+        "protocol": {
+            "relativePath": (
+                "validation/omega-nnue-king-state-v5-color-compat-protocol.json"
+            ),
+            "bytes": 11_050,
+            "sha256": "47518625404ca6a3a3d1ce4fd7ee1e30d2e3600e3cc2d42adfeeac52f6599daf",
+        },
+        "preregistrationTemplate": {
+            "relativePath": (
+                "validation/omega-nnue-king-state-v5-color-compat-preregistration.template.json"
+            ),
+            "bytes": 8_831,
+            "sha256": "c2f53efd4957dccf5428f043d5eea5d74669e0b79e8bcf01639ac770a7239e1e",
+        },
+    },
+    "lifecycleContract": {
+        "authorityLifecycleLock": (
+            "build-msvc/king-state-v5-authority-lifecycle-v1/authority.lock"
+        ),
+        "offlineLifetimeClaim": (
+            "build-msvc/king-state-v5/offline/evaluation-lifetime.claim.json"
+        ),
+        "offlineAccessClaim": "build-msvc/king-state-v5/offline/access-claim.json",
+        "offlineReport": "build-msvc/king-state-v5/offline/report.json",
+        "lifetimeClaimKind": (
+            "omega-nnue-king-state-v5-offline-evaluation-lifetime-claim"
+        ),
+        "strictChronology": ["robustness", "lifetime", "access", "report"],
+        "canonicalChronologyUtc": "python-datetime-isoformat-utc-z-round-trip",
+        "guardedLauncher": (
+            "tools/omega_nnue/king_state_generation5_early_terminal.py run-offline"
+        ),
+        "sharedLifecycleLockCoversOfflineEvaluationTerminalPublicationAndCompatibilityAuthorization": True,
+        "compatibilityAuthorizationRequiresLifetimeClaim": True,
+        "directLegacyOfflineEvaluateCannotAuthorize": True,
+        "earlyTerminalRootBlocksCompatibilityAuthorization": True,
+        "lexicalDescriptorSafety": {
+            "singleLinkRegularFilesOnly": True,
+            "reparseSymlinkAndHardlinkReject": True,
+            "lexicalNoFollowDescriptorIdentityRequired": True,
+        },
+    },
+    "canonicalRoot": "build-msvc/king-state-v5-early-terminal-v1",
+    "exactFileInventory": [
+        "source-selection.seal.json",
+        "source-closure.json",
+    ],
+    "terminalClasses": [
+        "selection-no-eligible",
+        "robustness-training-failed",
+        "robustness-worker-aborted",
+        "robustness-gate-failed",
+        "heldout-gate-failed",
+        "heldout-access-aborted",
+    ],
+    "promotionStatuses": ["failed", "aborted"],
+    "freshProcessReplayRequired": True,
+    "mixedEarlyTerminalAndMatchAuthorityRejects": True,
+    "failedOrAbortedRawModel": None,
+    "failedOrAbortedHealthPassed": False,
+    "generation6TargetRowsDecoded": 0,
+    "generation6TargetValuesExported": 0,
+    "gameResultsRead": False,
+    "resultInformationRead": False,
+}
+
 FALLBACK_PROTOCOL = {
     "architecture": "king-state-v6-move-decision-initializer-v1",
     "omegaNnueArchitectureId": 4,
@@ -244,16 +334,33 @@ VERIFIER_OPTIONS = {
     "initializerPolicy": {
         "orderedCatalog": list(INITIALIZER_CATALOG),
         "selectionModes": ["promoted-prior", "deterministic-fallback"],
+        "canonicalClosureKind": INITIALIZER_CLOSURE_KIND,
+        "canonicalAuthorityRelativeDirectory": (
+            "build-msvc/data-generation/omega-decision-v3/40-initializer"
+        ),
+        "canonicalFilenames": {
+            "model": "initializer.nnue",
+            "selection": "initializer.selection.json",
+            "closure": "initializer.closure.json",
+            "manifest": "initializer.manifest.json",
+        },
         "fallbackProtocol": dict(FALLBACK_PROTOCOL),
         "requireFirstIndependentlyPromotedEntry": True,
         "requireFreshHealthForPromotedEntry": True,
+        "requirePromotedSourceModelPathDistinct": True,
+        "requireClosureAfterRoutingTerminalAndEverySourceDocument": True,
+        "requireExactFourFileNamespaceAtEveryDownstreamReplay": True,
+        "publisherOwnedInodeContinuityRequired": True,
         "g5OnlyPromotableSource": True,
         "requireTerminalFailureOrAbortClosureForSkippedG5": True,
+        "requireFailedAbortedRawModelNull": True,
+        "requireFailedAbortedHealthFalse": True,
+        "g5EarlyTerminalAuthority": dict(G5_EARLY_TERMINAL_AUTHORITY),
         "g2UnavailableProtocol": dict(G2_UNAVAILABLE_PROTOCOL),
     },
     "requiredPriorForbiddenSourceIds": list(PRIOR_SOURCE_IDS),
     "requiredSemanticReplays": [
-        "G5-only initializer promotion, embedded health, source closure, exact G2 unavailability, and model cross-links",
+        "G5-only initializer promotion or exact fresh-process pre-match early-terminal replay, exact four-path canonical authority, closure chronology, distinct copied-model payload equality, failed/aborted output sanitation, embedded health, and exact G2 unavailability",
         "terminal rules manifest/transcript/completion and pre-teacher exclusions",
         "every prior-forbidden manifest/catalog and zero current overlap",
         "component-map coverage and whole-component split assignment",
@@ -284,8 +391,8 @@ CAPSULE_DECLARATION = {
 DEPENDENCY_PINS: dict[str, tuple[str, int | None, str | None]] = {
     "trainer": (
         "king_state_train_generation6.py",
-        330_787,
-        "81b9e0c5ffa5d78a4cf2198781ceffea7649bdaed3e827556a5e3deaeba8a2e0",
+        347_813,
+        "d5a27adba652b3dd5669fa530f92d23a262b0752faa00120905e87f15cbdd19b",
     ),
     "teacher": (
         "omega_decision_v3_teacher.py",
@@ -342,8 +449,28 @@ DEPENDENCY_PINS: dict[str, tuple[str, int | None, str | None]] = {
     ),
     "g5MatchReadiness": (
         "king_state_match_readiness_generation5_compat_v2.py",
-        123_792,
-        "fca7346bd95bc312c4832af354e9db4abd427013dcc791cfe5c43083fa4e132a",
+        143_024,
+        "84e1b67683ac75c2b34802d4ba1c960c6173f9437f52a1af1574188863b8bb10",
+    ),
+    "g5EarlyTerminal": (
+        "king_state_generation5_early_terminal.py",
+        75_430,
+        "895f3aad57a2ef32aa63be897dbb357afb07be397783ce0b5d5ee54a982e6227",
+    ),
+    "g5EarlyTerminalProtocol": (
+        "../../validation/omega-nnue-king-state-v5-early-terminal-protocol.json",
+        7_991,
+        "ae0852673fe1b9e54a0bda182219f4268278252dd2aa9fb067b882a1e69ce352",
+    ),
+    "g5ColorCompatProtocol": (
+        "../../validation/omega-nnue-king-state-v5-color-compat-protocol.json",
+        11_050,
+        "47518625404ca6a3a3d1ce4fd7ee1e30d2e3600e3cc2d42adfeeac52f6599daf",
+    ),
+    "g5ColorCompatTemplate": (
+        "../../validation/omega-nnue-king-state-v5-color-compat-preregistration.template.json",
+        8_831,
+        "c2f53efd4957dccf5428f043d5eea5d74669e0b79e8bcf01639ac770a7239e1e",
     ),
     "g2Verifier": (
         "king_state_v3.py",
@@ -408,6 +535,14 @@ INITIALIZER_SELECTION_FIELDS = frozenset(
         "schemaVersion", "kind", "profileId", "selectionMode",
         "selectedCatalogIndex", "selectedModel", "orderedCatalog",
         "fallbackProtocol", "g6TargetRowsDecoded", "resultInformationRead",
+    }
+)
+INITIALIZER_CLOSURE_FIELDS = frozenset(
+    {
+        "schemaVersion", "kind", "profileId", "status", "createdUtc",
+        "selectionSeal", "selectionMode", "selectedCatalogIndex",
+        "selectedModel", "sourceReports", "g6TargetRowsDecoded",
+        "resultInformationRead", "finalStageSeal",
     }
 )
 INITIALIZER_ENTRY_FIELDS = frozenset(
@@ -851,7 +986,7 @@ _PINNED_MODULE_PREFIX = "_omega_decision_v3_verifier_pinned_"
 
 
 def _dependency_path(filename: str) -> Path:
-    return Path(__file__).resolve().parent / filename
+    return _absolute(Path(__file__)).parent / filename
 
 
 def _pinned_module_name(name: str) -> str:
@@ -1430,6 +1565,106 @@ MAX_SOURCE_REPLAY_STDERR_BYTES = 1024 * 1024
 _TEST_INITIALIZER_SOURCE_RUNNERS: dict[
     str, tuple[Path, int, str]
 ] = {}
+_TEST_INITIALIZER_AUTHORITY_DIRECTORY: Path | None = None
+_TEST_G5_AUTHORITY_REPOSITORY: Path | None = None
+
+
+def _initializer_authority_paths() -> dict[str, Path]:
+    if _TEST_INITIALIZER_AUTHORITY_DIRECTORY is not None:
+        if set(_TEST_INITIALIZER_SOURCE_RUNNERS) != {"G5", "G2-K2"}:
+            raise RuntimeError(
+                "test initializer path override requires both synthetic source replays"
+            )
+        directory = _absolute(_TEST_INITIALIZER_AUTHORITY_DIRECTORY)
+    else:
+        repository = _absolute(Path(__file__)).parents[2]
+        directory = _absolute(
+            repository
+            / "build-msvc/data-generation/omega-decision-v3/40-initializer"
+        )
+    authority = directory.parent
+    return {
+        "model": directory / "initializer.nnue",
+        "selection": directory / "initializer.selection.json",
+        "closure": directory / "initializer.closure.json",
+        "manifest": directory / "initializer.manifest.json",
+        "routing": authority / "30-routing/routing.completion.json",
+        "terminal": authority / "20-terminal/terminal.lineage.json",
+    }
+
+
+def _verify_initializer_namespace_inventory() -> None:
+    paths = _initializer_authority_paths()
+    expected = {
+        paths[role].name for role in ("model", "selection", "closure", "manifest")
+    }
+    directory = paths["model"].parent
+    absolute = _absolute(directory)
+    for item in (*reversed(absolute.parents), absolute):
+        info = os.lstat(item)
+        if stat.S_ISLNK(info.st_mode) or _is_reparse(info):
+            raise ValueError(f"initializer namespace traverses reparse path: {item}")
+        if not stat.S_ISDIR(info.st_mode):
+            raise ValueError(f"initializer namespace parent is not a directory: {item}")
+    with os.scandir(absolute) as entries:
+        actual = {entry.name for entry in entries}
+    if actual != expected:
+        raise ValueError(
+            "initializer namespace is not the exact canonical four-file inventory: "
+            f"actual={sorted(actual)} expected={sorted(expected)}"
+        )
+
+
+def _parse_authority_timestamp(value: Any, label: str) -> datetime:
+    # Decision-v3 seals use fixed-width microseconds while G5 lifecycle seals
+    # use Python's UTC isoformat spelling.  Admit only those two canonical Z
+    # forms; never normalize a short or seventh fractional digit.
+    if type(value) is not str or re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{6})?Z", value
+    ) is None:
+        raise ValueError(f"{label} is not canonical UTC")
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as error:
+        raise ValueError(f"{label} is not a valid UTC timestamp") from error
+    if parsed.tzinfo is None or parsed.utcoffset() != timezone.utc.utcoffset(None):
+        raise ValueError(f"{label} is not UTC")
+    canonical = parsed.astimezone(timezone.utc)
+    accepted = {canonical.isoformat().replace("+00:00", "Z")}
+    if canonical.microsecond == 0:
+        accepted.add(canonical.strftime("%Y-%m-%dT%H:%M:%S.%fZ"))
+    if value not in accepted:
+        raise ValueError(f"{label} is not canonical UTC")
+    return canonical
+
+
+def _verify_initializer_chronology(
+    closure_created: datetime,
+    reports: Sequence[Mapping[str, Any]],
+) -> None:
+    paths = _initializer_authority_paths()
+    predecessors: list[tuple[Path, Mapping[str, Any] | None, str]] = [
+        (paths["routing"], None, "target-free routing completion"),
+        (paths["terminal"], None, "terminal-classifier lineage"),
+    ]
+    for index, report in enumerate(reports):
+        if type(report) is not dict or type(report.get("sourceId")) is not str:
+            raise ValueError(f"initializer chronology source report {index} changed")
+        for field in ("selectionSeal", "closure"):
+            label = f"initializer {report['sourceId']} {field}"
+            identity = _identity_shape(report.get(field), label)
+            predecessors.append((Path(identity["path"]), identity, label))
+    for path, expected_identity, label in predecessors:
+        document, identity = _read_document(path, label)
+        if expected_identity is not None:
+            _same_identity(identity, expected_identity, label)
+        predecessor = _parse_authority_timestamp(
+            document.get("createdUtc"), f"{label} createdUtc"
+        )
+        if closure_created <= predecessor:
+            raise ValueError(
+                "initializer closure does not follow routing, terminal, and source closures"
+            )
 
 
 def _run_json_process(
@@ -1507,18 +1742,297 @@ def _recheck_source_pins(records: Mapping[str, Mapping[str, Any]]) -> None:
             raise ValueError(f"initializer source verifier {name} changed during replay")
 
 
+G5_LIFECYCLE_SOURCE_NAMES = (
+    "g5EarlyTerminal",
+    "g5EarlyTerminalProtocol",
+    "g5MatchReadiness",
+    "g5ColorCompatProtocol",
+    "g5ColorCompatTemplate",
+)
+
+
+def _g5_lifecycle_mapping(value: Any, field: str, label: str) -> dict[str, Any]:
+    if type(value) is not dict or type(value.get(field)) is not dict:
+        raise ValueError(f"{label} {field} is not an object")
+    return value[field]
+
+
+def _g5_lifecycle_values(
+    value: Mapping[str, Any], expected: Mapping[str, Any], label: str
+) -> None:
+    for field, expected_value in expected.items():
+        if field not in value or not _type_exact_equal(value[field], expected_value):
+            raise ValueError(f"{label} lifecycle contract changed: {field}")
+
+
+def _verify_g5_lifecycle_contract(
+    records: Mapping[str, Mapping[str, Any]],
+) -> None:
+    """Bind both terminal branches to one exact held-out lifecycle contract."""
+
+    missing = set(G5_LIFECYCLE_SOURCE_NAMES) - set(records)
+    if missing:
+        raise ValueError(
+            f"G5 lifecycle source pin inventory changed: missing={sorted(missing)}"
+        )
+
+    authority = G5_EARLY_TERMINAL_AUTHORITY
+    compatibility = authority["compatibilityAuthority"]
+    policy_records = {
+        "g5EarlyTerminal": authority["tool"],
+        "g5EarlyTerminalProtocol": authority["protocol"],
+        "g5MatchReadiness": compatibility["readiness"],
+        "g5ColorCompatProtocol": compatibility["protocol"],
+        "g5ColorCompatTemplate": compatibility["preregistrationTemplate"],
+    }
+    repository = _absolute(Path(__file__)).parents[2]
+    for name, policy_record in policy_records.items():
+        filename, expected_bytes, expected_sha256 = DEPENDENCY_PINS[name]
+        expected_relative = _absolute(
+            _absolute(Path(__file__)).parent / filename
+        ).relative_to(repository).as_posix()
+        expected_policy = {
+            "relativePath": expected_relative,
+            "bytes": expected_bytes,
+            "sha256": expected_sha256,
+        }
+        if not _type_exact_equal(policy_record, expected_policy):
+            raise ValueError(f"G5 lifecycle policy and execution pin differ: {name}")
+
+    documents: dict[str, dict[str, Any]] = {}
+    for name in (
+        "g5EarlyTerminalProtocol",
+        "g5ColorCompatProtocol",
+        "g5ColorCompatTemplate",
+    ):
+        document, identity = _read_document(
+            Path(str(records[name]["path"])), f"{name} lifecycle authority"
+        )
+        if not _type_exact_equal(identity, records[name]):
+            raise ValueError(f"G5 lifecycle source identity changed: {name}")
+        documents[name] = document
+
+    contract = authority["lifecycleContract"]
+    early = documents["g5EarlyTerminalProtocol"]
+    early_namespaces = _g5_lifecycle_mapping(
+        early, "namespaces", "G5 early-terminal protocol"
+    )
+    _g5_lifecycle_values(
+        early_namespaces,
+        {
+            "offlineLifetimeClaim": contract["offlineLifetimeClaim"],
+            "offlineAccessClaim": contract["offlineAccessClaim"],
+            "offlineReport": contract["offlineReport"],
+            "authorityLifecycleLock": contract["authorityLifecycleLock"],
+            "terminalRoot": authority["canonicalRoot"],
+        },
+        "G5 early-terminal namespaces",
+    )
+    early_branch = _g5_lifecycle_mapping(
+        early, "branchPolicy", "G5 early-terminal protocol"
+    )
+    _g5_lifecycle_values(
+        early_branch,
+        {
+            "sharedLifecycleLockCoversOfflineEvaluationTerminalPublicationAndCompatibilityAuthorization": contract[
+                "sharedLifecycleLockCoversOfflineEvaluationTerminalPublicationAndCompatibilityAuthorization"
+            ],
+            "legacyAccessBeforeLifetimeClaimRejects": True,
+            "strictHeldOutChronology": contract["strictChronology"],
+            "canonicalHeldOutChronologyUtc": contract["canonicalChronologyUtc"],
+            "compatibilityAuthorizationOrClosureBlocksEarlyPublication": True,
+            "earlyNamespaceBlocksLaterCompatibilityAuthorization": contract[
+                "earlyTerminalRootBlocksCompatibilityAuthorization"
+            ],
+        },
+        "G5 early-terminal branch policy",
+    )
+    early_publication = _g5_lifecycle_mapping(
+        early, "publication", "G5 early-terminal protocol"
+    )
+    _g5_lifecycle_values(
+        early_publication,
+        contract["lexicalDescriptorSafety"],
+        "G5 early-terminal publication",
+    )
+
+    compat = documents["g5ColorCompatProtocol"]
+    compat_template_pin = compatibility["preregistrationTemplate"]
+    _g5_lifecycle_values(
+        compat,
+        {
+            "template": {
+                "path": compat_template_pin["relativePath"],
+                "bytes": compat_template_pin["bytes"],
+                "sha256": compat_template_pin["sha256"],
+            }
+        },
+        "G5 compatibility protocol",
+    )
+    compat_tools = _g5_lifecycle_mapping(
+        compat, "tools", "G5 compatibility protocol"
+    )
+    compat_readiness_pin = compatibility["readiness"]
+    _g5_lifecycle_values(
+        compat_tools,
+        {
+            "readiness": {
+                "path": compat_readiness_pin["relativePath"],
+                "bytes": compat_readiness_pin["bytes"],
+                "sha256": compat_readiness_pin["sha256"],
+            }
+        },
+        "G5 compatibility tools",
+    )
+    compat_lifecycle = _g5_lifecycle_mapping(
+        compat, "heldOutLifecycle", "G5 compatibility protocol"
+    )
+    early_protocol_pin = authority["protocol"]
+    _g5_lifecycle_values(
+        compat_lifecycle,
+        {
+            "earlyTerminalProtocol": {
+                "path": early_protocol_pin["relativePath"],
+                "bytes": early_protocol_pin["bytes"],
+                "sha256": early_protocol_pin["sha256"],
+            },
+            "authorityLifecycleLock": contract["authorityLifecycleLock"],
+            "earlyTerminalRoot": authority["canonicalRoot"],
+            "offlineLifetimeClaim": contract["offlineLifetimeClaim"],
+            "offlineAccessClaim": contract["offlineAccessClaim"],
+            "offlineReport": contract["offlineReport"],
+            "claimKind": contract["lifetimeClaimKind"],
+            "strictChronology": contract["strictChronology"],
+            "canonicalChronologyUtc": contract["canonicalChronologyUtc"],
+            "guardedLauncher": contract["guardedLauncher"],
+            "directLegacyOfflineEvaluateCannotAuthorize": contract[
+                "directLegacyOfflineEvaluateCannotAuthorize"
+            ],
+        },
+        "G5 compatibility held-out lifecycle",
+    )
+    compat_execution = _g5_lifecycle_mapping(
+        compat, "execution", "G5 compatibility protocol"
+    )
+    _g5_lifecycle_values(
+        compat_execution,
+        {
+            "earlyTerminalRootBlocksAuthorization": contract[
+                "earlyTerminalRootBlocksCompatibilityAuthorization"
+            ],
+            "sharedLifecycleLockCoversAuthorizationCommit": True,
+            "guardedHeldOutLifetimeClaimRequired": contract[
+                "compatibilityAuthorizationRequiresLifetimeClaim"
+            ],
+            "strictHeldOutChronologyRequired": True,
+        },
+        "G5 compatibility execution",
+    )
+    compat_publication = _g5_lifecycle_mapping(
+        compat, "publication", "G5 compatibility protocol"
+    )
+    _g5_lifecycle_values(
+        compat_publication,
+        {
+            "mixedEarlyTerminalAndCompatibilityAuthorityRejects": True,
+            "sharedLifecycleMutexRequiredForAuthorizationCommit": True,
+            "offlineLifetimeClaimBoundIntoAuthorizationAndCoreSeal": contract[
+                "compatibilityAuthorizationRequiresLifetimeClaim"
+            ],
+            "strictRobustnessLifetimeAccessReportChronologyRequired": True,
+        },
+        "G5 compatibility publication",
+    )
+
+    template = documents["g5ColorCompatTemplate"]
+    information = _g5_lifecycle_mapping(
+        template, "informationBoundary", "G5 compatibility template"
+    )
+    _g5_lifecycle_values(
+        information,
+        {
+            "earlyTerminalRootBlocksAuthorization": contract[
+                "earlyTerminalRootBlocksCompatibilityAuthorization"
+            ],
+            "mixedEarlyTerminalAndCompatibilityAuthorityRejects": True,
+            "sharedLifecycleLock": contract["authorityLifecycleLock"],
+            "guardedHeldOutLauncher": contract["guardedLauncher"],
+            "offlineLifetimeClaimRequiredForAuthorization": contract[
+                "compatibilityAuthorizationRequiresLifetimeClaim"
+            ],
+            "strictHeldOutChronology": contract["strictChronology"],
+            "canonicalHeldOutChronologyUtc": contract["canonicalChronologyUtc"],
+            "directLegacyOfflineEvaluateCannotAuthorize": contract[
+                "directLegacyOfflineEvaluateCannotAuthorize"
+            ],
+        },
+        "G5 compatibility information boundary",
+    )
+
+
 def _source_bridge_prelude(
     records: Mapping[str, Mapping[str, Any]], tool_directory: Path
 ) -> str:
     serialized = json.dumps(records, sort_keys=True, separators=(",", ":"))
     return f"""
-import hashlib,json,pathlib,sys
+import hashlib,importlib.abc,importlib.util,json,os,pathlib,stat,sys
 pins=json.loads({serialized!r})
-for name,record in pins.items():
+sources={{}}
+def snapshot(record):
     path=pathlib.Path(record['path'])
-    payload=path.read_bytes()
-    if len(payload)!=record['bytes'] or hashlib.sha256(payload).hexdigest()!=record['sha256']:
-        raise RuntimeError('initializer source pin changed: '+name)
+    before=os.lstat(path)
+    if (not stat.S_ISREG(before.st_mode) or stat.S_ISLNK(before.st_mode)
+        or getattr(before,'st_nlink',1)!=1
+        or getattr(before,'st_file_attributes',0)&0x0400):
+        raise RuntimeError('initializer source is not one private file: '+str(path))
+    descriptor=os.open(path,os.O_RDONLY|getattr(os,'O_BINARY',0)|getattr(os,'O_NOFOLLOW',0))
+    try:
+        opened=os.fstat(descriptor)
+        if ((opened.st_dev,opened.st_ino)!=(before.st_dev,before.st_ino)
+            or not stat.S_ISREG(opened.st_mode) or getattr(opened,'st_nlink',1)!=1):
+            raise RuntimeError('initializer source changed before open: '+str(path))
+        chunks=[]
+        digest=hashlib.sha256()
+        while True:
+            block=os.read(descriptor,1024*1024)
+            if not block:
+                break
+            chunks.append(block)
+            digest.update(block)
+        after=os.fstat(descriptor)
+        state=lambda value:(value.st_dev,value.st_ino,value.st_size,getattr(value,'st_mtime_ns',None))
+        if state(after)!=state(opened):
+            raise RuntimeError('initializer source changed while read: '+str(path))
+    finally:
+        os.close(descriptor)
+    if state(os.lstat(path))!=state(before):
+        raise RuntimeError('initializer source path changed while read: '+str(path))
+    payload=b''.join(chunks)
+    if len(payload)!=record['bytes'] or digest.hexdigest()!=record['sha256']:
+        raise RuntimeError('initializer source pin changed: '+str(path))
+    return path,payload
+for name,record in pins.items():
+    path,payload=snapshot(record)
+    if path.suffix=='.py':
+        module_name=path.stem
+        if module_name in sources:
+            raise RuntimeError('duplicate initializer source module: '+module_name)
+        if module_name in sys.modules:
+            raise RuntimeError('preloaded initializer source module: '+module_name)
+        sources[module_name]=(str(path),payload)
+class ExactSourceLoader(importlib.abc.MetaPathFinder,importlib.abc.Loader):
+    def find_spec(self,fullname,path=None,target=None):
+        if fullname in sources:
+            return importlib.util.spec_from_loader(fullname,self,origin=sources[fullname][0])
+        return None
+    def create_module(self,spec):
+        return None
+    def exec_module(self,module):
+        source_path,payload=sources[module.__name__]
+        module.__file__=source_path
+        module.__package__=''
+        exec(compile(payload,source_path,'exec',dont_inherit=True),module.__dict__)
+sys.meta_path.insert(0,ExactSourceLoader())
 sys.path.insert(0,{str(tool_directory)!r})
 """
 
@@ -1638,6 +2152,19 @@ def _validate_source_report(
         and value["healthPassed"] is not True
     ):
         raise ValueError(f"initializer {source_id} promotion failed source health")
+    if source_id == "G5" and (
+        (
+            value["promotionStatus"] == "promoted"
+            and value["rawModel"] is None
+        )
+        or (
+            value["promotionStatus"] in {"failed", "aborted"}
+            and (value["rawModel"] is not None or value["healthPassed"] is not False)
+        )
+    ):
+        raise ValueError(
+            "initializer G5 failed/aborted replay exported a model or source health"
+        )
     if source_id == "G2-K2":
         if value["rawModel"] is not None or value["healthPassed"] is not False:
             raise ValueError("initializer G2-K2 unavailable source names a model or health")
@@ -1676,9 +2203,48 @@ def _run_g5_source_replay(expected_status: str) -> dict[str, Any]:
     synthetic = _run_test_source_replay("G5")
     if synthetic is not None:
         return synthetic
-    names = ("g5Readiness", "g5Matches", "g5MatchReadiness")
+    repository = (
+        _TEST_G5_AUTHORITY_REPOSITORY
+        if _TEST_G5_AUTHORITY_REPOSITORY is not None
+        else _absolute(Path(__file__)).parents[2]
+    )
+    repository = _absolute(repository)
+    early_root = repository / "build-msvc/king-state-v5-early-terminal-v1"
+    match_root = repository / "build-king-state-v5/matches-color-compat-v2"
+    match_authorization = match_root / "sealed/match-authorization.json"
+    match_closure = match_root / "closure.json"
+    early_exists = os.path.lexists(early_root)
+    match_exists = os.path.lexists(match_authorization) or os.path.lexists(
+        match_closure
+    )
+    if early_exists and match_exists:
+        raise ValueError(
+            "Generation-5 early-terminal and compatibility-match authorities coexist"
+        )
+    if early_exists:
+        records = _source_pin_records(G5_LIFECYCLE_SOURCE_NAMES)
+        _verify_g5_lifecycle_contract(records)
+        tool = Path(str(records["g5EarlyTerminal"]["path"]))
+        value = _run_json_process(
+            [sys.executable, "-I", "-B", str(tool), "verify"],
+            label="canonical G5 early-terminal source replay",
+            timeout=SOURCE_REPLAY_TIMEOUT_SECONDS,
+        )
+        _recheck_source_pins(records)
+        result = _validate_source_report(value, "G5")
+        if result["sourceVerifier"] != records["g5EarlyTerminal"]:
+            raise ValueError("G5 early-terminal source verifier identity changed")
+        if expected_status == "promoted" or result["promotionStatus"] == "promoted":
+            raise ValueError("G5 early-terminal authority cannot promote a model")
+        return result
+    names = (
+        "g5Readiness",
+        "g5Matches",
+        *G5_LIFECYCLE_SOURCE_NAMES,
+    )
     records = _source_pin_records(names)
-    prelude = _source_bridge_prelude(records, Path(__file__).resolve().parent)
+    _verify_g5_lifecycle_contract(records)
+    prelude = _source_bridge_prelude(records, _absolute(Path(__file__)).parent)
     if expected_status == "promoted":
         body = r"""
 import king_state_confirmation_readiness_v2 as readiness
@@ -1716,7 +2282,7 @@ value={
  'promotionStatus':status,
  'selectionSeal':readiness.identity(authorization_path),
  'closure':readiness.identity(closure_path),
- 'rawModel':authorization['selectedNetwork'],
+ 'rawModel':None,
  'healthPassed':status=='promoted',
  'sourceVerifier':readiness.identity(pathlib.Path(matches.__file__)),
  'unavailabilityEvidence':None,
@@ -2050,7 +2616,7 @@ def _verify_g2_mapping(
 
 def _verify_initializer_source_entry(
     entry: Mapping[str, Any], source_id: str
-) -> tuple[bool, bool]:
+) -> tuple[bool, bool, dict[str, Any]]:
     status = entry["promotionStatus"]
     if source_id == "G5" and status == "unavailable":
         raise ValueError(
@@ -2088,7 +2654,7 @@ def _verify_initializer_source_entry(
         or report["unavailabilityEvidence"] is None
     ):
         raise ValueError("initializer G2-K2 unavailable source evidence changed")
-    return promoted, bool(report["healthPassed"] and promoted)
+    return promoted, bool(report["healthPassed"] and promoted), report
 
 
 def _verify_initializer(
@@ -2096,6 +2662,20 @@ def _verify_initializer(
     capsule: Mapping[str, Any],
     identities: Mapping[str, Mapping[str, Any]],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    canonical = _initializer_authority_paths()
+    _verify_initializer_namespace_inventory()
+    expected_paths = {
+        "initializerManifest": canonical["manifest"],
+        "initializerSelection": canonical["selection"],
+        "initializerClosure": canonical["closure"],
+        "initializerModel": canonical["model"],
+    }
+    if _absolute(manifest_path) != canonical["manifest"] or any(
+        type(identities.get(field)) is not dict
+        or identities[field].get("path") != str(expected)
+        for field, expected in expected_paths.items()
+    ):
+        raise ValueError("initializer authority is outside exact canonical paths")
     manifest, manifest_identity = _read_document(
         manifest_path, "initializer manifest"
     )
@@ -2117,7 +2697,9 @@ def _verify_initializer(
         or len(manifest["orderedCatalog"]) != len(INITIALIZER_CATALOG)
     ):
         raise ValueError("initializer manifest header/policy changed")
-    _parse_timestamp(manifest["createdUtc"], "initializer manifest createdUtc")
+    manifest_created = _parse_timestamp(
+        manifest["createdUtc"], "initializer manifest createdUtc"
+    )
     for field in ("model", "producer", "selectionSeal", "sourceClosure"):
         _verified_identity(manifest[field], f"initializer manifest {field}")
     _same_identity(manifest["model"], identities["initializerModel"], "initializer model")
@@ -2129,6 +2711,48 @@ def _verify_initializer(
         manifest["sourceClosure"], identities["initializerClosure"],
         "initializer closure",
     )
+    closure, closure_identity = _read_document(
+        Path(str(manifest["sourceClosure"]["path"])),
+        "initializer source closure",
+    )
+    _same_identity(
+        closure_identity, manifest["sourceClosure"],
+        "initializer source closure",
+    )
+    _exact_keys(
+        closure, INITIALIZER_CLOSURE_FIELDS, "initializer source closure"
+    )
+    closure_created = _parse_timestamp(
+        closure.get("createdUtc"), "initializer source closure createdUtc"
+    )
+    if (
+        type(closure.get("schemaVersion")) is not int
+        or closure["schemaVersion"] != 1
+        or closure.get("kind") != INITIALIZER_CLOSURE_KIND
+        or closure.get("profileId") != PROFILE_ID
+        or closure.get("status")
+        != "frozen-pre-g6-initializer-source-closure"
+        or not _type_exact_equal(
+            closure.get("selectionSeal"), manifest["selectionSeal"]
+        )
+        or closure.get("selectionMode") != manifest["selectionMode"]
+        or not _type_exact_equal(
+            closure.get("selectedCatalogIndex"),
+            manifest["selectedCatalogIndex"],
+        )
+        or not _type_exact_equal(
+            closure.get("selectedModel"), manifest["model"]
+        )
+        or type(closure.get("sourceReports")) is not list
+        or len(closure["sourceReports"]) != len(INITIALIZER_CATALOG)
+        or type(closure.get("g6TargetRowsDecoded")) is not int
+        or closure["g6TargetRowsDecoded"] != 0
+        or closure.get("resultInformationRead") is not False
+        or closure.get("finalStageSeal") is not True
+        or manifest_created <= closure_created
+    ):
+        raise ValueError("initializer source closure changed")
+    _verify_initializer_chronology(closure_created, closure["sourceReports"])
     selection, selection_identity = _read_document(
         Path(str(manifest["selectionSeal"]["path"])), "initializer selection"
     )
@@ -2175,7 +2799,13 @@ def _verify_initializer(
         _verified_identity(entry["closure"], f"initializer {source_id} closure")
         if entry["model"] is not None:
             _verified_identity(entry["model"], f"initializer {source_id} model")
-        promoted, health = _verify_initializer_source_entry(entry, source_id)
+        promoted, health, report = _verify_initializer_source_entry(
+            entry, source_id
+        )
+        if not _type_exact_equal(report, closure["sourceReports"][index]):
+            raise ValueError(
+                f"initializer {source_id} canonical source replay changed"
+            )
         if promoted:
             promoted_indexes.append(index)
             if index == manifest["selectedCatalogIndex"]:
@@ -2192,13 +2822,14 @@ def _verify_initializer(
             raise ValueError("initializer did not select the first promoted catalog")
         selected = manifest["orderedCatalog"][selected_index]
         if (
-            not _type_exact_equal(selected["model"], manifest["model"])
-            or not _type_exact_equal(
-                selected["closure"], manifest["sourceClosure"]
-            )
+            selected["model"] is None
+            or selected["model"]["path"] == manifest["model"]["path"]
+            or selected["model"]["bytes"] != manifest["model"]["bytes"]
+            or selected["model"]["sha256"] != manifest["model"]["sha256"]
             or selected_health is not True
         ):
             raise ValueError("initializer selected model/closure/health changed")
+        _verify_initializer_health(manifest["model"])
         fallback_replayed = False
     else:
         if selected_index is not None or promoted_indexes:
@@ -2218,6 +2849,7 @@ def _verify_initializer(
         selected_health = None
         fallback_replayed = True
 
+    _verify_initializer_namespace_inventory()
     return manifest, {
         "manifest": dict(manifest_identity),
         "selectionMode": manifest["selectionMode"],
@@ -3806,6 +4438,7 @@ def dependency_status_document() -> dict[str, Any]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    _safe_existing(Path(__file__))
     arguments = list(sys.argv[1:] if argv is None else argv)
     if len(arguments) == 2 and arguments[0] == "--publish-verifier-options":
         publish_verifier_options(Path(arguments[1]))

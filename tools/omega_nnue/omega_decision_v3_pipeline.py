@@ -76,9 +76,6 @@ FILE_ATTRIBUTE_REPARSE_POINT = 0x0400
 MAX_JSON_BYTES = 16 * 1024 * 1024
 MAX_PROCESS_STDOUT_BYTES = 16 * 1024 * 1024
 _TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$")
-_EXTERNAL_TIMESTAMP = re.compile(
-    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$"
-)
 IDENTITY_FIELDS = frozenset({"path", "bytes", "sha256"})
 DEPENDENCY_RECORD_FIELDS = frozenset(
     {"expectedBytes", "expectedSha256", "actual", "pinFinalized", "matches"}
@@ -172,8 +169,8 @@ REVIEWED_PINS: dict[str, tuple[str, int | None, str | None]] = {
     ),
     "trainerAuthority": (
         "king_state_train_generation6.py",
-        330_787,
-        "81b9e0c5ffa5d78a4cf2198781ceffea7649bdaed3e827556a5e3deaeba8a2e0",
+        347_813,
+        "d5a27adba652b3dd5669fa530f92d23a262b0752faa00120905e87f15cbdd19b",
     ),
     "initializerGenerator": (
         "omega_decision_v3_initializer.py",
@@ -182,13 +179,13 @@ REVIEWED_PINS: dict[str, tuple[str, int | None, str | None]] = {
     ),
     "verifierImplementation": (
         "omega_decision_v3_verifier.py",
-        154_746,
-        "6144469a45c481f55c73718b12154f64333d6fa17c81a39d8e9cb570f6ea6907",
+        181_433,
+        "a45f9b771d4f7fab3c6b7f7c9a14a54ffaf3e192329929ca6c87c8420c005dfd",
     ),
     "verifierRunner": (
         "verify_omega_decision_v3_upstream.py",
-        4_856,
-        "0b434c3ab3275cb4598e12bc955723c5cdc5662bb6429a7a155acdbb85c771b6",
+        5_356,
+        "4d7ffc2becade214f8db6f5d171809ed423d3d879754de84abcc0144d9e9c232",
     ),
     "priorCatalog": (
         "omega_decision_v3_prior_catalog.py",
@@ -371,7 +368,7 @@ def _validate_private_descriptor(
 
 def _read_stable(
     path: Path, *, capture: bool, max_bytes: int | None = None,
-) -> tuple[dict[str, Any], bytes | None]:
+) -> tuple[dict[str, Any], bytes | None, tuple[int, int]]:
     absolute = _safe_path(path, must_exist=True)
     before = os.lstat(absolute)
     _validate_private_descriptor(before, absolute, "authority")
@@ -409,18 +406,29 @@ def _read_stable(
     if _stat_state(named) != _stat_state(before):
         raise ValueError(f"authority path changed while read: {absolute}")
     identity = {"path": str(absolute), "bytes": total, "sha256": digest.hexdigest()}
-    return identity, b"".join(chunks) if capture else None
+    return (
+        identity,
+        b"".join(chunks) if capture else None,
+        (after.st_dev, after.st_ino),
+    )
 
 
 def _snapshot(path: Path) -> tuple[dict[str, Any], bytes]:
-    identity, payload = _read_stable(path, capture=True, max_bytes=MAX_JSON_BYTES)
+    identity, payload, _ = _read_stable(
+        path, capture=True, max_bytes=MAX_JSON_BYTES
+    )
     assert payload is not None
     return identity, payload
 
 
 def _identity(path: Path) -> dict[str, Any]:
-    identity, _ = _read_stable(path, capture=False)
+    identity, _, _ = _read_stable(path, capture=False)
     return identity
+
+
+def _identity_with_inode(path: Path) -> tuple[dict[str, Any], tuple[int, int]]:
+    identity, _, inode = _read_stable(path, capture=False)
+    return identity, inode
 
 
 def _verify_identity(value: Any, label: str) -> dict[str, Any]:
@@ -449,7 +457,9 @@ def _load_json(path: Path, label: str) -> tuple[dict[str, Any], dict[str, Any]]:
     return value, identity
 
 
-def _exclusive_bytes(path: Path, payload: bytes) -> dict[str, Any]:
+def _exclusive_bytes_owned(
+    path: Path, payload: bytes
+) -> tuple[dict[str, Any], tuple[int, int]]:
     absolute = _safe_path(path, must_exist=False)
     absolute.parent.mkdir(parents=True, exist_ok=True)
     _safe_directory(absolute.parent)
@@ -486,14 +496,19 @@ def _exclusive_bytes(path: Path, payload: bytes) -> dict[str, Any]:
     _validate_private_descriptor(named, absolute, "published pathname")
     if (named.st_dev, named.st_ino) != (completed.st_dev, completed.st_ino):
         raise ValueError(f"exclusive publication pathname changed: {absolute}")
-    identity = _identity(absolute)
+    identity, named_inode = _identity_with_inode(absolute)
     expected = {
         "path": str(absolute), "bytes": len(payload),
         "sha256": hashlib.sha256(payload).hexdigest(),
     }
-    if identity != expected:
+    owned_inode = (completed.st_dev, completed.st_ino)
+    if identity != expected or named_inode != owned_inode:
         raise ValueError(f"exclusive publication changed: {absolute}")
-    return identity
+    return identity, owned_inode
+
+
+def _exclusive_bytes(path: Path, payload: bytes) -> dict[str, Any]:
+    return _exclusive_bytes_owned(path, payload)[0]
 
 
 def _exclusive_json(path: Path, value: Mapping[str, Any]) -> dict[str, Any]:
@@ -537,14 +552,26 @@ def _timestamp_after(value: str, microseconds: int) -> str:
 
 
 def _parse_external_timestamp(value: Any, label: str) -> datetime:
-    if type(value) is not str or _EXTERNAL_TIMESTAMP.fullmatch(value) is None:
+    # Upstream authorities may use fixed-width decision-v3 microseconds or
+    # Python's UTC isoformat spelling.  Admit only those two canonical Z forms;
+    # never normalize a short or seventh fractional digit.
+    if type(value) is not str or re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{6})?Z", value
+    ) is None:
         raise ValueError(f"{label} is not a canonical UTC timestamp")
-    main = value[:-1]
-    if "." in main:
-        prefix, fraction = main.rsplit(".", 1)
-        # .NET may emit seven fractional digits; Python datetime stores six.
-        main = prefix + "." + (fraction + "000000")[:6]
-    return datetime.fromisoformat(main).replace(tzinfo=timezone.utc)
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as error:
+        raise ValueError(f"{label} is not a valid UTC timestamp") from error
+    if parsed.tzinfo is None or parsed.utcoffset() != timezone.utc.utcoffset(None):
+        raise ValueError(f"{label} is not UTC")
+    canonical = parsed.astimezone(timezone.utc)
+    accepted = {canonical.isoformat().replace("+00:00", "Z")}
+    if canonical.microsecond == 0:
+        accepted.add(canonical.strftime("%Y-%m-%dT%H:%M:%S.%fZ"))
+    if value not in accepted:
+        raise ValueError(f"{label} is not a canonical UTC timestamp")
+    return canonical
 
 
 def _require_after(value: str, documents: Sequence[tuple[Path, str]]) -> None:
@@ -557,7 +584,7 @@ def _require_after(value: str, documents: Sequence[tuple[Path, str]]) -> None:
 
 
 def _tool_dir() -> Path:
-    return Path(__file__).resolve().parent
+    return _absolute(Path(__file__)).parent
 
 
 def _dependency_records() -> dict[str, dict[str, Any]]:
@@ -644,7 +671,7 @@ def _command(executable: Path, script: Path, *arguments: str) -> list[str]:
 
 def _runbook(paths: Mapping[str, str], bindings: Mapping[str, Any], groups: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     python = Path(bindings["staticHceExecutable"]["path"])
-    pipeline = Path(__file__).resolve()
+    pipeline = _absolute(Path(__file__))
     terminal = _tool_dir() / "omega_decision_v3_terminal_lineage.py"
     routing = _tool_dir() / "omega_decision_v3_routing.py"
     teacher = _tool_dir() / "omega_decision_v3_teacher.py"
@@ -690,18 +717,22 @@ def _runbook(paths: Mapping[str, str], bindings: Mapping[str, Any], groups: Sequ
         {"sequence": 60, "stage": "routing-finalize", "action": "pipeline-command",
          "argv": _command(python, pipeline, "finalize", "--plan", plan_path, "--stage", "routing"),
          "stdoutPath": None, "stderrPath": None, "stopAfter": "STOP: independently publish the four exact initializer authority files at their canonical paths."},
-        {"sequence": 70, "stage": "initializer", "action": "required-artifacts", "argv": [],
+        {"sequence": 70, "stage": "initializer", "action": "pipeline-command",
+         "argv": _command(python, pipeline, "publish-initializer", "--plan", plan_path,
+                          "--created-utc", "<canonical-utc-after-routing-and-source-closures>"),
          "requiredPaths": [paths[name] for name in ("initializerSelection", "initializerClosure", "initializerModel", "initializerManifest")],
          "artifactContract": {
              "manifestKind": "omega-nnue-king-state-v6-initializer-manifest",
+             "closureKind": "omega-decision-v3-pre-g6-initializer-closure",
              "manifestStatus": "frozen-pre-g6-initializer-selection",
              "orderedCatalog": ["G5", "G2-K2"],
              "selectionModes": ["promoted-prior", "deterministic-fallback"],
              "validation": "fresh source-specific exact-pinned verifier replay before prelabel publication",
+             "promotedModelCopy": "canonical model bytes and SHA must equal the original catalog model; paths remain distinct authorities",
              "g6TargetRowsDecoded": 0,
              "gameResultsRead": False,
          },
-         "stdoutPath": None, "stderrPath": None, "stopAfter": "STOP: initializer manifest must pass source-specific fresh replay before pretarget claim."},
+         "stdoutPath": None, "stderrPath": None, "stopAfter": "STOP: the no-clobber publisher must create and freshly replay exactly four canonical initializer artifacts before pretarget claim."},
         {"sequence": 80, "stage": "pretarget-claim", "action": "pipeline-command",
          "argv": _command(python, pipeline, "claim", "--plan", plan_path, "--stage", "pretarget", "--created-utc", "<canonical-utc>"),
          "stdoutPath": None, "stderrPath": None, "stopAfter": "STOP: prelabel and HCE claim must precede any HCE/teacher target row."},
@@ -797,7 +828,7 @@ def expected_plan(inputs_path: Path, *, created_utc: str) -> dict[str, Any]:
         "status": status,
         "createdUtc": created_utc,
         "authorityDirectory": str(_absolute(directory)),
-        "producer": _identity(Path(__file__).resolve()),
+        "producer": _identity(_absolute(Path(__file__))),
         "dependencies": dependencies,
         "bindings": bindings,
         "priorForbiddenGroups": groups,
@@ -848,7 +879,7 @@ def verify_plan(path: Path) -> dict[str, Any]:
         raise ValueError("pipeline plan header changed")
     _parse_timestamp(document["createdUtc"], "plan createdUtc")
     _verify_identity(document["producer"], "pipeline plan producer")
-    if document["producer"] != _identity(Path(__file__).resolve()):
+    if document["producer"] != _identity(_absolute(Path(__file__))):
         raise ValueError("pipeline plan was not produced by this exact module")
     directory = Path(document["authorityDirectory"])
     expected_paths = _canonical_paths(directory)
@@ -1076,6 +1107,379 @@ def _verify_initializer_source_authority(paths: Mapping[str, Path]) -> dict[str,
     return manifest
 
 
+def _payload_identity(path: Path, payload: bytes) -> dict[str, Any]:
+    return {
+        "path": str(_absolute(path)),
+        "bytes": len(payload),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+    }
+
+
+def _initializer_source_reports(verifier: Any) -> list[dict[str, Any]]:
+    """Freshly replay both fixed initializer sources without G6 targets."""
+
+    g5 = verifier._run_g5_source_replay("failed")
+    if g5.get("promotionStatus") == "promoted":
+        # The promoted path performs the stronger nomination/health replay.
+        g5 = verifier._run_g5_source_replay("promoted")
+    if (
+        g5.get("sourceId") != "G5"
+        or g5.get("promotionStatus") not in {"promoted", "failed", "aborted"}
+        or g5.get("resultInformationRead") is not False
+    ):
+        raise ValueError("G5 initializer source replay did not reach terminal closure")
+
+    protocol = verifier.G2_UNAVAILABLE_PROTOCOL
+    repository = _absolute(Path(__file__)).parents[2]
+    artifacts = protocol["artifacts"]
+    g2_entry = {
+        "sourceId": "G2-K2",
+        "selectionSeal": _identity(
+            repository / Path(artifacts["selectionSeal"]["relativePath"])
+        ),
+        "closure": _identity(
+            repository / Path(artifacts["closure"]["relativePath"])
+        ),
+        "model": None,
+        "promotionStatus": "unavailable",
+    }
+    g2 = verifier._run_g2_source_replay(g2_entry)
+    if (
+        g2.get("sourceId") != "G2-K2"
+        or g2.get("promotionStatus") != "unavailable"
+        or g2.get("rawModel") is not None
+        or g2.get("healthPassed") is not False
+        or type(g2.get("unavailabilityEvidence")) is not dict
+        or g2.get("resultInformationRead") is not False
+    ):
+        raise ValueError("G2-K2 initializer source is not exactly unavailable")
+    return [dict(g5), dict(g2)]
+
+
+def _require_initializer_namespace(
+    paths: Mapping[str, Path], *, complete: bool
+) -> None:
+    roles = (
+        "initializerSelection",
+        "initializerClosure",
+        "initializerModel",
+        "initializerManifest",
+    )
+    outputs = [paths[role] for role in roles]
+    if len({str(path.parent) for path in outputs}) != 1:
+        raise ValueError("initializer outputs do not share one canonical directory")
+    directory = outputs[0].parent
+    expected = {path.name for path in outputs}
+    if not os.path.lexists(directory):
+        if complete:
+            raise FileNotFoundError("canonical initializer directory is missing")
+        return
+    _safe_directory(directory)
+    with os.scandir(directory) as iterator:
+        names = {entry.name for entry in iterator}
+    required = expected if complete else set()
+    if names != required:
+        label = "complete" if complete else "empty"
+        raise FileExistsError(
+            f"initializer no-clobber publication requires an exact {label} four-file "
+            f"namespace: actual={sorted(names)} expected={sorted(required)}"
+        )
+    if complete:
+        for output in outputs:
+            _identity(output)
+
+
+def _require_empty_initializer_namespace(paths: Mapping[str, Path]) -> None:
+    _require_initializer_namespace(paths, complete=False)
+
+
+def _recheck_initializer_ownership(
+    paths: Mapping[str, Path],
+    snapshots: Mapping[str, tuple[Mapping[str, Any], tuple[int, int]]],
+) -> dict[str, dict[str, Any]]:
+    roles = (
+        "initializerSelection",
+        "initializerClosure",
+        "initializerModel",
+        "initializerManifest",
+    )
+    if set(snapshots) != set(roles):
+        raise ValueError("initializer owned-publication inventory changed")
+    checked: dict[str, dict[str, Any]] = {}
+    for role in roles:
+        expected_identity, expected_inode = snapshots[role]
+        actual_identity, actual_inode = _identity_with_inode(paths[role])
+        if (
+            actual_inode != expected_inode
+            or not _type_exact_equal(actual_identity, expected_identity)
+        ):
+            raise ValueError(
+                f"initializer owned publication changed before return: {role}"
+            )
+        checked[role] = actual_identity
+    return checked
+
+
+def _require_initializer_runtime(plan: Mapping[str, Any]) -> None:
+    if sys.flags.isolated != 1 or sys.flags.dont_write_bytecode != 1:
+        raise RuntimeError(
+            "initializer publication requires Python -I -B isolation"
+        )
+    runtime = _identity(_absolute(Path(sys.executable)))
+    try:
+        planned = plan["bindings"]["staticHceExecutable"]
+    except (KeyError, TypeError) as error:
+        raise ValueError("pipeline plan lacks the exact Python runtime binding") from error
+    if not _type_exact_equal(runtime, planned):
+        raise ValueError(
+            "initializer publication runtime differs from pipeline binding"
+        )
+
+
+def publish_initializer(
+    plan_path: Path, *, created_utc: str
+) -> dict[str, Any]:
+    """Publish the four target-blind canonical initializer authorities once."""
+
+    plan = verify_plan(plan_path)
+    paths = _paths(plan)
+    _require_dependencies(
+        plan,
+        (
+            "terminal",
+            "routing",
+            "trainerAuthority",
+            "initializerGenerator",
+            "verifierImplementation",
+            "evaluatorRunner",
+        ),
+    )
+    _require_initializer_runtime(plan)
+    _require_empty_initializer_namespace(paths)
+    created = _parse_timestamp(created_utc, "initializer closure createdUtc")
+    if created <= _parse_timestamp(plan["createdUtc"], "plan createdUtc"):
+        raise ValueError("initializer closure must follow pipeline plan")
+
+    trainer, routing, _, terminal = _import_authorities(
+        ("trainerAuthority", "routing", "terminal")
+    )
+    assert trainer is not None and routing is not None and terminal is not None
+    routing.verify_completion(paths["routingCompletion"])
+    terminal.verify_terminal_lineage(paths["terminalLineage"])
+    _require_routing_inventory(trainer, paths)
+
+    verifier = _load_exact_reviewed("verifierImplementation")
+    reports = _initializer_source_reports(verifier)
+    g5, g2 = reports
+    source_documents = tuple(
+        (
+            Path(str(report[field]["path"])),
+            f"initializer {report['sourceId']} {field}",
+        )
+        for report in reports
+        for field in ("selectionSeal", "closure")
+    )
+    _require_after(
+        created_utc,
+        (
+            (paths["routingCompletion"], "target-free routing completion"),
+            (paths["terminalLineage"], "terminal-classifier lineage"),
+            *source_documents,
+        ),
+    )
+
+    promoted = g5["promotionStatus"] == "promoted"
+    if promoted:
+        source_model = g5.get("rawModel")
+        if type(source_model) is not dict or g5.get("healthPassed") is not True:
+            raise ValueError("promoted G5 initializer lacks exact healthy model")
+        _verify_identity(source_model, "promoted G5 initializer source model")
+        source_identity, model_payload = _snapshot(Path(source_model["path"]))
+        if not _type_exact_equal(source_identity, source_model):
+            raise ValueError("promoted G5 initializer source model changed")
+        verifier._verify_initializer_health(source_model)
+        selection_mode = "promoted-prior"
+        selected_index: int | None = 0
+    else:
+        if (
+            g5["promotionStatus"] not in {"failed", "aborted"}
+            or g2["promotionStatus"] != "unavailable"
+        ):
+            raise ValueError("deterministic fallback is not source-authorized")
+        generator = _load_exact_reviewed("initializerGenerator")
+        model_payload = generator.fallback_bytes()
+        description = generator._fallback_description(model_payload)
+        if (
+            description.get("profileId") != PROFILE_ID
+            or description.get("architectureId")
+            != verifier.FALLBACK_PROTOCOL["architecture"]
+            or description.get("seed") != verifier.FALLBACK_PROTOCOL["seed"]
+            or description.get("prng") != verifier.FALLBACK_PROTOCOL["prng"]
+            or description.get("gameResultsRead") is not False
+            or description.get("targetRowsDecoded") != 0
+        ):
+            raise ValueError("deterministic fallback generator contract changed")
+        selection_mode = "deterministic-fallback"
+        selected_index = None
+
+    model_identity = _payload_identity(paths["initializerModel"], model_payload)
+    catalog = [
+        {
+            "sourceId": report["sourceId"],
+            "selectionSeal": dict(report["selectionSeal"]),
+            "closure": dict(report["closure"]),
+            "model": (
+                dict(report["rawModel"])
+                if report["promotionStatus"] == "promoted"
+                else None
+            ),
+            "promotionStatus": report["promotionStatus"],
+        }
+        for report in reports
+    ]
+    selection = {
+        "schemaVersion": 1,
+        "kind": verifier.INITIALIZER_SELECTION_KIND,
+        "profileId": PROFILE_ID,
+        "selectionMode": selection_mode,
+        "selectedCatalogIndex": selected_index,
+        "selectedModel": model_identity,
+        "orderedCatalog": catalog,
+        "fallbackProtocol": dict(verifier.FALLBACK_PROTOCOL),
+        "g6TargetRowsDecoded": 0,
+        "resultInformationRead": False,
+    }
+    selection_payload = _canonical_json(selection)
+    selection_identity = _payload_identity(
+        paths["initializerSelection"], selection_payload
+    )
+    closure = {
+        "schemaVersion": 1,
+        "kind": verifier.INITIALIZER_CLOSURE_KIND,
+        "profileId": PROFILE_ID,
+        "status": "frozen-pre-g6-initializer-source-closure",
+        "createdUtc": created_utc,
+        "selectionSeal": selection_identity,
+        "selectionMode": selection_mode,
+        "selectedCatalogIndex": selected_index,
+        "selectedModel": model_identity,
+        "sourceReports": reports,
+        "g6TargetRowsDecoded": 0,
+        "resultInformationRead": False,
+        "finalStageSeal": True,
+    }
+    closure_payload = _canonical_json(closure)
+    closure_identity = _payload_identity(
+        paths["initializerClosure"], closure_payload
+    )
+    manifest_created_utc = _timestamp_after(created_utc, 1)
+    manifest = {
+        "schemaVersion": 1,
+        "kind": verifier.INITIALIZER_KIND,
+        "profileId": PROFILE_ID,
+        "status": "frozen-pre-g6-initializer-selection",
+        "createdUtc": manifest_created_utc,
+        "resultInformationRead": False,
+        "model": model_identity,
+        "producer": _identity(_absolute(Path(__file__))),
+        "selectionMode": selection_mode,
+        "selectedCatalogIndex": selected_index,
+        "selectionSeal": selection_identity,
+        "sourceClosure": closure_identity,
+        "orderedCatalog": catalog,
+        "fallbackProtocol": dict(verifier.FALLBACK_PROTOCOL),
+    }
+    manifest_payload = _canonical_json(manifest)
+    manifest_identity = _payload_identity(
+        paths["initializerManifest"], manifest_payload
+    )
+
+    # Source replays and model generation can be long-running.  Re-scan the
+    # namespace immediately before the first O_EXCL write so an injected fifth
+    # file or pre-created canonical output cannot cross that window.
+    _require_empty_initializer_namespace(paths)
+
+    # Dependency order ensures that every published JSON points only to an
+    # already immutable canonical artifact.  Any interrupted file remains
+    # fail-closed evidence and cannot be silently retried or overwritten.
+    owned_publications: dict[
+        str, tuple[Mapping[str, Any], tuple[int, int]]
+    ] = {}
+    for role, payload, expected in (
+        ("initializerModel", model_payload, model_identity),
+        ("initializerSelection", selection_payload, selection_identity),
+        ("initializerClosure", closure_payload, closure_identity),
+        ("initializerManifest", manifest_payload, manifest_identity),
+    ):
+        published_identity, published_inode = _exclusive_bytes_owned(
+            paths[role], payload
+        )
+        if not _type_exact_equal(published_identity, expected):
+            raise ValueError(f"initializer publication identity changed: {role}")
+        owned_publications[role] = (dict(expected), published_inode)
+
+    trainer_manifest = trainer._verify_initializer_manifest(
+        paths["initializerManifest"], paths["initializerModel"]
+    )
+    verifier_manifest = _verify_initializer_source_authority(paths)
+    if (
+        not _type_exact_equal(trainer_manifest, manifest)
+        or not _type_exact_equal(verifier_manifest, manifest)
+    ):
+        raise ValueError(
+            "trainer/verifier initializer interpretation differs from publication"
+        )
+
+    # Validators are external exact-pinned authorities and may run for many
+    # minutes.  Re-open every canonical output after both return so a path
+    # replacement during that window cannot be accepted with stale identities.
+    final_model = _identity(paths["initializerModel"])
+    final_selection_document, final_selection = _load_json(
+        paths["initializerSelection"], "final initializer selection"
+    )
+    final_closure_document, final_closure = _load_json(
+        paths["initializerClosure"], "final initializer closure"
+    )
+    final_manifest_document, final_manifest = _load_json(
+        paths["initializerManifest"], "final initializer manifest"
+    )
+    if (
+        final_model != model_identity
+        or final_selection != selection_identity
+        or final_closure != closure_identity
+        or final_manifest != manifest_identity
+        or not _type_exact_equal(final_selection_document, selection)
+        or not _type_exact_equal(final_closure_document, closure)
+        or not _type_exact_equal(final_manifest_document, manifest)
+        or _identity(_absolute(Path(__file__))) != manifest["producer"]
+    ):
+        raise ValueError(
+            "initializer canonical publication changed during fresh validation"
+        )
+    _require_initializer_namespace(paths, complete=True)
+    # The content-only identities above are insufficient ownership evidence:
+    # an attacker can exchange a pathname for a new inode containing identical
+    # bytes.  Keep this as the final filesystem operation and require every
+    # canonical path to name the exact inode returned by its O_EXCL descriptor.
+    final_owned = _recheck_initializer_ownership(paths, owned_publications)
+
+    return {
+        "schemaVersion": 1,
+        "kind": "omega-decision-v3-pre-g6-initializer-publication",
+        "profileId": PROFILE_ID,
+        "status": "published-and-freshly-verified",
+        "createdUtc": manifest_created_utc,
+        "selectionMode": selection_mode,
+        "selectedCatalogIndex": selected_index,
+        "selection": final_owned["initializerSelection"],
+        "closure": final_owned["initializerClosure"],
+        "model": final_owned["initializerModel"],
+        "manifest": final_owned["initializerManifest"],
+        "g6TargetRowsDecoded": 0,
+        "resultInformationRead": False,
+    }
+
+
 def claim_stage(plan_path: Path, stage: str, *, created_utc: str) -> dict[str, Any]:
     plan = verify_plan(plan_path)
     paths = _paths(plan)
@@ -1113,6 +1517,7 @@ def claim_stage(plan_path: Path, stage: str, *, created_utc: str) -> dict[str, A
             plan_created_utc=plan["createdUtc"],
             full_replay=True,
         )
+        _require_initializer_namespace(paths, complete=True)
         trainer, routing, _, _ = _import_authorities(
             ("trainerAuthority", "routing")
         )
@@ -1135,7 +1540,7 @@ def claim_stage(plan_path: Path, stage: str, *, created_utc: str) -> dict[str, A
         )
         registry_document = trainer.expected_upstream_forbidden_registry(
             catalog_groups=[(group["coveredSourceIds"], Path(group["manifest"]["path"])) for group in plan["priorForbiddenGroups"]],
-            producer=Path(__file__).resolve(), created_utc=created_utc,
+            producer=_absolute(Path(__file__)), created_utc=created_utc,
         )
         _publish_or_verify(paths["priorForbiddenRegistry"], registry_document, "prior-forbidden registry")
         prelabel_time = _timestamp_after(created_utc, 1)
@@ -1144,7 +1549,7 @@ def claim_stage(plan_path: Path, stage: str, *, created_utc: str) -> dict[str, A
             terminal_classifier_lineage=paths["terminalLineage"], prior_forbidden_registry=paths["priorForbiddenRegistry"],
             prior_forbidden_catalogs=[Path(group["manifest"]["path"]) for group in plan["priorForbiddenGroups"]],
             initializer_manifest=paths["initializerManifest"], source_root_manifest=paths["sourceRootManifest"],
-            source_children_manifest=paths["sourceChildrenManifest"], producer=Path(__file__).resolve(), created_utc=prelabel_time,
+            source_children_manifest=paths["sourceChildrenManifest"], producer=_absolute(Path(__file__)), created_utc=prelabel_time,
         )
         _publish_or_verify(paths["prelabelSeal"], prelabel_document, "prelabel seal")
         _publish_or_verify(paths["staticHceOptions"], trainer.static_hce_options_document(), "static-HCE options")
@@ -1304,6 +1709,7 @@ def _capsule_document(plan: Mapping[str, Any], *, created_utc: str) -> dict[str,
     _, _, teacher, _ = _import_authorities(("teacher",))
     assert teacher is not None
     paths = _paths(plan)
+    _require_initializer_namespace(paths, complete=True)
     initializer, _ = _load_json(paths["initializerManifest"], "initializer manifest")
     registry, _ = _load_json(paths["priorForbiddenRegistry"], "prior-forbidden registry")
     teacher_claim, _ = _load_json(paths["teacherClaim"], "teacher claim")
@@ -1877,6 +2283,7 @@ def finalize_stage(
             plan_created_utc=plan["createdUtc"],
             full_replay=True,
         )
+        _require_initializer_namespace(paths, complete=True)
         trainer, routing, teacher, terminal = _import_authorities()
         assert all(item is not None for item in (trainer, routing, teacher, terminal))
         _require_fresh_verifier_ready(plan)
@@ -2022,6 +2429,9 @@ def _parser() -> argparse.ArgumentParser:
     finalize.add_argument("--created-utc")
     finalize.add_argument("--started-utc")
     finalize.add_argument("--completed-utc")
+    initializer = sub.add_parser("publish-initializer")
+    initializer.add_argument("--plan", required=True, type=Path)
+    initializer.add_argument("--created-utc", required=True)
     hce = sub.add_parser("materialize-hce")
     hce.add_argument("--plan", required=True, type=Path)
     projection = sub.add_parser("materialize-projection")
@@ -2035,6 +2445,7 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    _safe_path(_absolute(Path(__file__)), must_exist=True)
     args = _parser().parse_args(argv)
     if args.command == "plan":
         result = publish_plan(args.inputs, args.output, created_utc=args.created_utc)
@@ -2043,6 +2454,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     elif args.command == "finalize":
         result = finalize_stage(args.plan, args.stage, created_utc=args.created_utc,
                                 started_utc=args.started_utc, completed_utc=args.completed_utc)
+    elif args.command == "publish-initializer":
+        result = publish_initializer(args.plan, created_utc=args.created_utc)
     elif args.command == "materialize-hce":
         result = materialize_hce(args.plan)
     elif args.command == "materialize-projection":
@@ -2068,5 +2481,5 @@ if __name__ == "__main__":
 __all__ = [
     "CANONICAL_RELATIVE_PATHS", "REVIEWED_PINS", "claim_stage", "expected_plan",
     "finalize_stage", "main", "materialize_hce", "materialize_projection",
-    "publish_plan", "status_document", "verify_plan",
+    "publish_initializer", "publish_plan", "status_document", "verify_plan",
 ]

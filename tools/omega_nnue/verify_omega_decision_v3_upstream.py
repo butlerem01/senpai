@@ -13,11 +13,15 @@ from typing import Any, Sequence
 
 
 VERIFIER_IMPLEMENTATION = "omega_decision_v3_verifier.py"
-VERIFIER_IMPLEMENTATION_BYTES: int | None = 154_746
+VERIFIER_IMPLEMENTATION_BYTES: int | None = 181_433
 VERIFIER_IMPLEMENTATION_SHA256: str | None = (
-    "6144469a45c481f55c73718b12154f64333d6fa17c81a39d8e9cb570f6ea6907"
+    "a45f9b771d4f7fab3c6b7f7c9a14a54ffaf3e192329929ca6c87c8420c005dfd"
 )
 FILE_ATTRIBUTE_REPARSE_POINT = 0x0400
+
+
+def _runner_path() -> Path:
+    return Path(os.path.abspath(os.path.normpath(os.fspath(Path(__file__)))))
 
 
 def _is_reparse(info: os.stat_result) -> bool:
@@ -85,6 +89,8 @@ def _snapshot(path: Path) -> tuple[dict[str, Any], bytes]:
 
 
 def _load_verifier() -> tuple[types.ModuleType, dict[str, Any]]:
+    runner = _runner_path()
+    runner_identity, _ = _snapshot(runner)
     if (
         type(VERIFIER_IMPLEMENTATION_BYTES) is not int
         or VERIFIER_IMPLEMENTATION_BYTES <= 0
@@ -92,7 +98,7 @@ def _load_verifier() -> tuple[types.ModuleType, dict[str, Any]]:
         or len(VERIFIER_IMPLEMENTATION_SHA256) != 64
     ):
         raise RuntimeError("canonical verifier implementation pin is not finalized")
-    path = Path(__file__).resolve().with_name(VERIFIER_IMPLEMENTATION)
+    path = runner.with_name(VERIFIER_IMPLEMENTATION)
     identity, payload = _snapshot(path)
     if (
         identity["bytes"] != VERIFIER_IMPLEMENTATION_BYTES
@@ -121,15 +127,22 @@ def _load_verifier() -> tuple[types.ModuleType, dict[str, Any]]:
     if _snapshot(path)[0] != identity:
         sys.modules.pop(name, None)
         raise ValueError("canonical verifier implementation changed while loaded")
-    module.__dict__["VERIFIER_RUNNER_OVERRIDE"] = Path(__file__).resolve()
+    module.__dict__["VERIFIER_RUNNER_OVERRIDE"] = runner
+    if _snapshot(runner)[0] != runner_identity:
+        sys.modules.pop(name, None)
+        raise ValueError("canonical verifier runner changed while loaded")
     return module, identity
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    runner = _runner_path()
+    runner_identity, _ = _snapshot(runner)
     module, identity = _load_verifier()
     result = int(module.main(sys.argv[1:] if argv is None else argv))
     if _snapshot(Path(str(identity["path"])))[0] != identity:
         raise ValueError("canonical verifier implementation changed during execution")
+    if _snapshot(runner)[0] != runner_identity:
+        raise ValueError("canonical verifier runner changed during execution")
     return result
 
 

@@ -382,6 +382,9 @@ class CanonicalFixture:
         teacher_completion_before_label_manifest: bool = False,
         hce_manifest_after_capsule: bool = False,
         preregistration_before_capsule: bool = False,
+        alias_promoted_source_model: bool = False,
+        backdated_initializer_source: bool = False,
+        backdated_initializer_routing: bool = False,
     ) -> None:
         self.root = root
         module_path = root / "tools/omega_nnue/king_state_train_generation6.py"
@@ -442,6 +445,9 @@ class CanonicalFixture:
         )
         self.hce_manifest_after_capsule = hce_manifest_after_capsule
         self.preregistration_before_capsule = preregistration_before_capsule
+        self.alias_promoted_source_model = alias_promoted_source_model
+        self.backdated_initializer_source = backdated_initializer_source
+        self.backdated_initializer_routing = backdated_initializer_routing
         self._build_authority()
 
     def _identity(self, path: Path) -> dict:
@@ -449,50 +455,94 @@ class CanonicalFixture:
 
     def _build_initializer_authority(self) -> tuple[Path, Path, Path, Path]:
         g6 = self.g6
-        initializer = self.data / "I0.nnue"
+        initializer_directory = (
+            self.root
+            / "build-msvc/data-generation/omega-decision-v3/40-initializer"
+        )
+        initializer_directory.mkdir(parents=True)
+        initializer = initializer_directory / "initializer.nnue"
+        source_initializer = (
+            initializer
+            if self.alias_promoted_source_model
+            else self.data / "prior-source-initializer.nnue"
+        )
         if self.initializer_mode == "promoted-prior":
-            initializer.write_bytes(b"PROMOTED PRIOR INITIALIZER\n")
+            payload = b"PROMOTED PRIOR INITIALIZER\n"
         elif self.initializer_mode == "deterministic-fallback":
-            initializer.write_bytes(b"DETERMINISTIC FALLBACK INITIALIZER\n")
+            payload = b"DETERMINISTIC FALLBACK INITIALIZER\n"
         else:
             raise ValueError(self.initializer_mode)
+        initializer.write_bytes(payload)
+        source_initializer.write_bytes(payload)
         initializer_producer = self.data / "initializer-producer.bin"
         initializer_producer.write_bytes(b"initializer producer\n")
-        initializer_selection = self.data / "initializer-selection.json"
+        g5_source_verifier = self.data / "g5-source-verifier.py"
+        g5_source_verifier.write_bytes(b"# g5 source verifier\n")
+        g2_source_verifier = self.data / "g2-source-verifier.py"
+        g2_source_verifier.write_bytes(b"# g2 source verifier\n")
+        initializer_selection = initializer_directory / "initializer.selection.json"
         g5_selection = self.data / "g5-selection.json"
         g5_closure = self.data / "g5-closure.json"
         g2_selection = self.data / "g2-k2-selection.json"
         g2_closure = self.data / "g2-k2-closure.json"
+        authority = initializer_directory.parent
+        routing_directory = authority / "30-routing"
+        terminal_directory = authority / "20-terminal"
+        routing_directory.mkdir()
+        terminal_directory.mkdir()
+        _write_json(
+            routing_directory / "routing.completion.json",
+            {
+                "createdUtc": (
+                    "2026-07-24T00:00:00.000000Z"
+                    if self.backdated_initializer_routing
+                    else "2026-07-23T23:59:56.000000Z"
+                )
+            },
+        )
+        _write_json(
+            terminal_directory / "terminal.lineage.json",
+            {"createdUtc": "2026-07-23T23:59:57.000000Z"},
+        )
         promoted = self.initializer_mode == "promoted-prior"
         g5_promoted = promoted and not self.first_prior_initializer_ineligible
         g2_promoted = promoted and (
             self.force_second_promoted_initializer
             or self.first_prior_initializer_ineligible
         )
+        source_created = (
+            "2026-07-24T00:00:00.000000Z"
+            if self.backdated_initializer_source
+            else "2026-07-23T23:59:58.000000Z"
+        )
         _write_json(g5_selection, {
+            "createdUtc": source_created,
             "kind": "generation5-selection-seal",
             "status": "selected-validation-winner" if g5_promoted else "closed-no-eligible-candidate",
-            "selectedModel": self._identity(initializer) if g5_promoted else None,
+            "selectedModel": self._identity(source_initializer) if g5_promoted else None,
             "healthPassed": True if g5_promoted else None,
         })
         _write_json(g5_closure, {
+            "createdUtc": source_created,
             "kind": "generation5-terminal-closure",
             "outcome": "promoted" if g5_promoted else "closed-no-eligible-candidate",
             "selection": self._identity(g5_selection),
-            "winnerModel": self._identity(initializer) if g5_promoted else None,
+            "winnerModel": self._identity(source_initializer) if g5_promoted else None,
             "winnerHealthPassed": True if g5_promoted else None,
         })
         _write_json(g2_selection, {
+            "createdUtc": source_created,
             "kind": "generation2-k2-selection-seal",
             "status": "selected-validation-winner" if g2_promoted else "forensically-unavailable",
-            "selectedModel": self._identity(initializer) if g2_promoted else None,
+            "selectedModel": self._identity(source_initializer) if g2_promoted else None,
             "healthPassed": True if g2_promoted else None,
         })
         _write_json(g2_closure, {
+            "createdUtc": source_created,
             "kind": "generation2-k2-terminal-closure",
             "outcome": "promoted" if g2_promoted else "unavailable",
             "selection": self._identity(g2_selection),
-            "winnerModel": self._identity(initializer) if g2_promoted else None,
+            "winnerModel": self._identity(source_initializer) if g2_promoted else None,
             "winnerHealthPassed": True if g2_promoted else None,
         })
         ordered_catalog = [
@@ -500,14 +550,14 @@ class CanonicalFixture:
                 "sourceId": "G5",
                 "selectionSeal": self._identity(g5_selection),
                 "closure": self._identity(g5_closure),
-                "model": self._identity(initializer) if g5_promoted else None,
+                "model": self._identity(source_initializer) if g5_promoted else None,
                 "promotionStatus": "promoted" if g5_promoted else "failed",
             },
             {
                 "sourceId": "G2-K2",
                 "selectionSeal": self._identity(g2_selection),
                 "closure": self._identity(g2_closure),
-                "model": self._identity(initializer) if g2_promoted else None,
+                "model": self._identity(source_initializer) if g2_promoted else None,
                 "promotionStatus": "promoted" if g2_promoted else "unavailable",
             },
         ]
@@ -519,9 +569,6 @@ class CanonicalFixture:
                 or self.first_prior_initializer_ineligible
             )
             else (0 if promoted else None)
-        )
-        source_closure = (
-            g2_closure if selected_catalog_index == 1 else g5_closure
         )
         _write_json(initializer_selection, {
             "schemaVersion": 1,
@@ -535,7 +582,47 @@ class CanonicalFixture:
             "g6TargetRowsDecoded": 0,
             "resultInformationRead": False,
         })
-        initializer_manifest = self.data / "initializer.manifest.json"
+        source_reports = [
+            {
+                "sourceId": "G5",
+                "promotionStatus": "promoted" if g5_promoted else "failed",
+                "selectionSeal": self._identity(g5_selection),
+                "closure": self._identity(g5_closure),
+                "rawModel": self._identity(source_initializer) if g5_promoted else None,
+                "healthPassed": g5_promoted,
+                "sourceVerifier": self._identity(g5_source_verifier),
+                "unavailabilityEvidence": None,
+                "resultInformationRead": False,
+            },
+            {
+                "sourceId": "G2-K2",
+                "promotionStatus": "promoted" if g2_promoted else "unavailable",
+                "selectionSeal": self._identity(g2_selection),
+                "closure": self._identity(g2_closure),
+                "rawModel": self._identity(source_initializer) if g2_promoted else None,
+                "healthPassed": g2_promoted,
+                "sourceVerifier": self._identity(g2_source_verifier),
+                "unavailabilityEvidence": None if g2_promoted else {"authenticated": True},
+                "resultInformationRead": False,
+            },
+        ]
+        source_closure = initializer_directory / "initializer.closure.json"
+        _write_json(source_closure, {
+            "schemaVersion": 1,
+            "kind": g6.INITIALIZER_CLOSURE_KIND,
+            "profileId": g6.PROFILE_ID,
+            "status": "frozen-pre-g6-initializer-source-closure",
+            "createdUtc": "2026-07-24T00:00:00.000000Z",
+            "selectionSeal": self._identity(initializer_selection),
+            "selectionMode": self.initializer_mode,
+            "selectedCatalogIndex": selected_catalog_index,
+            "selectedModel": self._identity(initializer),
+            "sourceReports": source_reports,
+            "g6TargetRowsDecoded": 0,
+            "resultInformationRead": False,
+            "finalStageSeal": True,
+        })
+        initializer_manifest = initializer_directory / "initializer.manifest.json"
         _write_json(initializer_manifest, {
             "schemaVersion": 1,
             "kind": g6.INITIALIZER_MANIFEST_KIND,
@@ -1115,6 +1202,70 @@ class Generation6Tests(unittest.TestCase):
                 abs_tol=2e-7,
             ))
 
+    def test_g5_initializer_lifecycle_contract_is_fully_bound(self) -> None:
+        authority = host_g6.INITIALIZER_G5_EARLY_TERMINAL_AUTHORITY
+        self.assertEqual(
+            authority,
+            host_g6.UPSTREAM_VERIFIER_OPTIONS["initializerPolicy"][
+                "g5EarlyTerminalAuthority"
+            ],
+        )
+        self.assertEqual(
+            authority,
+            host_g6.protocol_document()["training"]["initializerAuthority"][
+                "g5EarlyTerminalAuthority"
+            ],
+        )
+        compatibility = authority["compatibilityAuthority"]
+        self.assertEqual(
+            set(compatibility), {"readiness", "protocol", "preregistrationTemplate"}
+        )
+        for record in (
+            authority["protocol"],
+            authority["tool"],
+            *compatibility.values(),
+        ):
+            self.assertEqual(set(record), {"relativePath", "bytes", "sha256"})
+            self.assertIs(type(record["bytes"]), int)
+            self.assertRegex(record["sha256"], r"^[0-9a-f]{64}$")
+        lifecycle = authority["lifecycleContract"]
+        self.assertTrue(
+            lifecycle[
+                "sharedLifecycleLockCoversOfflineEvaluationTerminalPublicationAndCompatibilityAuthorization"
+            ]
+        )
+        self.assertEqual(
+            lifecycle["strictChronology"],
+            ["robustness", "lifetime", "access", "report"],
+        )
+        self.assertTrue(lifecycle["compatibilityAuthorizationRequiresLifetimeClaim"])
+        self.assertTrue(lifecycle["directLegacyOfflineEvaluateCannotAuthorize"])
+        self.assertEqual(
+            lifecycle["lexicalDescriptorSafety"],
+            {
+                "singleLinkRegularFilesOnly": True,
+                "reparseSymlinkAndHardlinkReject": True,
+                "lexicalNoFollowDescriptorIdentityRequired": True,
+            },
+        )
+
+    def test_upstream_source_chronology_requires_canonical_utc(self) -> None:
+        for value in (
+            "2026-07-24T08:00:00Z",
+            "2026-07-24T08:00:00.000000Z",
+            "2026-07-24T08:00:00.123456Z",
+        ):
+            host_g6._parse_authority_timestamp(value, "authority")
+        for value in (
+            "2026-07-24T08:00:00.1Z",
+            "2026-07-24T08:00:00.1234560Z",
+            "2026-07-24T08:00:00+00:00",
+        ):
+            with self.subTest(value=value), self.assertRaisesRegex(
+                ValueError, "canonical UTC"
+            ):
+                host_g6._parse_authority_timestamp(value, "authority")
+
     def test_formal_api_has_no_caller_evidence_inputs(self) -> None:
         forbidden = {"path", "model", "roots", "predictions", "report", "health"}
         for name in (
@@ -1194,6 +1345,43 @@ class Generation6Tests(unittest.TestCase):
                     "fallbackProtocolReplayed"
                 ]
             )
+
+    def test_failed_initializer_source_report_cannot_retain_raw_model(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = CanonicalFixture(
+                Path(directory), initializer_mode="deterministic-fallback"
+            )
+            capsule = json.loads(fixture.paths["capsule"].read_text(encoding="utf-8"))
+            manifest_path = Path(capsule["initializerManifest"]["path"])
+            model_path = Path(capsule["initializerModel"]["path"])
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            closure_path = Path(manifest["sourceClosure"]["path"])
+            closure = json.loads(closure_path.read_text(encoding="utf-8"))
+            closure["sourceReports"][0]["rawModel"] = fixture._identity(model_path)
+            _write_json(closure_path, closure)
+            manifest["sourceClosure"] = fixture._identity(closure_path)
+            _write_json(manifest_path, manifest)
+            with self.assertRaisesRegex(ValueError, "source report G5"):
+                fixture.g6._verify_initializer_manifest(manifest_path, model_path)
+
+    def test_initializer_replay_rejects_a_fifth_namespace_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = CanonicalFixture(Path(directory))
+            initializer_directory = (
+                Path(directory)
+                / "build-msvc/data-generation/omega-decision-v3/40-initializer"
+            )
+            (initializer_directory / "fifth-file.attack").write_bytes(b"attack\n")
+            capsule = json.loads(
+                fixture.paths["capsule"].read_text(encoding="utf-8")
+            )
+            with self.assertRaisesRegex(
+                ValueError, "exact canonical four-file inventory"
+            ):
+                fixture.g6._verify_initializer_manifest(
+                    Path(capsule["initializerManifest"]["path"]),
+                    Path(capsule["initializerModel"]["path"]),
+                )
 
     def test_incomplete_teacher_ledger_is_rejected_by_fresh_verifier(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1499,7 +1687,11 @@ class Generation6Tests(unittest.TestCase):
             claim_hardlink = fixture.data / "claim-hardlink-to-prelabel.json"
             os.link(prelabel, claim_hardlink)
             with self.subTest(alias="same-inode"), self.assertRaisesRegex(
-                ValueError, "pre-target HCE authority roles share a path or inode"
+                ValueError,
+                (
+                    "pre-target HCE authority roles share a path or inode|"
+                    "artifact is not one regular unlinked file"
+                ),
             ):
                 fixture.g6.expected_upstream_hce_completion(
                     claim=claim_hardlink,
@@ -1658,6 +1850,89 @@ class Generation6Tests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 fixture.g6.verify_canonical_namespace()
 
+    def test_initializer_manifest_and_model_must_use_canonical_paths(self) -> None:
+        for role in ("manifest", "model", "selection", "closure"):
+            with self.subTest(role=role), tempfile.TemporaryDirectory() as directory:
+                fixture = CanonicalFixture(Path(directory))
+                canonical = fixture.g6._initializer_authority_paths()
+                original = canonical[role]
+                off_tree = fixture.data / f"off-tree-{original.name}"
+                shutil.copyfile(original, off_tree)
+                manifest_path = canonical["manifest"]
+                model_path = canonical["model"]
+                if role == "manifest":
+                    manifest_path = off_tree
+                elif role == "model":
+                    model_path = off_tree
+                else:
+                    manifest = json.loads(
+                        manifest_path.read_text(encoding="utf-8")
+                    )
+                    field = "selectionSeal" if role == "selection" else "sourceClosure"
+                    manifest[field] = fixture._identity(off_tree)
+                    _write_json(manifest_path, manifest)
+                expected = (
+                    "exact canonical paths"
+                    if role in {"manifest", "model"}
+                    else "paths are not canonical"
+                )
+                with self.assertRaisesRegex(ValueError, expected):
+                    fixture.g6._verify_initializer_manifest(
+                        manifest_path, model_path
+                    )
+
+    def test_initializer_promoted_source_model_cannot_alias_canonical_model(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = CanonicalFixture(
+                Path(directory), alias_promoted_source_model=True
+            )
+            canonical = fixture.g6._initializer_authority_paths()
+            with self.assertRaisesRegex(ValueError, "catalog cross-links changed"):
+                fixture.g6._verify_initializer_manifest(
+                    canonical["manifest"], canonical["model"]
+                )
+
+    def test_initializer_rejects_backdated_source_and_routing_authorities(
+        self,
+    ) -> None:
+        for option in (
+            "backdated_initializer_source",
+            "backdated_initializer_routing",
+        ):
+            with self.subTest(option=option), tempfile.TemporaryDirectory() as directory:
+                fixture = CanonicalFixture(Path(directory), **{option: True})
+                canonical = fixture.g6._initializer_authority_paths()
+                with self.assertRaisesRegex(ValueError, "does not follow"):
+                    fixture.g6._verify_initializer_manifest(
+                        canonical["manifest"], canonical["model"]
+                    )
+
+    def test_initializer_canonical_closure_report_substitution_is_rejected(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = CanonicalFixture(Path(directory))
+            preregistration = json.loads(
+                (fixture.namespace / "00-preregistration.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            manifest_path = Path(preregistration["initializerManifest"]["path"])
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            closure_path = Path(manifest["sourceClosure"]["path"])
+            closure = json.loads(closure_path.read_text(encoding="utf-8"))
+            closure["sourceReports"][0]["healthPassed"] = False
+            _write_json(closure_path, closure)
+            manifest["sourceClosure"] = fixture.g6._identity(closure_path)
+            _write_json(manifest_path, manifest)
+            with self.assertRaisesRegex(ValueError, "source report"):
+                fixture.g6._verify_initializer_manifest(
+                    manifest_path,
+                    Path(manifest["model"]["path"]),
+                )
+
     def test_runtime_manifest_substitution_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = CanonicalFixture(Path(directory))
@@ -1739,6 +2014,62 @@ class Generation6Tests(unittest.TestCase):
                 timeout=180,
             )
             self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+
+    def test_trainer_rejects_hardlinked_cli_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            original = root / "trainer-original.py"
+            alias = root / "trainer-hardlink.py"
+            shutil.copyfile(Path(host_g6.__file__), original)
+            try:
+                os.link(original, alias)
+            except OSError as error:
+                self.skipTest(f"hardlinks unavailable: {error}")
+            completed = subprocess.run(
+                [sys.executable, "-I", "-B", str(alias), "self-test"],
+                cwd=root,
+                env={},
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=60,
+                check=False,
+            )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn(b"regular unlinked file", completed.stderr)
+
+    def test_runtime_manifest_works_in_fresh_isolated_numpy_process(self) -> None:
+        trainer = Path(host_g6.__file__).resolve()
+        source = (
+            "import importlib.util,json,pathlib,sys\n"
+            f"path=pathlib.Path({str(trainer)!r})\n"
+            "spec=importlib.util.spec_from_file_location('isolated_g6_runtime',path)\n"
+            "module=importlib.util.module_from_spec(spec)\n"
+            "sys.modules[spec.name]=module\n"
+            "spec.loader.exec_module(module)\n"
+            "document=module.runtime_manifest_document()\n"
+            "print(json.dumps({'numpyVersion':document['numpyVersion'],"
+            "'compiledCore':document['numpyCompiledCore']}))\n"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            completed = subprocess.run(
+                [sys.executable, "-I", "-B", "-c", source],
+                cwd=directory,
+                env={},
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=60,
+                check=False,
+            )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stderr, b"")
+        document = json.loads(completed.stdout)
+        self.assertEqual(document["numpyVersion"], host_g6.np.__version__)
+        self.assertEqual(
+            document["compiledCore"],
+            host_g6._identity(Path(host_g6._numpy_compiled_core.__file__)),
+        )
 
 
 if __name__ == "__main__":

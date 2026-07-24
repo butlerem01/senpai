@@ -3,7 +3,7 @@
   "kind": "omega-nnue-king-state-v5-color-compat-preregistration-template",
   "compatibilityId": "king-state-v5-color-compat-v2",
   "status": "additive compatibility policy frozen before any Generation-5 match launch",
-  "purpose": "Preserve the immutable Generation-5 experiment while adapting OmegaMatch ply Color tokens and terminal process-exit records in separately hashed evidence, replaying every successful move with the exact G5 ChessLib, sealing malformed or absent launch growth as terminal safety failures, and publishing closure-bound authenticated reached-position and symmetry-orbit history under an exact post-authorization global namespace inventory.",
+  "purpose": "Preserve the immutable Generation-5 experiment while adapting OmegaMatch ply Color tokens and terminal process-exit records in separately hashed evidence, replaying every successful move with the exact G5 ChessLib, sealing malformed or absent launch growth as terminal safety failures, rejecting authorization after an immutable pre-match early-terminal closure, and publishing closure-bound authenticated reached-position and symmetry-orbit history under an exact post-authorization global namespace inventory.",
   "immutableGeneration5Authority": {
     "profile": {
       "path": "validation/omega-nnue-king-state-v5-preregistration.json",
@@ -155,6 +155,14 @@
     "suiteConstructionCandidateBlind": true,
     "targetFieldsDecodedByCompatibilityLayer": 0,
     "matchResultsAccessedBeforeAuthorization": 0,
+    "earlyTerminalRootBlocksAuthorization": true,
+    "mixedEarlyTerminalAndCompatibilityAuthorityRejects": true,
+    "sharedLifecycleLock": "build-msvc/king-state-v5-authority-lifecycle-v1/authority.lock",
+    "guardedHeldOutLauncher": "tools/omega_nnue/king_state_generation5_early_terminal.py run-offline",
+    "offlineLifetimeClaimRequiredForAuthorization": true,
+    "strictHeldOutChronology": ["robustness", "lifetime", "access", "report"],
+    "canonicalHeldOutChronologyUtc": "python-datetime-isoformat-utc-z-round-trip",
+    "directLegacyOfflineEvaluateCannotAuthorize": true,
     "originalArtifactsRewritten": 0,
     "originalNamespaceOutputsCreated": 0
   },

@@ -135,6 +135,43 @@ def _generate_fallback_payload(root: Path) -> bytes:
     return fallback.read_bytes()
 
 
+def _g5_lifecycle_fixture(
+    root: Path,
+) -> tuple[dict[str, dict], dict[str, Path]]:
+    """Copy the exact lifecycle documents but use tiny synthetic Python pins."""
+
+    source_root = root / "lifecycle-sources"
+    source_root.mkdir(parents=True)
+    repository = MODULE_PATH.parents[2]
+    paths = {
+        "g5EarlyTerminalProtocol": source_root / "early-terminal-protocol.json",
+        "g5ColorCompatProtocol": source_root / "color-compat-protocol.json",
+        "g5ColorCompatTemplate": source_root / "color-compat-template.json",
+        "g5EarlyTerminal": source_root / "early-terminal-tool.py",
+        "g5MatchReadiness": source_root / "color-compat-readiness.py",
+    }
+    shutil.copyfile(
+        repository
+        / "validation/omega-nnue-king-state-v5-early-terminal-protocol.json",
+        paths["g5EarlyTerminalProtocol"],
+    )
+    shutil.copyfile(
+        repository
+        / "validation/omega-nnue-king-state-v5-color-compat-protocol.json",
+        paths["g5ColorCompatProtocol"],
+    )
+    shutil.copyfile(
+        repository
+        / "validation/omega-nnue-king-state-v5-color-compat-preregistration.template.json",
+        paths["g5ColorCompatTemplate"],
+    )
+    paths["g5EarlyTerminal"].write_text("# synthetic early tool\n", encoding="utf-8")
+    paths["g5MatchReadiness"].write_text(
+        "# synthetic compatibility readiness\n", encoding="utf-8"
+    )
+    return ({name: verifier._identity(path) for name, path in paths.items()}, paths)
+
+
 def _route_rows() -> tuple[list[dict], list[dict]]:
     board = "5k4/10/10/10/10/4P5/10/10/10/4K5[-/-/-/-]"
     children = [
@@ -214,9 +251,28 @@ class VerifierTests(unittest.TestCase):
             prefix="omega-decision-v3-verifier-test-"
         )
         self.root = Path(self.temporary.name)
+        self.initializer_directory = (
+            self.root / "authority/40-initializer"
+        ).resolve()
+        self.initializer_directory.mkdir(parents=True)
+        verifier._TEST_INITIALIZER_AUTHORITY_DIRECTORY = (
+            self.initializer_directory
+        )
+        (self.root / "authority/30-routing").mkdir()
+        (self.root / "authority/20-terminal").mkdir()
+        _write_json(
+            self.root / "authority/30-routing/routing.completion.json",
+            {"createdUtc": _timestamp(-2)},
+        )
+        _write_json(
+            self.root / "authority/20-terminal/terminal.lineage.json",
+            {"createdUtc": _timestamp(-1)},
+        )
 
     def tearDown(self) -> None:
         verifier._TEST_INITIALIZER_SOURCE_RUNNERS.clear()
+        verifier._TEST_INITIALIZER_AUTHORITY_DIRECTORY = None
+        verifier._TEST_G5_AUTHORITY_REPOSITORY = None
         self.temporary.cleanup()
 
     def _install_source_report(
@@ -471,6 +527,32 @@ class VerifierTests(unittest.TestCase):
         )
         self.assertEqual(document["status"], "ready")
 
+    def test_verifier_and_wrapper_reject_hardlinked_cli_entry(self) -> None:
+        for label, source in (("verifier", MODULE_PATH), ("wrapper", WRAPPER_PATH)):
+            with self.subTest(label=label):
+                original = self.root / f"{label}-original.py"
+                alias = self.root / f"{label}-hardlink.py"
+                shutil.copyfile(source, original)
+                try:
+                    os.link(original, alias)
+                except OSError as error:
+                    self.skipTest(f"hardlinks unavailable: {error}")
+                completed = subprocess.run(
+                    [sys.executable, "-I", "-B", str(alias), "--self-test"],
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    env={},
+                    cwd=self.root,
+                    check=False,
+                    timeout=60,
+                )
+                self.assertNotEqual(completed.returncode, 0)
+                self.assertRegex(
+                    completed.stderr.decode("utf-8", errors="replace"),
+                    r"regular unlinked file|private regular file",
+                )
+
     def test_exact_fixed_routing_quota_is_accepted(self) -> None:
         roots, cells = _fixed_quota_inventories()
         verifier._verify_fixed_routing_quota_inventories(roots, cells)
@@ -547,9 +629,15 @@ class VerifierTests(unittest.TestCase):
         tamper_health: bool = False,
         forge_source_model: bool = False,
         fallback: bool = False,
+        alias_source_model: bool = False,
+        backdate_source_documents: bool = False,
     ) -> tuple[Path, dict, dict]:
-        model = self.root / "initializer.nnue"
+        model = self.initializer_directory / "initializer.nnue"
         model.write_bytes(self.fallback_payload)
+        source_model = (
+            model if alias_source_model else self.root / "source-initializer.nnue"
+        )
+        source_model.write_bytes(self.fallback_payload)
         foreign_model = self.root / "foreign-initializer.nnue"
         foreign_model.write_bytes(b"foreign initializer\n")
         producer = self.root / "initializer-producer.py"
@@ -562,28 +650,32 @@ class VerifierTests(unittest.TestCase):
         g5_closure = self.root / "g5-closure.json"
         g2_selection = self.root / "g2-selection.json"
         g2_closure = self.root / "g2-closure.json"
+        source_created = _timestamp(2 if backdate_source_documents else 0)
         _write_json(
             g5_selection,
             {
+                "createdUtc": source_created,
                 "kind": "generation5-selection-seal",
                 "status": "failed" if fallback else "selected-validation-winner",
-                "selectedModel": None if fallback else verifier._identity(model),
+                "selectedModel": None if fallback else verifier._identity(source_model),
                 "healthPassed": None if fallback else not tamper_health,
             },
         )
         _write_json(
             g5_closure,
             {
+                "createdUtc": source_created,
                 "kind": "generation5-terminal-closure",
                 "outcome": "failed" if fallback else "promoted",
                 "selection": verifier._identity(g5_selection),
-                "winnerModel": None if fallback else verifier._identity(model),
+                "winnerModel": None if fallback else verifier._identity(source_model),
                 "winnerHealthPassed": None if fallback else True,
             },
         )
         _write_json(
             g2_selection,
             {
+                "createdUtc": source_created,
                 "kind": "generation2-k2-selection-seal",
                 "status": "forensically-unavailable",
                 "selectedModel": None,
@@ -593,6 +685,7 @@ class VerifierTests(unittest.TestCase):
         _write_json(
             g2_closure,
             {
+                "createdUtc": source_created,
                 "kind": "generation2-k2-terminal-closure",
                 "outcome": "unavailable",
                 "selection": verifier._identity(g2_selection),
@@ -605,7 +698,7 @@ class VerifierTests(unittest.TestCase):
                 "sourceId": "G5",
                 "selectionSeal": verifier._identity(g5_selection),
                 "closure": verifier._identity(g5_closure),
-                "model": None if fallback else verifier._identity(model),
+                "model": None if fallback else verifier._identity(source_model),
                 "promotionStatus": "failed" if fallback else "promoted",
             },
             {
@@ -616,26 +709,25 @@ class VerifierTests(unittest.TestCase):
                 "promotionStatus": "unavailable",
             },
         ]
-        self._install_source_report(
-            "G5",
-            {
+        g5_report = {
                 "sourceId": "G5",
                 "promotionStatus": "failed" if fallback else "promoted",
                 "selectionSeal": verifier._identity(g5_selection),
                 "closure": verifier._identity(g5_closure),
-                "rawModel": verifier._identity(
-                    foreign_model if forge_source_model else model
+                "rawModel": (
+                    None
+                    if fallback
+                    else verifier._identity(
+                        foreign_model if forge_source_model else source_model
+                    )
                 ),
                 "healthPassed": False if fallback else not tamper_health,
                 "sourceVerifier": verifier._identity(g5_source_verifier),
                 "unavailabilityEvidence": None,
                 "resultInformationRead": False,
-            },
-            "g5",
-        )
-        self._install_source_report(
-            "G2-K2",
-            {
+            }
+        self._install_source_report("G5", g5_report, "g5")
+        g2_report = {
                 "sourceId": "G2-K2",
                 "promotionStatus": "unavailable",
                 "selectionSeal": verifier._identity(g2_selection),
@@ -647,10 +739,9 @@ class VerifierTests(unittest.TestCase):
                     self.root, "initializer"
                 ),
                 "resultInformationRead": False,
-            },
-            "g2",
-        )
-        selection = self.root / "initializer-selection.json"
+            }
+        self._install_source_report("G2-K2", g2_report, "g2")
+        selection = self.initializer_directory / "initializer.selection.json"
         _write_json(
             selection,
             {
@@ -668,7 +759,28 @@ class VerifierTests(unittest.TestCase):
                 "resultInformationRead": False,
             },
         )
-        manifest = self.root / "initializer.manifest.json"
+        source_closure = self.initializer_directory / "initializer.closure.json"
+        _write_json(
+            source_closure,
+            {
+                "schemaVersion": 1,
+                "kind": verifier.INITIALIZER_CLOSURE_KIND,
+                "profileId": verifier.PROFILE_ID,
+                "status": "frozen-pre-g6-initializer-source-closure",
+                "createdUtc": _timestamp(1),
+                "selectionSeal": verifier._identity(selection),
+                "selectionMode": (
+                    "deterministic-fallback" if fallback else "promoted-prior"
+                ),
+                "selectedCatalogIndex": None if fallback else 0,
+                "selectedModel": verifier._identity(model),
+                "sourceReports": [g5_report, g2_report],
+                "g6TargetRowsDecoded": 0,
+                "resultInformationRead": False,
+                "finalStageSeal": True,
+            },
+        )
+        manifest = self.initializer_directory / "initializer.manifest.json"
         _write_json(
             manifest,
             {
@@ -676,7 +788,7 @@ class VerifierTests(unittest.TestCase):
                 "kind": verifier.INITIALIZER_KIND,
                 "profileId": verifier.PROFILE_ID,
                 "status": "frozen-pre-g6-initializer-selection",
-                "createdUtc": _timestamp(1),
+                "createdUtc": _timestamp(2),
                 "resultInformationRead": False,
                 "model": verifier._identity(model),
                 "producer": verifier._identity(producer),
@@ -685,7 +797,7 @@ class VerifierTests(unittest.TestCase):
                 ),
                 "selectedCatalogIndex": None if fallback else 0,
                 "selectionSeal": verifier._identity(selection),
-                "sourceClosure": verifier._identity(g5_closure),
+                "sourceClosure": verifier._identity(source_closure),
                 "orderedCatalog": catalog,
                 "fallbackProtocol": dict(verifier.FALLBACK_PROTOCOL),
             },
@@ -694,7 +806,7 @@ class VerifierTests(unittest.TestCase):
             "initializerManifest": verifier._identity(manifest),
             "initializerModel": verifier._identity(model),
             "initializerSelection": verifier._identity(selection),
-            "initializerClosure": verifier._identity(g5_closure),
+            "initializerClosure": verifier._identity(source_closure),
         }
         return manifest, identities, {}
 
@@ -703,6 +815,14 @@ class VerifierTests(unittest.TestCase):
         _, result = verifier._verify_initializer(manifest, capsule, identities)
         self.assertIs(result["selectedPromotionHealthPassed"], True)
         self.assertEqual(result["catalogSourceIds"], ["G5", "G2-K2"])
+
+    def test_initializer_rejects_a_fifth_namespace_file(self) -> None:
+        manifest, identities, capsule = self._initializer()
+        (self.initializer_directory / "fifth-file.attack").write_bytes(b"attack\n")
+        with self.assertRaisesRegex(
+            ValueError, "exact canonical four-file inventory"
+        ):
+            verifier._verify_initializer(manifest, capsule, identities)
 
     def test_initializer_rejects_false_promoted_health(self) -> None:
         manifest, identities, capsule = self._initializer(tamper_health=True)
@@ -714,6 +834,99 @@ class VerifierTests(unittest.TestCase):
             forge_source_model=True
         )
         with self.assertRaisesRegex(ValueError, "model cross-link"):
+            verifier._verify_initializer(manifest, capsule, identities)
+
+    def test_initializer_rejects_off_tree_canonical_role(self) -> None:
+        roles = {
+            "initializerManifest": "manifest",
+            "initializerSelection": "selection",
+            "initializerClosure": "closure",
+            "initializerModel": "model",
+        }
+        for identity_role, label in roles.items():
+            with self.subTest(role=label):
+                manifest, identities, capsule = self._initializer()
+                original = Path(identities[identity_role]["path"])
+                off_tree = self.root / f"off-tree-{label}{original.suffix}"
+                shutil.copyfile(original, off_tree)
+                identities[identity_role] = verifier._identity(off_tree)
+                manifest_argument = (
+                    off_tree if identity_role == "initializerManifest" else manifest
+                )
+                with self.assertRaisesRegex(ValueError, "exact canonical paths"):
+                    verifier._verify_initializer(
+                        manifest_argument, capsule, identities
+                    )
+
+    def test_initializer_rejects_promoted_source_model_path_alias(self) -> None:
+        manifest, identities, capsule = self._initializer(alias_source_model=True)
+        with self.assertRaisesRegex(ValueError, "selected model/closure/health"):
+            verifier._verify_initializer(manifest, capsule, identities)
+
+    def test_initializer_rejects_backdated_source_authority(self) -> None:
+        manifest, identities, capsule = self._initializer(
+            backdate_source_documents=True
+        )
+        with self.assertRaisesRegex(ValueError, "does not follow"):
+            verifier._verify_initializer(manifest, capsule, identities)
+
+    def test_initializer_rejects_backdated_routing_authority(self) -> None:
+        manifest, identities, capsule = self._initializer()
+        _write_json(
+            self.root / "authority/30-routing/routing.completion.json",
+            {"createdUtc": _timestamp(1)},
+        )
+        with self.assertRaisesRegex(ValueError, "does not follow"):
+            verifier._verify_initializer(manifest, capsule, identities)
+
+    def test_source_bridge_executes_descriptor_snapshot_after_path_replacement(
+        self,
+    ) -> None:
+        source = self.root / "bridge_pinned.py"
+        source.write_text("VALUE = 'captured'\n", encoding="utf-8")
+        records = {"bridge": verifier._identity(source)}
+        prelude = verifier._source_bridge_prelude(records, self.root)
+        replacement = self.root / "replacement.py"
+        replacement.write_text("VALUE = 'hostile'\n", encoding="utf-8")
+        body = (
+            f"path=pathlib.Path({str(source)!r})\n"
+            f"replacement=pathlib.Path({str(replacement)!r})\n"
+            "os.replace(replacement,path)\n"
+            "import bridge_pinned\n"
+            "print(bridge_pinned.VALUE)\n"
+        )
+        completed = subprocess.run(
+            [sys.executable, "-I", "-B", "-c", prelude + body],
+            cwd=self.root,
+            env={},
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=30,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stderr, b"")
+        self.assertEqual(completed.stdout.decode("ascii").strip(), "captured")
+
+    def test_initializer_rejects_canonical_closure_source_report_substitution(
+        self,
+    ) -> None:
+        manifest, identities, capsule = self._initializer()
+        manifest_document = json.loads(manifest.read_text(encoding="utf-8"))
+        closure_path = Path(manifest_document["sourceClosure"]["path"])
+        closure = json.loads(closure_path.read_text(encoding="utf-8"))
+        substituted = self.root / "substituted-source-verifier.py"
+        substituted.write_text("# substituted\n", encoding="utf-8")
+        closure["sourceReports"][0]["sourceVerifier"] = verifier._identity(
+            substituted
+        )
+        _write_json(closure_path, closure)
+        manifest_document["sourceClosure"] = verifier._identity(closure_path)
+        _write_json(manifest, manifest_document)
+        identities["initializerClosure"] = verifier._identity(closure_path)
+        identities["initializerManifest"] = verifier._identity(manifest)
+        with self.assertRaisesRegex(ValueError, "canonical source replay"):
             verifier._verify_initializer(manifest, capsule, identities)
 
     def test_authenticated_g2_unavailability_selects_exact_fallback(self) -> None:
@@ -738,6 +951,211 @@ class VerifierTests(unittest.TestCase):
         entry["promotionStatus"] = "unavailable"
         with self.assertRaisesRegex(ValueError, "G5 has no terminal"):
             verifier._verify_initializer_source_entry(entry, "G5")
+
+    def test_failed_g5_source_report_must_not_export_raw_model(self) -> None:
+        selection = self.root / "failed-selection.json"
+        closure = self.root / "failed-closure.json"
+        model = self.root / "failed-model.nnue"
+        source = self.root / "failed-source.py"
+        for path, payload in (
+            (selection, b"{}\n"),
+            (closure, b"{}\n"),
+            (model, b"model"),
+            (source, b"# source\n"),
+        ):
+            path.write_bytes(payload)
+        report = {
+            "sourceId": "G5",
+            "promotionStatus": "failed",
+            "selectionSeal": verifier._identity(selection),
+            "closure": verifier._identity(closure),
+            "rawModel": verifier._identity(model),
+            "healthPassed": False,
+            "sourceVerifier": verifier._identity(source),
+            "unavailabilityEvidence": None,
+            "resultInformationRead": False,
+        }
+        with self.assertRaisesRegex(ValueError, "exported a model"):
+            verifier._validate_source_report(report, "G5")
+
+    def test_canonical_early_terminal_replay_runs_fresh_and_mixed_rejects(self) -> None:
+        repository = self.root / "g5-authority"
+        early_root = repository / "build-msvc/king-state-v5-early-terminal-v1"
+        early_root.mkdir(parents=True)
+        selection = early_root / "source-selection.seal.json"
+        closure = early_root / "source-closure.json"
+        selection.write_text("{}\n", encoding="utf-8")
+        closure.write_text("{}\n", encoding="utf-8")
+        records, lifecycle_paths = _g5_lifecycle_fixture(repository)
+        tool = lifecycle_paths["g5EarlyTerminal"]
+        base = {
+            "sourceId": "G5",
+            "promotionStatus": "aborted",
+            "selectionSeal": verifier._identity(selection),
+            "closure": verifier._identity(closure),
+            "rawModel": None,
+            "healthPassed": False,
+            "unavailabilityEvidence": None,
+            "resultInformationRead": False,
+        }
+        encoded = json.dumps(base, sort_keys=True, separators=(",", ":"))
+        tool.write_text(
+            "import hashlib,json,pathlib,sys\n"
+            "assert sys.argv[1:] == ['verify']\n"
+            f"value=json.loads({encoded!r})\n"
+            "path=pathlib.Path(__file__).resolve();payload=path.read_bytes()\n"
+            "value['sourceVerifier']={'path':str(path),'bytes':len(payload),'sha256':hashlib.sha256(payload).hexdigest()}\n"
+            "print(json.dumps(value,sort_keys=True,separators=(',',':')))\n",
+            encoding="utf-8",
+        )
+        records["g5EarlyTerminal"] = verifier._identity(tool)
+        verifier._TEST_G5_AUTHORITY_REPOSITORY = repository
+        with mock.patch.object(
+            verifier, "_source_pin_records", return_value=records
+        ), mock.patch.object(verifier, "_recheck_source_pins"):
+            result = verifier._run_g5_source_replay("aborted")
+            self.assertEqual(result["promotionStatus"], "aborted")
+            self.assertIsNone(result["rawModel"])
+            authorization = (
+                repository
+                / "build-king-state-v5/matches-color-compat-v2/sealed/"
+                "match-authorization.json"
+            )
+            authorization.parent.mkdir(parents=True)
+            authorization.write_text("{}\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "coexist"):
+                verifier._run_g5_source_replay("aborted")
+
+    def test_g5_lifecycle_contract_rejects_mutex_chronology_lifetime_and_lexical_drift(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "shared lifecycle mutex",
+                "g5ColorCompatProtocol",
+                lambda document: document["heldOutLifecycle"].__setitem__(
+                    "authorityLifecycleLock", "build-msvc/attacker/authority.lock"
+                ),
+                "authorityLifecycleLock",
+            ),
+            (
+                "strict chronology",
+                "g5ColorCompatProtocol",
+                lambda document: document["heldOutLifecycle"].__setitem__(
+                    "strictChronology", ["robustness", "access", "lifetime", "report"]
+                ),
+                "strictChronology",
+            ),
+            (
+                "lifetime-bound authorization",
+                "g5ColorCompatProtocol",
+                lambda document: document["heldOutLifecycle"].__setitem__(
+                    "directLegacyOfflineEvaluateCannotAuthorize", False
+                ),
+                "directLegacyOfflineEvaluateCannotAuthorize",
+            ),
+            (
+                "lexical descriptor policy",
+                "g5EarlyTerminalProtocol",
+                lambda document: document["publication"].__setitem__(
+                    "lexicalNoFollowDescriptorIdentityRequired", False
+                ),
+                "lexicalNoFollowDescriptorIdentityRequired",
+            ),
+            (
+                "readiness cross-pin",
+                "g5ColorCompatProtocol",
+                lambda document: document["tools"]["readiness"].__setitem__(
+                    "sha256", "0" * 64
+                ),
+                "readiness",
+            ),
+            (
+                "template cross-pin",
+                "g5ColorCompatProtocol",
+                lambda document: document["template"].__setitem__(
+                    "sha256", "0" * 64
+                ),
+                "template",
+            ),
+            (
+                "authorization publication binding",
+                "g5ColorCompatProtocol",
+                lambda document: document["publication"].__setitem__(
+                    "offlineLifetimeClaimBoundIntoAuthorizationAndCoreSeal", False
+                ),
+                "offlineLifetimeClaimBoundIntoAuthorizationAndCoreSeal",
+            ),
+            (
+                "early branch compatibility exclusion",
+                "g5EarlyTerminalProtocol",
+                lambda document: document["branchPolicy"].__setitem__(
+                    "compatibilityAuthorizationOrClosureBlocksEarlyPublication", False
+                ),
+                "compatibilityAuthorizationOrClosureBlocksEarlyPublication",
+            ),
+            (
+                "template mixed-authority exclusion",
+                "g5ColorCompatTemplate",
+                lambda document: document["informationBoundary"].__setitem__(
+                    "mixedEarlyTerminalAndCompatibilityAuthorityRejects", False
+                ),
+                "mixedEarlyTerminalAndCompatibilityAuthorityRejects",
+            ),
+        )
+        for label, name, mutate, expected_error in cases:
+            with self.subTest(label=label):
+                case_root = self.root / label.replace(" ", "-")
+                records, paths = _g5_lifecycle_fixture(case_root)
+                document = json.loads(paths[name].read_text(encoding="utf-8"))
+                mutate(document)
+                _write_json(paths[name], document)
+                records[name] = verifier._identity(paths[name])
+                with self.assertRaisesRegex(ValueError, expected_error):
+                    verifier._verify_g5_lifecycle_contract(records)
+
+    def test_g5_lifecycle_contract_rejects_hardlinked_protocol_source(self) -> None:
+        records, paths = _g5_lifecycle_fixture(self.root / "hardlink-lifecycle")
+        protocol = paths["g5ColorCompatProtocol"]
+        alias = protocol.with_name("color-compat-protocol-hardlink.json")
+        try:
+            os.link(protocol, alias)
+        except OSError as error:
+            self.skipTest(f"hardlinks unavailable: {error}")
+        with self.assertRaisesRegex(ValueError, "regular unlinked file"):
+            verifier._verify_g5_lifecycle_contract(records)
+
+    def test_lifecycle_snapshot_rejects_symlinked_parent(self) -> None:
+        real_parent = self.root / "real-lifecycle-parent"
+        linked_parent = self.root / "linked-lifecycle-parent"
+        real_parent.mkdir()
+        protocol = real_parent / "protocol.json"
+        protocol.write_text("{}\n", encoding="utf-8")
+        try:
+            os.symlink(real_parent, linked_parent, target_is_directory=True)
+        except (OSError, NotImplementedError) as error:
+            self.skipTest(f"directory symlinks unavailable: {error}")
+        with self.assertRaisesRegex(ValueError, "symlink/junction/reparse"):
+            verifier._snapshot_payload(
+                linked_parent / protocol.name, "linked lifecycle protocol"
+            )
+
+    def test_source_authority_chronology_requires_canonical_utc(self) -> None:
+        for value in (
+            "2026-07-24T08:00:00Z",
+            "2026-07-24T08:00:00.000000Z",
+            "2026-07-24T08:00:00.123456Z",
+        ):
+            verifier._parse_authority_timestamp(value, "authority")
+        for value in (
+            "2026-07-24T08:00:00.1Z",
+            "2026-07-24T08:00:00.1234560Z",
+            "2026-07-24T08:00:00+00:00",
+        ):
+            with self.subTest(value=value), self.assertRaisesRegex(
+                ValueError, "canonical UTC"
+            ):
+                verifier._parse_authority_timestamp(value, "authority")
 
     def test_canonical_g2_honest_deep_mismatch_is_authenticated_unavailable(
         self,
@@ -1067,9 +1485,11 @@ class RealProducerIntegrationTests(unittest.TestCase):
 
     def setUp(self) -> None:
         verifier._TEST_INITIALIZER_SOURCE_RUNNERS.clear()
+        verifier._TEST_INITIALIZER_AUTHORITY_DIRECTORY = None
 
     def tearDown(self) -> None:
         verifier._TEST_INITIALIZER_SOURCE_RUNNERS.clear()
+        verifier._TEST_INITIALIZER_AUTHORITY_DIRECTORY = None
 
     def test_real_teacher_producer_is_not_accepted_by_echo(self) -> None:
         teacher = verifier._load_pinned("teacher").module
@@ -1257,8 +1677,23 @@ class RealProducerIntegrationTests(unittest.TestCase):
                 created_utc=_timestamp(6),
             )
 
-            initializer = root / "initializer.nnue"
+            initializer_directory = root / "authority/40-initializer"
+            initializer_directory.mkdir(parents=True)
+            verifier._TEST_INITIALIZER_AUTHORITY_DIRECTORY = initializer_directory
+            (root / "authority/30-routing").mkdir()
+            (root / "authority/20-terminal").mkdir()
+            _write_json(
+                root / "authority/30-routing/routing.completion.json",
+                {"createdUtc": _timestamp(-4)},
+            )
+            _write_json(
+                root / "authority/20-terminal/terminal.lineage.json",
+                {"createdUtc": _timestamp(-3)},
+            )
+            initializer = initializer_directory / "initializer.nnue"
             initializer.write_bytes(self.fallback_payload)
+            source_initializer = root / "source-initializer.nnue"
+            source_initializer.write_bytes(self.fallback_payload)
             initializer_producer = root / "initializer-producer.py"
             initializer_producer.write_text("# initializer producer\n", encoding="utf-8")
             g5_source_verifier = root / "g5-source-authority.py"
@@ -1269,9 +1704,10 @@ class RealProducerIntegrationTests(unittest.TestCase):
             _write_json(
                 g5_selection,
                 {
+                    "createdUtc": _timestamp(-2),
                     "kind": "generation5-selection-seal",
                     "status": "selected-validation-winner",
-                    "selectedModel": verifier._identity(initializer),
+                    "selectedModel": verifier._identity(source_initializer),
                     "healthPassed": True,
                 },
             )
@@ -1279,10 +1715,11 @@ class RealProducerIntegrationTests(unittest.TestCase):
             _write_json(
                 g5_closure,
                 {
+                    "createdUtc": _timestamp(-1),
                     "kind": "generation5-terminal-closure",
                     "outcome": "promoted",
                     "selection": verifier._identity(g5_selection),
-                    "winnerModel": verifier._identity(initializer),
+                    "winnerModel": verifier._identity(source_initializer),
                     "winnerHealthPassed": True,
                 },
             )
@@ -1290,6 +1727,7 @@ class RealProducerIntegrationTests(unittest.TestCase):
             _write_json(
                 g2_selection,
                 {
+                    "createdUtc": _timestamp(-2),
                     "kind": "generation2-k2-selection-seal",
                     "status": "forensically-unavailable",
                     "selectedModel": None,
@@ -1300,6 +1738,7 @@ class RealProducerIntegrationTests(unittest.TestCase):
             _write_json(
                 g2_closure,
                 {
+                    "createdUtc": _timestamp(-1),
                     "kind": "generation2-k2-terminal-closure",
                     "outcome": "unavailable",
                     "selection": verifier._identity(g2_selection),
@@ -1312,7 +1751,7 @@ class RealProducerIntegrationTests(unittest.TestCase):
                     "sourceId": "G5",
                     "selectionSeal": verifier._identity(g5_selection),
                     "closure": verifier._identity(g5_closure),
-                    "model": verifier._identity(initializer),
+                    "model": verifier._identity(source_initializer),
                     "promotionStatus": "promoted",
                 },
                 {
@@ -1323,26 +1762,19 @@ class RealProducerIntegrationTests(unittest.TestCase):
                     "promotionStatus": "unavailable",
                 },
             ]
-            _install_source_report(
-                root,
-                "G5",
-                {
+            g5_report = {
                     "sourceId": "G5",
                     "promotionStatus": "promoted",
                     "selectionSeal": verifier._identity(g5_selection),
                     "closure": verifier._identity(g5_closure),
-                    "rawModel": verifier._identity(initializer),
+                    "rawModel": verifier._identity(source_initializer),
                     "healthPassed": True,
                     "sourceVerifier": verifier._identity(g5_source_verifier),
                     "unavailabilityEvidence": None,
                     "resultInformationRead": False,
-                },
-                "g5",
-            )
-            _install_source_report(
-                root,
-                "G2-K2",
-                {
+                }
+            _install_source_report(root, "G5", g5_report, "g5")
+            g2_report = {
                     "sourceId": "G2-K2",
                     "promotionStatus": "unavailable",
                     "selectionSeal": verifier._identity(g2_selection),
@@ -1354,10 +1786,9 @@ class RealProducerIntegrationTests(unittest.TestCase):
                         root, "real-producer"
                     ),
                     "resultInformationRead": False,
-                },
-                "g2",
-            )
-            initializer_selection = root / "initializer-selection.json"
+                }
+            _install_source_report(root, "G2-K2", g2_report, "g2")
+            initializer_selection = initializer_directory / "initializer.selection.json"
             _write_json(
                 initializer_selection,
                 {
@@ -1373,7 +1804,26 @@ class RealProducerIntegrationTests(unittest.TestCase):
                     "resultInformationRead": False,
                 },
             )
-            initializer_manifest = root / "initializer.manifest.json"
+            initializer_closure = initializer_directory / "initializer.closure.json"
+            _write_json(
+                initializer_closure,
+                {
+                    "schemaVersion": 1,
+                    "kind": verifier.INITIALIZER_CLOSURE_KIND,
+                    "profileId": verifier.PROFILE_ID,
+                    "status": "frozen-pre-g6-initializer-source-closure",
+                    "createdUtc": _timestamp(5),
+                    "selectionSeal": verifier._identity(initializer_selection),
+                    "selectionMode": "promoted-prior",
+                    "selectedCatalogIndex": 0,
+                    "selectedModel": verifier._identity(initializer),
+                    "sourceReports": [g5_report, g2_report],
+                    "g6TargetRowsDecoded": 0,
+                    "resultInformationRead": False,
+                    "finalStageSeal": True,
+                },
+            )
+            initializer_manifest = initializer_directory / "initializer.manifest.json"
             _write_json(
                 initializer_manifest,
                 {
@@ -1388,7 +1838,7 @@ class RealProducerIntegrationTests(unittest.TestCase):
                     "selectionMode": "promoted-prior",
                     "selectedCatalogIndex": 0,
                     "selectionSeal": verifier._identity(initializer_selection),
-                    "sourceClosure": verifier._identity(g5_closure),
+                    "sourceClosure": verifier._identity(initializer_closure),
                     "orderedCatalog": initializer_catalog,
                     "fallbackProtocol": dict(verifier.FALLBACK_PROTOCOL),
                 },
@@ -1585,7 +2035,7 @@ class RealProducerIntegrationTests(unittest.TestCase):
                 "prelabelSeal": verifier._identity(prelabel),
                 "terminalClassifierLineage": verifier._identity(terminal_fixture.lineage),
                 "initializerSelection": verifier._identity(initializer_selection),
-                "initializerClosure": verifier._identity(g5_closure),
+                "initializerClosure": verifier._identity(initializer_closure),
                 "initializerModel": verifier._identity(initializer),
                 "initializerManifest": verifier._identity(initializer_manifest),
                 "plannedProjectionProducer": verifier._identity(projection_producer),

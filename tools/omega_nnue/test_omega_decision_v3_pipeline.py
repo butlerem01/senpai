@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import types
@@ -50,6 +51,48 @@ class SyntheticPriorCatalogAuthority:
             }
             for group in groups
         ]
+
+
+class ExternalTimestampTests(unittest.TestCase):
+    def test_external_source_chronology_requires_canonical_utc(self) -> None:
+        for value in (
+            "2026-07-24T08:00:00Z",
+            "2026-07-24T08:00:00.000000Z",
+            "2026-07-24T08:00:00.123456Z",
+        ):
+            pipeline._parse_external_timestamp(value, "external authority")
+        for value in (
+            "2026-07-24T08:00:00.1Z",
+            "2026-07-24T08:00:00.1234560Z",
+            "2026-07-24T08:00:00+00:00",
+        ):
+            with self.subTest(value=value), self.assertRaisesRegex(
+                ValueError, "canonical UTC"
+            ):
+                pipeline._parse_external_timestamp(value, "external authority")
+
+    def test_pipeline_rejects_hardlinked_cli_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            original = root / "pipeline-original.py"
+            alias = root / "pipeline-hardlink.py"
+            original.write_bytes(Path(pipeline.__file__).read_bytes())
+            try:
+                os.link(original, alias)
+            except OSError as error:
+                self.skipTest(f"hardlinks unavailable: {error}")
+            completed = subprocess.run(
+                [sys.executable, "-I", "-B", str(alias), "status", "absent.json"],
+                cwd=root,
+                env={},
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=60,
+                check=False,
+            )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn(b"private regular file", completed.stderr)
 
 
 class PlanFixture:
@@ -122,6 +165,480 @@ class ExactPriorCatalogLoaderTests(unittest.TestCase):
         )
 
 
+class InitializerPublisherTests(unittest.TestCase):
+    @staticmethod
+    def _fixture(root: Path, *, promoted: bool) -> tuple[dict, dict, list[dict]]:
+        root = root.resolve()
+        authority = root / "authority"
+        paths = {
+            name: (authority / relative).resolve()
+            for name, relative in pipeline.CANONICAL_RELATIVE_PATHS.items()
+        }
+        external = root / "external"
+        external.mkdir(parents=True)
+
+        def artifact(name: str, payload: bytes) -> dict:
+            path = (external / name).resolve()
+            path.write_bytes(payload)
+            return pipeline._identity(path)
+
+        g5_selection = artifact("g5-selection.json", b"{}\n")
+        g5_closure = artifact("g5-closure.json", b"{}\n")
+        g2_selection = artifact("g2-selection.json", b"{}\n")
+        g2_closure = artifact("g2-closure.json", b"{}\n")
+        g5_verifier = artifact("g5-verifier.py", b"# g5\n")
+        g2_verifier = artifact("g2-verifier.py", b"# g2\n")
+        source_model = artifact("g5.nnue", b"PROMOTED-G5-NETWORK\n")
+        reports = [
+            {
+                "sourceId": "G5",
+                "promotionStatus": "promoted" if promoted else "failed",
+                "selectionSeal": g5_selection,
+                "closure": g5_closure,
+                "rawModel": source_model if promoted else None,
+                "healthPassed": promoted,
+                "sourceVerifier": g5_verifier,
+                "unavailabilityEvidence": None,
+                "resultInformationRead": False,
+            },
+            {
+                "sourceId": "G2-K2",
+                "promotionStatus": "unavailable",
+                "selectionSeal": g2_selection,
+                "closure": g2_closure,
+                "rawModel": None,
+                "healthPassed": False,
+                "sourceVerifier": g2_verifier,
+                "unavailabilityEvidence": {"authenticated": True},
+                "resultInformationRead": False,
+            },
+        ]
+        plan = {
+            "createdUtc": "2026-07-24T07:00:00.000000Z",
+            "paths": {name: str(path) for name, path in paths.items()},
+            "dependencies": {},
+            "bindings": {
+                "staticHceExecutable": pipeline._identity(
+                    Path(sys.executable).resolve()
+                )
+            },
+        }
+        return plan, paths, reports
+
+    def _publish(
+        self,
+        root: Path,
+        *,
+        promoted: bool = False,
+        validator_transform=None,
+        post_fresh_hook=None,
+        prewrite_hook=None,
+        post_owned_write_hook=None,
+    ):
+        plan, paths, reports = self._fixture(root, promoted=promoted)
+        calls: list[str] = []
+        fallback = b"EXACT-DETERMINISTIC-FALLBACK\n"
+        protocol = {
+            "architecture": "king-state-v6-move-decision-initializer-v1",
+            "seed": 2026072400,
+            "prng": "numpy.random.default_rng-PCG64",
+        }
+
+        class FakeTrainer:
+            @staticmethod
+            def _verify_initializer_manifest(path, model):
+                calls.append("trainer-verify")
+                document = json.loads(Path(path).read_text(encoding="utf-8"))
+                return (
+                    validator_transform(document)
+                    if validator_transform is not None
+                    else document
+                )
+
+        class FakeRouting:
+            @staticmethod
+            def verify_completion(path):
+                calls.append("routing")
+
+        class FakeTerminal:
+            @staticmethod
+            def verify_terminal_lineage(path):
+                calls.append("terminal")
+
+        fake_verifier = types.SimpleNamespace(
+            INITIALIZER_KIND="omega-nnue-king-state-v6-initializer-manifest",
+            INITIALIZER_SELECTION_KIND=(
+                "omega-decision-v3-pre-g6-initializer-selection"
+            ),
+            INITIALIZER_CLOSURE_KIND=(
+                "omega-decision-v3-pre-g6-initializer-closure"
+            ),
+            FALLBACK_PROTOCOL=protocol,
+            _verify_initializer_health=lambda model: calls.append("health"),
+        )
+        fake_generator = types.SimpleNamespace(
+            fallback_bytes=lambda: fallback,
+            _fallback_description=lambda payload: {
+                "profileId": pipeline.PROFILE_ID,
+                "architectureId": protocol["architecture"],
+                "seed": protocol["seed"],
+                "prng": protocol["prng"],
+                "gameResultsRead": False,
+                "targetRowsDecoded": 0,
+            },
+        )
+
+        def exact(key: str):
+            if key == "verifierImplementation":
+                return fake_verifier
+            if key == "initializerGenerator":
+                return fake_generator
+            raise AssertionError(key)
+
+        def fresh(paths_value):
+            calls.append("fresh-verifier")
+            document = json.loads(
+                paths_value["initializerManifest"].read_text(encoding="utf-8")
+            )
+            if post_fresh_hook is not None:
+                post_fresh_hook(paths_value)
+            return (
+                validator_transform(document)
+                if validator_transform is not None
+                else document
+            )
+
+        def chronology(*args, **kwargs):
+            if prewrite_hook is not None:
+                prewrite_hook(paths)
+
+        original_owned_write = pipeline._exclusive_bytes_owned
+
+        def owned_write(path, payload):
+            result = original_owned_write(path, payload)
+            if post_owned_write_hook is not None:
+                post_owned_write_hook(Path(path), payload)
+            return result
+
+        with mock.patch.object(
+            pipeline, "verify_plan", return_value=plan
+        ), mock.patch.object(
+            pipeline, "_require_dependencies"
+        ), mock.patch.object(
+            pipeline,
+            "_import_authorities",
+            return_value=(FakeTrainer, FakeRouting, None, FakeTerminal),
+        ), mock.patch.object(
+            pipeline, "_require_routing_inventory"
+        ), mock.patch.object(
+            pipeline, "_initializer_source_reports", return_value=reports
+        ) as source_replay, mock.patch.object(
+            pipeline, "_require_after", side_effect=chronology
+        ) as chronology_mock, mock.patch.object(
+            pipeline, "_load_exact_reviewed", side_effect=exact
+        ), mock.patch.object(
+            pipeline, "_verify_initializer_source_authority", side_effect=fresh
+        ), mock.patch.object(
+            pipeline, "_exclusive_bytes_owned", side_effect=owned_write
+        ):
+            result = pipeline.publish_initializer(
+                root / "plan.json", created_utc=TIME
+            )
+        return (
+            result, paths, reports, fallback, calls, source_replay,
+            chronology_mock,
+        )
+
+    def test_fallback_publishes_exactly_four_canonical_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result, paths, reports, fallback, calls, source, chronology = (
+                self._publish(Path(directory))
+            )
+            initializer_directory = paths["initializerModel"].parent
+            self.assertEqual(
+                {path.name for path in initializer_directory.iterdir()},
+                {
+                    "initializer.selection.json",
+                    "initializer.closure.json",
+                    "initializer.nnue",
+                    "initializer.manifest.json",
+                },
+            )
+            self.assertEqual(paths["initializerModel"].read_bytes(), fallback)
+            closure = json.loads(
+                paths["initializerClosure"].read_text(encoding="utf-8")
+            )
+            manifest = json.loads(
+                paths["initializerManifest"].read_text(encoding="utf-8")
+            )
+            self.assertEqual(closure["sourceReports"], reports)
+            self.assertEqual(
+                manifest["sourceClosure"],
+                pipeline._identity(paths["initializerClosure"]),
+            )
+            self.assertEqual(result["selectionMode"], "deterministic-fallback")
+            self.assertEqual(result["g6TargetRowsDecoded"], 0)
+            self.assertIs(result["resultInformationRead"], False)
+            for result_field, path_field in (
+                ("selection", "initializerSelection"),
+                ("closure", "initializerClosure"),
+                ("model", "initializerModel"),
+                ("manifest", "initializerManifest"),
+            ):
+                self.assertEqual(result[result_field], pipeline._identity(paths[path_field]))
+            self.assertEqual(calls, ["routing", "terminal", "trainer-verify", "fresh-verifier"])
+            source.assert_called_once()
+            chronology.assert_called_once()
+
+    def test_validator_returns_must_equal_the_in_memory_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            def forge(document):
+                return {**document, "forgedValidatorField": True}
+
+            with self.assertRaisesRegex(
+                ValueError, "differs from publication"
+            ):
+                self._publish(
+                    Path(directory), validator_transform=forge
+                )
+
+    def test_post_validation_recheck_rejects_every_canonical_path_replacement(
+        self,
+    ) -> None:
+        for role in (
+            "initializerSelection",
+            "initializerClosure",
+            "initializerModel",
+            "initializerManifest",
+        ):
+            with self.subTest(role=role), tempfile.TemporaryDirectory() as directory:
+                def replace(paths_value, role_value=role):
+                    target = paths_value[role_value]
+                    target.unlink()
+                    target.write_bytes(
+                        b"hostile replacement\n"
+                        if role_value == "initializerModel"
+                        else pipeline._canonical_json({"hostile": True})
+                    )
+
+                with self.assertRaisesRegex(
+                    ValueError, "changed during fresh validation"
+                ):
+                    self._publish(
+                        Path(directory), post_fresh_hook=replace
+                    )
+
+    def test_o_excl_ownership_rejects_identical_bytes_on_a_new_inode(self) -> None:
+        for role in (
+            "initializerSelection",
+            "initializerClosure",
+            "initializerModel",
+            "initializerManifest",
+        ):
+            with self.subTest(role=role), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                target = (
+                    root
+                    / "authority"
+                    / pipeline.CANONICAL_RELATIVE_PATHS[role]
+                ).resolve()
+                swapped = False
+
+                def replace_after_owned_write(path, payload):
+                    nonlocal swapped
+                    if swapped or path != target:
+                        return
+                    displaced = root / f"displaced-{role}"
+                    path.replace(displaced)
+                    path.write_bytes(payload)
+                    swapped = True
+
+                with self.assertRaisesRegex(
+                    ValueError, "owned publication changed before return"
+                ):
+                    self._publish(
+                        root,
+                        post_owned_write_hook=replace_after_owned_write,
+                    )
+                self.assertTrue(swapped)
+                self.assertEqual(target.read_bytes(), (root / f"displaced-{role}").read_bytes())
+
+    def test_fifth_file_injection_is_rejected_prewrite_and_at_final_boundary(
+        self,
+    ) -> None:
+        for phase in ("prewrite", "final"):
+            with self.subTest(phase=phase), tempfile.TemporaryDirectory() as directory:
+                def inject(paths_value):
+                    parent = paths_value["initializerModel"].parent
+                    parent.mkdir(parents=True, exist_ok=True)
+                    (parent / "fifth-file.attack").write_bytes(b"attack\n")
+
+                kwargs = (
+                    {"prewrite_hook": inject}
+                    if phase == "prewrite"
+                    else {"post_fresh_hook": inject}
+                )
+                with self.assertRaisesRegex(
+                    FileExistsError, "four-file namespace"
+                ):
+                    self._publish(Path(directory), **kwargs)
+
+    def test_runtime_must_match_plan_and_use_isolated_no_bytecode_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            plan, _, _ = self._fixture(root, promoted=False)
+            plan["bindings"]["staticHceExecutable"] = {
+                **plan["bindings"]["staticHceExecutable"],
+                "sha256": "0" * 64,
+            }
+            with mock.patch.object(
+                pipeline, "verify_plan", return_value=plan
+            ), mock.patch.object(pipeline, "_require_dependencies"):
+                with self.assertRaisesRegex(ValueError, "runtime differs"):
+                    pipeline.publish_initializer(root / "plan", created_utc=TIME)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            plan, _, _ = self._fixture(root, promoted=False)
+            flags = types.SimpleNamespace(isolated=0, dont_write_bytecode=1)
+            with mock.patch.object(
+                pipeline, "verify_plan", return_value=plan
+            ), mock.patch.object(
+                pipeline, "_require_dependencies"
+            ), mock.patch.object(pipeline.sys, "flags", flags):
+                with self.assertRaisesRegex(RuntimeError, "-I -B"):
+                    pipeline.publish_initializer(root / "plan", created_utc=TIME)
+
+    def test_promoted_model_is_exactly_copied_but_source_identity_is_retained(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result, paths, reports, _, calls, _, _ = self._publish(
+                Path(directory), promoted=True
+            )
+            selection = json.loads(
+                paths["initializerSelection"].read_text(encoding="utf-8")
+            )
+            source = reports[0]["rawModel"]
+            canonical = pipeline._identity(paths["initializerModel"])
+            self.assertNotEqual(source["path"], canonical["path"])
+            self.assertEqual(source["bytes"], canonical["bytes"])
+            self.assertEqual(source["sha256"], canonical["sha256"])
+            self.assertEqual(selection["orderedCatalog"][0]["model"], source)
+            self.assertEqual(selection["selectedModel"], canonical)
+            self.assertEqual(result["selectionMode"], "promoted-prior")
+            self.assertIn("health", calls)
+
+    def test_existing_output_rejects_before_any_source_replay(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            plan, paths, _ = self._fixture(root, promoted=False)
+            paths["initializerModel"].parent.mkdir(parents=True)
+            paths["initializerModel"].write_bytes(b"occupied")
+            with mock.patch.object(
+                pipeline, "verify_plan", return_value=plan
+            ), mock.patch.object(
+                pipeline, "_require_dependencies"
+            ), mock.patch.object(
+                pipeline, "_initializer_source_reports"
+            ) as source:
+                with self.assertRaisesRegex(FileExistsError, "no-clobber"):
+                    pipeline.publish_initializer(
+                        root / "plan.json", created_utc=TIME
+                    )
+            source.assert_not_called()
+
+    def test_source_replay_failure_publishes_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            plan, paths, _ = self._fixture(root, promoted=False)
+            fake = types.SimpleNamespace()
+            with mock.patch.object(
+                pipeline, "verify_plan", return_value=plan
+            ), mock.patch.object(
+                pipeline, "_require_dependencies"
+            ), mock.patch.object(
+                pipeline,
+                "_import_authorities",
+                return_value=(object(), types.SimpleNamespace(verify_completion=lambda path: None), None,
+                              types.SimpleNamespace(verify_terminal_lineage=lambda path: None)),
+            ), mock.patch.object(
+                pipeline, "_require_routing_inventory"
+            ), mock.patch.object(
+                pipeline, "_load_exact_reviewed", return_value=fake
+            ), mock.patch.object(
+                pipeline,
+                "_initializer_source_reports",
+                side_effect=ValueError("injected source replay failure"),
+            ):
+                with self.assertRaisesRegex(ValueError, "source replay failure"):
+                    pipeline.publish_initializer(root / "plan.json", created_utc=TIME)
+            self.assertFalse(paths["initializerModel"].parent.exists())
+
+    def test_nonterminal_g5_cannot_authorize_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            plan, paths, reports = self._fixture(root, promoted=False)
+            reports[0]["promotionStatus"] = "pending"
+            fake_verifier = types.SimpleNamespace(
+                FALLBACK_PROTOCOL={
+                    "architecture": "king-state-v6-move-decision-initializer-v1",
+                    "seed": 2026072400,
+                    "prng": "numpy.random.default_rng-PCG64",
+                }
+            )
+            with mock.patch.object(
+                pipeline, "verify_plan", return_value=plan
+            ), mock.patch.object(
+                pipeline, "_require_dependencies"
+            ), mock.patch.object(
+                pipeline,
+                "_import_authorities",
+                return_value=(object(), types.SimpleNamespace(verify_completion=lambda path: None), None,
+                              types.SimpleNamespace(verify_terminal_lineage=lambda path: None)),
+            ), mock.patch.object(
+                pipeline, "_require_routing_inventory"
+            ), mock.patch.object(
+                pipeline, "_load_exact_reviewed", return_value=fake_verifier
+            ), mock.patch.object(
+                pipeline, "_initializer_source_reports", return_value=reports
+            ), mock.patch.object(
+                pipeline, "_require_after"
+            ):
+                with self.assertRaisesRegex(ValueError, "not source-authorized"):
+                    pipeline.publish_initializer(root / "plan.json", created_utc=TIME)
+            self.assertFalse(paths["initializerModel"].parent.exists())
+
+    def test_chronology_failure_precedes_publication(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            plan, paths, reports = self._fixture(root, promoted=True)
+            fake_verifier = types.SimpleNamespace(
+                _verify_initializer_health=lambda model: None
+            )
+            with mock.patch.object(
+                pipeline, "verify_plan", return_value=plan
+            ), mock.patch.object(
+                pipeline, "_require_dependencies"
+            ), mock.patch.object(
+                pipeline,
+                "_import_authorities",
+                return_value=(object(), types.SimpleNamespace(verify_completion=lambda path: None), None,
+                              types.SimpleNamespace(verify_terminal_lineage=lambda path: None)),
+            ), mock.patch.object(
+                pipeline, "_require_routing_inventory"
+            ), mock.patch.object(
+                pipeline, "_load_exact_reviewed", return_value=fake_verifier
+            ), mock.patch.object(
+                pipeline, "_initializer_source_reports", return_value=reports
+            ), mock.patch.object(
+                pipeline,
+                "_require_after",
+                side_effect=ValueError("injected chronology failure"),
+            ):
+                with self.assertRaisesRegex(ValueError, "chronology failure"):
+                    pipeline.publish_initializer(root / "plan.json", created_utc=TIME)
+            self.assertFalse(paths["initializerModel"].parent.exists())
+
+
 class PipelinePlanTests(unittest.TestCase):
     def setUp(self) -> None:
         self.prior_events: list[tuple[str, bool, str]] = []
@@ -146,6 +663,49 @@ class PipelinePlanTests(unittest.TestCase):
             pipeline.CANONICAL_RELATIVE_PATHS["capsule"],
             "capsule.closure.json",
         )
+
+    def test_pretarget_and_capsule_replays_reject_fifth_initializer_file(
+        self,
+    ) -> None:
+        for stage in ("pretarget", "capsule"):
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory() as directory:
+                fixture = PlanFixture(Path(directory))
+                plan = fixture.publish()
+                paths = pipeline._paths(plan)
+                initializer_directory = paths["initializerModel"].parent
+                initializer_directory.mkdir(parents=True)
+                for role in (
+                    "initializerSelection",
+                    "initializerClosure",
+                    "initializerModel",
+                    "initializerManifest",
+                ):
+                    paths[role].write_bytes(b"fixture\n")
+                (initializer_directory / "fifth-file.attack").write_bytes(
+                    b"attack\n"
+                )
+                if stage == "pretarget":
+                    action = lambda: pipeline.claim_stage(
+                        fixture.plan, "pretarget", created_utc=TIME
+                    )
+                else:
+                    action = lambda: pipeline.finalize_stage(
+                        fixture.plan, "capsule", created_utc=TIME
+                    )
+                with mock.patch.object(
+                    pipeline, "verify_plan", return_value=plan
+                ), mock.patch.object(
+                    pipeline, "_require_dependencies"
+                ), mock.patch.object(
+                    pipeline, "_verify_prior_catalog_groups"
+                ), mock.patch.object(
+                    pipeline, "_import_authorities"
+                ) as imported:
+                    with self.assertRaisesRegex(
+                        FileExistsError, "four-file namespace"
+                    ):
+                        action()
+                imported.assert_not_called()
 
     def test_plan_freezes_exact_stop_gated_runbook_without_targets(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -176,6 +736,11 @@ class PipelinePlanTests(unittest.TestCase):
             teacher = next(item for item in plan["runbook"] if item["stage"] == "teacher-run")
             self.assertEqual(teacher["argv"][1:3], ["-I", "-B"])
             self.assertIn("resumeArgv", teacher)
+            initializer = next(
+                item for item in plan["runbook"] if item["stage"] == "initializer"
+            )
+            self.assertEqual(initializer["action"], "pipeline-command")
+            self.assertIn("publish-initializer", initializer["argv"])
 
     def test_full_semantic_replay_precedes_plan_publication(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -388,20 +953,20 @@ class PipelinePlanTests(unittest.TestCase):
             plan = fixture.publish()
             expected = {
                 "trainerAuthority": (
-                    330_787,
-                    "81b9e0c5ffa5d78a4cf2198781ceffea7649bdaed3e827556a5e3deaeba8a2e0",
+                    347_813,
+                    "d5a27adba652b3dd5669fa530f92d23a262b0752faa00120905e87f15cbdd19b",
                 ),
                 "initializerGenerator": (
                     19_564,
                     "38d81f665d0bccb4939e3a1707b7dbfbe4c9c29795e0699f51d92bf30af94be0",
                 ),
                 "verifierImplementation": (
-                    154_746,
-                    "6144469a45c481f55c73718b12154f64333d6fa17c81a39d8e9cb570f6ea6907",
+                    181_433,
+                    "a45f9b771d4f7fab3c6b7f7c9a14a54ffaf3e192329929ca6c87c8420c005dfd",
                 ),
                 "verifierRunner": (
-                    4_856,
-                    "0b434c3ab3275cb4598e12bc955723c5cdc5662bb6429a7a155acdbb85c771b6",
+                    5_356,
+                    "4d7ffc2becade214f8db6f5d171809ed423d3d879754de84abcc0144d9e9c232",
                 ),
                 "priorCatalog": (
                     56_580,
@@ -845,6 +1410,14 @@ class PublicationBoundaryTests(unittest.TestCase):
                 name: (root / relative).resolve()
                 for name, relative in pipeline.CANONICAL_RELATIVE_PATHS.items()
             }
+            for role in (
+                "initializerSelection",
+                "initializerClosure",
+                "initializerModel",
+                "initializerManifest",
+            ):
+                paths[role].parent.mkdir(parents=True, exist_ok=True)
+                paths[role].write_bytes(b"fixture\n")
             options = {"schemaVersion": 1, "kind": "test-verifier-options"}
             _write_json(paths["verifierOptions"], options)
             plan = {

@@ -148,6 +148,14 @@
     "formalCommandInputBoundary": "train-only corpus and train-only static HCE",
     "heldOutTargetsProvidedToTrainerCommand": false,
     "initializerAuthority": {
+      "canonicalAuthorityRelativeDirectory": "build-msvc/data-generation/omega-decision-v3/40-initializer",
+      "canonicalClosureKind": "omega-decision-v3-pre-g6-initializer-closure",
+      "canonicalFilenames": {
+        "closure": "initializer.closure.json",
+        "manifest": "initializer.manifest.json",
+        "model": "initializer.nnue",
+        "selection": "initializer.selection.json"
+      },
       "fallbackProtocol": {
         "architecture": "king-state-v6-move-decision-initializer-v1",
         "drawOrder": [
@@ -304,12 +312,96 @@
         "resultInformationRead": false,
         "sourceId": "G2-K2"
       },
+      "g5EarlyTerminalAuthority": {
+        "canonicalRoot": "build-msvc/king-state-v5-early-terminal-v1",
+        "compatibilityAuthority": {
+          "preregistrationTemplate": {
+            "bytes": 8831,
+            "relativePath": "validation/omega-nnue-king-state-v5-color-compat-preregistration.template.json",
+            "sha256": "c2f53efd4957dccf5428f043d5eea5d74669e0b79e8bcf01639ac770a7239e1e"
+          },
+          "protocol": {
+            "bytes": 11050,
+            "relativePath": "validation/omega-nnue-king-state-v5-color-compat-protocol.json",
+            "sha256": "47518625404ca6a3a3d1ce4fd7ee1e30d2e3600e3cc2d42adfeeac52f6599daf"
+          },
+          "readiness": {
+            "bytes": 143024,
+            "relativePath": "tools/omega_nnue/king_state_match_readiness_generation5_compat_v2.py",
+            "sha256": "84e1b67683ac75c2b34802d4ba1c960c6173f9437f52a1af1574188863b8bb10"
+          }
+        },
+        "exactFileInventory": [
+          "source-selection.seal.json",
+          "source-closure.json"
+        ],
+        "failedOrAbortedHealthPassed": false,
+        "failedOrAbortedRawModel": null,
+        "freshProcessReplayRequired": true,
+        "gameResultsRead": false,
+        "generation6TargetRowsDecoded": 0,
+        "generation6TargetValuesExported": 0,
+        "lifecycleContract": {
+          "authorityLifecycleLock": "build-msvc/king-state-v5-authority-lifecycle-v1/authority.lock",
+          "canonicalChronologyUtc": "python-datetime-isoformat-utc-z-round-trip",
+          "compatibilityAuthorizationRequiresLifetimeClaim": true,
+          "directLegacyOfflineEvaluateCannotAuthorize": true,
+          "earlyTerminalRootBlocksCompatibilityAuthorization": true,
+          "guardedLauncher": "tools/omega_nnue/king_state_generation5_early_terminal.py run-offline",
+          "lexicalDescriptorSafety": {
+            "lexicalNoFollowDescriptorIdentityRequired": true,
+            "reparseSymlinkAndHardlinkReject": true,
+            "singleLinkRegularFilesOnly": true
+          },
+          "lifetimeClaimKind": "omega-nnue-king-state-v5-offline-evaluation-lifetime-claim",
+          "offlineAccessClaim": "build-msvc/king-state-v5/offline/access-claim.json",
+          "offlineLifetimeClaim": "build-msvc/king-state-v5/offline/evaluation-lifetime.claim.json",
+          "offlineReport": "build-msvc/king-state-v5/offline/report.json",
+          "sharedLifecycleLockCoversOfflineEvaluationTerminalPublicationAndCompatibilityAuthorization": true,
+          "strictChronology": [
+            "robustness",
+            "lifetime",
+            "access",
+            "report"
+          ]
+        },
+        "mixedEarlyTerminalAndMatchAuthorityRejects": true,
+        "promotionStatuses": [
+          "failed",
+          "aborted"
+        ],
+        "protocol": {
+          "bytes": 7991,
+          "relativePath": "validation/omega-nnue-king-state-v5-early-terminal-protocol.json",
+          "sha256": "ae0852673fe1b9e54a0bda182219f4268278252dd2aa9fb067b882a1e69ce352"
+        },
+        "resultInformationRead": false,
+        "terminalClasses": [
+          "selection-no-eligible",
+          "robustness-training-failed",
+          "robustness-worker-aborted",
+          "robustness-gate-failed",
+          "heldout-gate-failed",
+          "heldout-access-aborted"
+        ],
+        "tool": {
+          "bytes": 75430,
+          "relativePath": "tools/omega_nnue/king_state_generation5_early_terminal.py",
+          "sha256": "895f3aad57a2ef32aa63be897dbb357afb07be397783ce0b5d5ee54a982e6227"
+        }
+      },
       "g5FailureAbortIsVerifiedButNotFatal": true,
       "g5OnlyPromotableSource": true,
       "orderedCatalog": [
         "G5",
         "G2-K2"
       ],
+      "publisherOwnedInodeContinuityRequired": true,
+      "requireClosureAfterRoutingTerminalAndEverySourceDocument": true,
+      "requireExactFourFileNamespaceAtEveryDownstreamReplay": true,
+      "requireFailedAbortedHealthFalse": true,
+      "requireFailedAbortedRawModelNull": true,
+      "requirePromotedSourceModelPathDistinct": true,
       "rule": "use a semantically verified healthy promoted G5 model; otherwise require terminal G5 closure, exact G2 unavailability, and exact fallback",
       "selectionModes": [
         "promoted-prior",
@@ -377,6 +469,14 @@
       "canonicalRelativePath": "tools/omega_nnue/verify_omega_decision_v3_upstream.py",
       "options": {
         "initializerPolicy": {
+          "canonicalAuthorityRelativeDirectory": "build-msvc/data-generation/omega-decision-v3/40-initializer",
+          "canonicalClosureKind": "omega-decision-v3-pre-g6-initializer-closure",
+          "canonicalFilenames": {
+            "closure": "initializer.closure.json",
+            "manifest": "initializer.manifest.json",
+            "model": "initializer.nnue",
+            "selection": "initializer.selection.json"
+          },
           "fallbackProtocol": {
             "architecture": "king-state-v6-move-decision-initializer-v1",
             "drawOrder": [
@@ -533,13 +633,97 @@
             "resultInformationRead": false,
             "sourceId": "G2-K2"
           },
+          "g5EarlyTerminalAuthority": {
+            "canonicalRoot": "build-msvc/king-state-v5-early-terminal-v1",
+            "compatibilityAuthority": {
+              "preregistrationTemplate": {
+                "bytes": 8831,
+                "relativePath": "validation/omega-nnue-king-state-v5-color-compat-preregistration.template.json",
+                "sha256": "c2f53efd4957dccf5428f043d5eea5d74669e0b79e8bcf01639ac770a7239e1e"
+              },
+              "protocol": {
+                "bytes": 11050,
+                "relativePath": "validation/omega-nnue-king-state-v5-color-compat-protocol.json",
+                "sha256": "47518625404ca6a3a3d1ce4fd7ee1e30d2e3600e3cc2d42adfeeac52f6599daf"
+              },
+              "readiness": {
+                "bytes": 143024,
+                "relativePath": "tools/omega_nnue/king_state_match_readiness_generation5_compat_v2.py",
+                "sha256": "84e1b67683ac75c2b34802d4ba1c960c6173f9437f52a1af1574188863b8bb10"
+              }
+            },
+            "exactFileInventory": [
+              "source-selection.seal.json",
+              "source-closure.json"
+            ],
+            "failedOrAbortedHealthPassed": false,
+            "failedOrAbortedRawModel": null,
+            "freshProcessReplayRequired": true,
+            "gameResultsRead": false,
+            "generation6TargetRowsDecoded": 0,
+            "generation6TargetValuesExported": 0,
+            "lifecycleContract": {
+              "authorityLifecycleLock": "build-msvc/king-state-v5-authority-lifecycle-v1/authority.lock",
+              "canonicalChronologyUtc": "python-datetime-isoformat-utc-z-round-trip",
+              "compatibilityAuthorizationRequiresLifetimeClaim": true,
+              "directLegacyOfflineEvaluateCannotAuthorize": true,
+              "earlyTerminalRootBlocksCompatibilityAuthorization": true,
+              "guardedLauncher": "tools/omega_nnue/king_state_generation5_early_terminal.py run-offline",
+              "lexicalDescriptorSafety": {
+                "lexicalNoFollowDescriptorIdentityRequired": true,
+                "reparseSymlinkAndHardlinkReject": true,
+                "singleLinkRegularFilesOnly": true
+              },
+              "lifetimeClaimKind": "omega-nnue-king-state-v5-offline-evaluation-lifetime-claim",
+              "offlineAccessClaim": "build-msvc/king-state-v5/offline/access-claim.json",
+              "offlineLifetimeClaim": "build-msvc/king-state-v5/offline/evaluation-lifetime.claim.json",
+              "offlineReport": "build-msvc/king-state-v5/offline/report.json",
+              "sharedLifecycleLockCoversOfflineEvaluationTerminalPublicationAndCompatibilityAuthorization": true,
+              "strictChronology": [
+                "robustness",
+                "lifetime",
+                "access",
+                "report"
+              ]
+            },
+            "mixedEarlyTerminalAndMatchAuthorityRejects": true,
+            "promotionStatuses": [
+              "failed",
+              "aborted"
+            ],
+            "protocol": {
+              "bytes": 7991,
+              "relativePath": "validation/omega-nnue-king-state-v5-early-terminal-protocol.json",
+              "sha256": "ae0852673fe1b9e54a0bda182219f4268278252dd2aa9fb067b882a1e69ce352"
+            },
+            "resultInformationRead": false,
+            "terminalClasses": [
+              "selection-no-eligible",
+              "robustness-training-failed",
+              "robustness-worker-aborted",
+              "robustness-gate-failed",
+              "heldout-gate-failed",
+              "heldout-access-aborted"
+            ],
+            "tool": {
+              "bytes": 75430,
+              "relativePath": "tools/omega_nnue/king_state_generation5_early_terminal.py",
+              "sha256": "895f3aad57a2ef32aa63be897dbb357afb07be397783ce0b5d5ee54a982e6227"
+            }
+          },
           "g5OnlyPromotableSource": true,
           "orderedCatalog": [
             "G5",
             "G2-K2"
           ],
+          "publisherOwnedInodeContinuityRequired": true,
+          "requireClosureAfterRoutingTerminalAndEverySourceDocument": true,
+          "requireExactFourFileNamespaceAtEveryDownstreamReplay": true,
+          "requireFailedAbortedHealthFalse": true,
+          "requireFailedAbortedRawModelNull": true,
           "requireFirstIndependentlyPromotedEntry": true,
           "requireFreshHealthForPromotedEntry": true,
+          "requirePromotedSourceModelPathDistinct": true,
           "requireTerminalFailureOrAbortClosureForSkippedG5": true,
           "selectionModes": [
             "promoted-prior",
@@ -555,7 +739,7 @@
           "G5"
         ],
         "requiredSemanticReplays": [
-          "G5-only initializer promotion, embedded health, source closure, exact G2 unavailability, and model cross-links",
+          "G5-only initializer promotion or exact fresh-process pre-match early-terminal replay, exact four-path canonical authority, closure chronology, distinct copied-model payload equality, failed/aborted output sanitation, embedded health, and exact G2 unavailability",
           "terminal rules manifest/transcript/completion and pre-teacher exclusions",
           "every prior-forbidden manifest/catalog and zero current overlap",
           "component-map coverage and whole-component split assignment",
@@ -607,7 +791,14 @@
       "workers": 4
     },
     "teacherClaimKind": "omega-decision-v3-teacher-claim",
-    "teacherCompletionKind": "omega-decision-v3-teacher-completion"
+    "teacherCompletionKind": "omega-decision-v3-teacher-completion",
+    "verificationReceiptContinuity": {
+      "inodeSerializedInPortableAuthority": false,
+      "ownership": "independently-published-upstream",
+      "publisherClaimsInodeOwnership": false,
+      "publisherRollbackMayDeleteReceipt": false,
+      "requiredDuringEachPreregistrationOperation": "stable-canonical-path-bytes-and-sha256"
+    }
   },
   "validation": {
     "aggregation": "equal mean of eight phase-by-root-side cells; equal complete roots within cell",

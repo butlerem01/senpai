@@ -5,14 +5,14 @@
   "status": "additive compatibility protocol; original Generation-5 bytes and namespace remain immutable",
   "template": {
     "path": "validation/omega-nnue-king-state-v5-color-compat-preregistration.template.json",
-    "bytes": 8168,
-    "sha256": "0dacf0853a37d959e24c05567a974a8d85311fc1709502f1b5fb6c346b396219"
+    "bytes": 8831,
+    "sha256": "c2f53efd4957dccf5428f043d5eea5d74669e0b79e8bcf01639ac770a7239e1e"
   },
   "tools": {
     "readiness": {
       "path": "tools/omega_nnue/king_state_match_readiness_generation5_compat_v2.py",
-      "bytes": 123792,
-      "sha256": "fca7346bd95bc312c4832af354e9db4abd427013dcc791cfe5c43083fa4e132a"
+      "bytes": 143024,
+      "sha256": "84e1b67683ac75c2b34802d4ba1c960c6173f9437f52a1af1574188863b8bb10"
     },
     "matches": {
       "path": "tools/omega_nnue/king_state_matches_generation5_compat_v2.py",
@@ -53,7 +53,28 @@
     "pendingIntentMayOnlyResolveToCompletionOrTerminalAbort": true,
     "partialJsonTailRetainedAndTerminallyAborted": true,
     "abortDecisionRecoveryRequired": true,
+    "earlyTerminalRootBlocksAuthorization": true,
+    "sharedLifecycleLockCoversAuthorizationCommit": true,
+    "guardedHeldOutLifetimeClaimRequired": true,
+    "strictHeldOutChronologyRequired": true,
     "launchOnlyThrough": "tools/omega_nnue/king_state_matches_generation5_compat_v2.py"
+  },
+  "heldOutLifecycle": {
+    "earlyTerminalProtocol": {
+      "path": "validation/omega-nnue-king-state-v5-early-terminal-protocol.json",
+      "bytes": 7991,
+      "sha256": "ae0852673fe1b9e54a0bda182219f4268278252dd2aa9fb067b882a1e69ce352"
+    },
+    "authorityLifecycleLock": "build-msvc/king-state-v5-authority-lifecycle-v1/authority.lock",
+    "earlyTerminalRoot": "build-msvc/king-state-v5-early-terminal-v1",
+    "offlineLifetimeClaim": "build-msvc/king-state-v5/offline/evaluation-lifetime.claim.json",
+    "offlineAccessClaim": "build-msvc/king-state-v5/offline/access-claim.json",
+    "offlineReport": "build-msvc/king-state-v5/offline/report.json",
+    "claimKind": "omega-nnue-king-state-v5-offline-evaluation-lifetime-claim",
+    "strictChronology": ["robustness", "lifetime", "access", "report"],
+    "canonicalChronologyUtc": "python-datetime-isoformat-utc-z-round-trip",
+    "guardedLauncher": "tools/omega_nnue/king_state_generation5_early_terminal.py run-offline",
+    "directLegacyOfflineEvaluateCannotAuthorize": true
   },
   "adapter": {
     "acceptedRawTokens": ["white", "black"],
@@ -146,6 +167,10 @@
     "postAuthorizationExactGlobalInventoryRequired": true,
     "closureBindsAuthenticatedPositionHistory": true,
     "closureBindsAllTerminalDecisions": true,
+    "mixedEarlyTerminalAndCompatibilityAuthorityRejects": true,
+    "sharedLifecycleMutexRequiredForAuthorizationCommit": true,
+    "offlineLifetimeClaimBoundIntoAuthorizationAndCoreSeal": true,
+    "strictRobustnessLifetimeAccessReportChronologyRequired": true,
     "originalFilesOrDirectoriesMayNeverBeCreatedOrModified": true
   }
 }

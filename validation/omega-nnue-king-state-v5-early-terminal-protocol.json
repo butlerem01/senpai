@@ -1,0 +1,199 @@
+{
+  "schemaVersion": 1,
+  "kind": "omega-nnue-king-state-v5-early-terminal-protocol",
+  "protocolId": "king-state-v5-early-terminal-v1",
+  "profileId": "king-state-v5-omega-decision-v2",
+  "createdUtc": "2026-07-24T14:05:15.388705Z",
+  "status": "frozen before any Generation-5 candidate, robustness, or held-out result",
+  "purpose": "Authenticate every preregistered pre-match Generation-5 terminal outcome without changing the frozen Generation-5 trainer, exporting target values, or reading Generation-6 targets or game results.",
+  "runtime": {
+    "isolated": true,
+    "dontWriteBytecode": true,
+    "python": {
+      "path": "C:/Users/whate/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe",
+      "bytes": 91648,
+      "sha256": "3c6a206b7d93cca823934a83732220dcffd413fd1036d9fb82eebb64599cf7f3"
+    },
+    "manifest": {
+      "path": "validation/omega-nnue-king-state-v5-python-runtime.json",
+      "bytes": 4029,
+      "sha256": "d5f62db11f8563a5ef580379c49d2ebafec05f7d3b55052e004d5b446882272c"
+    }
+  },
+  "frozenGeneration5": {
+    "trainer": {
+      "path": "tools/omega_nnue/king_state_train_generation5.py",
+      "bytes": 280790,
+      "sha256": "beed564db0ca61c57af3884beb4117e39d8cb32ac2a381fe1fa040ea2a862d81"
+    },
+    "runtimeAuthority": {
+      "path": "tools/omega_nnue/king_state_generation5_runtime.py",
+      "bytes": 13853,
+      "sha256": "8f183378f3c461fb2699774239c90b424b19c0b63d848a8e60a521e154163ed0"
+    },
+    "baseTrainer": {
+      "path": "tools/omega_nnue/train.py",
+      "bytes": 124508,
+      "sha256": "ac64a0941c176c0d0b2a9024e31955739635d4e958d5f9fda06394d239e3f1a3"
+    },
+    "profileValidator": {
+      "path": "tools/omega_nnue/validate_king_state_v5_preregistration.py",
+      "bytes": 82821,
+      "sha256": "36c746b9af379517ac68b1c0502e0f8444291f3a4d87a06f1cef3fe7c6016bdc"
+    },
+    "networkFormat": {
+      "path": "tools/omega_nnue/omega_nnue.py",
+      "bytes": 53900,
+      "sha256": "efc55715895f32e948db35428372393c711f701f2e84c69256bdf689065422aa"
+    },
+    "profile": {
+      "path": "validation/omega-nnue-king-state-v5-preregistration.json",
+      "bytes": 41620,
+      "sha256": "60f48b19902b62bea88bd4877d55f798e0b2d6c6751f8acd59cb8522a3fdd5ab"
+    },
+    "finalFreeze": {
+      "path": "validation/omega-nnue-king-state-v5-freeze.seal.json",
+      "bytes": 12914,
+      "sha256": "03ff3fefc9ef4eff553f9aebdaed4f5827eeff29ef613b22ecd5b613f1a435a1"
+    }
+  },
+  "namespaces": {
+    "trainingRoot": "build-msvc/king-state-v5",
+    "trainingPlan": "build-msvc/king-state-v5/training-plan.json",
+    "validationSelection": "build-msvc/king-state-v5/validation-selection.seal.json",
+    "robustnessClaim": "build-msvc/king-state-v5/.robustness.training.claim.json",
+    "robustnessFailure": "build-msvc/king-state-v5/robustness.failure.json",
+    "robustnessBundle": "build-msvc/king-state-v5/robustness.bundle",
+    "robustnessSeal": "build-msvc/king-state-v5/robustness.seal.json",
+    "offlineLifetimeClaim": "build-msvc/king-state-v5/offline/evaluation-lifetime.claim.json",
+    "offlineAccessClaim": "build-msvc/king-state-v5/offline/access-claim.json",
+    "offlineReport": "build-msvc/king-state-v5/offline/report.json",
+    "authorityLifecycleLock": "build-msvc/king-state-v5-authority-lifecycle-v1/authority.lock",
+    "terminalRoot": "build-msvc/king-state-v5-early-terminal-v1",
+    "sourceSelection": "build-msvc/king-state-v5-early-terminal-v1/source-selection.seal.json",
+    "sourceClosure": "build-msvc/king-state-v5-early-terminal-v1/source-closure.json",
+    "compatibilityAuthorization": "build-king-state-v5/matches-color-compat-v2/sealed/match-authorization.json",
+    "compatibilityClosure": "build-king-state-v5/matches-color-compat-v2/closure.json"
+  },
+  "branches": [
+    {
+      "terminalClass": "selection-no-eligible",
+      "promotionStatus": "failed",
+      "requiredEvidence": ["validationSelection"],
+      "internalReplaySplits": ["validation"]
+    },
+    {
+      "terminalClass": "robustness-training-failed",
+      "promotionStatus": "failed",
+      "requiredEvidence": ["validationSelection", "robustnessFailure"],
+      "internalReplaySplits": ["train", "validation"]
+    },
+    {
+      "terminalClass": "robustness-worker-aborted",
+      "promotionStatus": "aborted",
+      "requiredEvidence": ["validationSelection", "robustnessFailure"],
+      "internalReplaySplits": ["validation"]
+    },
+    {
+      "terminalClass": "robustness-gate-failed",
+      "promotionStatus": "failed",
+      "requiredEvidence": ["validationSelection", "robustnessSeal"],
+      "internalReplaySplits": ["validation"]
+    },
+    {
+      "terminalClass": "heldout-gate-failed",
+      "promotionStatus": "failed",
+      "requiredEvidence": ["validationSelection", "robustnessSeal", "offlineLifetimeClaim", "offlineAccessClaim", "offlineReport"],
+      "internalReplaySplits": ["validation", "heldOut"]
+    },
+    {
+      "terminalClass": "heldout-access-aborted",
+      "promotionStatus": "aborted",
+      "requiredEvidence": ["validationSelection", "robustnessSeal", "offlineLifetimeClaim", "offlineAccessClaim"],
+      "internalReplaySplits": ["validation"]
+    }
+  ],
+  "branchPolicy": {
+    "precedence": [
+      "selection-no-eligible",
+      "robustness-training-failed",
+      "robustness-worker-aborted",
+      "robustness-gate-failed",
+      "heldout-gate-failed",
+      "heldout-access-aborted"
+    ],
+    "ambiguousTerminalEvidenceRejects": true,
+    "unfinishedPrimaryOrRobustnessWorkIsNotTerminal": true,
+    "claimOnlyHeldoutAbortRequiresLifetimeLockAndExplicitOperator": true,
+    "sharedLifecycleLockCoversOfflineEvaluationTerminalPublicationAndCompatibilityAuthorization": true,
+    "terminalRootBlocksOfflineRetry": true,
+    "legacyAccessBeforeLifetimeClaimRejects": true,
+    "strictHeldOutChronology": ["robustness", "lifetime", "access", "report"],
+    "canonicalHeldOutChronologyUtc": "python-datetime-isoformat-utc-z-round-trip",
+    "compatibilityAuthorizationOrClosureBlocksEarlyPublication": true,
+    "earlyNamespaceBlocksLaterCompatibilityAuthorization": true,
+    "normalCompatibilityPromotionFailureAndAbortRemainAuthoritative": true
+  },
+  "publication": {
+    "exactTerminalFileInventory": ["source-selection.seal.json", "source-closure.json"],
+    "exclusiveCreateOnly": true,
+    "noOutputPathArguments": true,
+    "partialPublicationFailsClosed": true,
+    "singleLinkRegularFilesOnly": true,
+    "reparseSymlinkAndHardlinkReject": true,
+    "lexicalNoFollowDescriptorIdentityRequired": true,
+    "sourceSelectionPrecedesSourceClosure": true,
+    "terminalClosureIsIrrevocable": true
+  },
+  "informationBoundary": {
+    "generation6TargetRowsDecoded": 0,
+    "generation6TargetValuesExported": 0,
+    "generation5TargetValuesExported": 0,
+    "gameResultsRead": false,
+    "resultInformationRead": false,
+    "metricsChecksPredictionsAndTargetsMayNotAppearInTerminalOutputs": true,
+    "failedOrAbortedSourceReplayRawModel": null,
+    "failedOrAbortedSourceReplayHealthPassed": false
+  },
+  "schemas": {
+    "sourceSelectionFields": [
+      "schemaVersion",
+      "kind",
+      "profileId",
+      "createdUtc",
+      "protocol",
+      "terminalClass",
+      "promotionStatus",
+      "generation5Selection",
+      "selectedCandidateId",
+      "selectedModel",
+      "operatorAuthorization",
+      "terminalEvidence",
+      "informationBoundary",
+      "finalStageSeal"
+    ],
+    "sourceClosureFields": [
+      "schemaVersion",
+      "kind",
+      "profileId",
+      "createdUtc",
+      "protocol",
+      "selectionSeal",
+      "status",
+      "terminalClass",
+      "promotionStatus",
+      "selectedCandidateId",
+      "selectedModel",
+      "operatorAuthorization",
+      "terminalEvidence",
+      "matchAuthorizationPresent",
+      "compatibilityClosurePresent",
+      "retryPermitted",
+      "targetValuesExported",
+      "generation6TargetRowsDecoded",
+      "gameResultsRead",
+      "resultInformationRead",
+      "finalStageSeal"
+    ]
+  }
+}
