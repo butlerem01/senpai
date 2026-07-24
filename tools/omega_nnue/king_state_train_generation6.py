@@ -84,12 +84,151 @@ PRIMARY_TRAINING_SEED_BASE = 2026072401
 ROBUSTNESS_TRAINING_SEED_BASE = 2026072402
 INITIALIZER_ORDERED_CATALOG = ("G5", "G2-K2")
 INITIALIZER_SELECTION_MODES = ("promoted-prior", "deterministic-fallback")
+INITIALIZER_G2_UNAVAILABLE_PROTOCOL = {
+    "sourceId": "G2-K2",
+    "catalogStatus": "unavailable",
+    "model": None,
+    "reason": "untouched frozen-source replays reject current dependency identities",
+    "compatibilityPatchesApplied": False,
+    "freshReplayRequired": True,
+    "artifacts": {
+        "selectionSeal": {
+            "relativePath": "build-msvc/data-generation/deep-hce-v4/generation3-initializer-resolution.seal.json",
+            "bytes": 5_286,
+            "sha256": "ec3c53c6bd2093e1f48d06852440436226ee492beef5b7171829ce774097517c",
+        },
+        "closure": {
+            "relativePath": "build-msvc/data-generation/deep-hce-v4/king-state-v1-prelabel.seal.json",
+            "bytes": 42_342,
+            "sha256": "14bf17732ac78bd96c4e093e6e983e3c4ca704c7eaca1075f0634bc90d037735",
+        },
+        "deepFreeze": {
+            "relativePath": "build-msvc/data-generation/deep-hce-v4/deep-hce-v2.freeze.json",
+            "bytes": 38_940_062,
+            "sha256": "a1f01135c8ee45950cd92a586ad74d02ea2d46ad9a6f9edd5744d266ea0ba53f",
+        },
+        "generation2Incident": {
+            "relativePath": "validation/omega-nnue-king-state-v2-offline-incident.json",
+            "bytes": 22_747,
+            "sha256": "df4b440ec625e3beb33735f3e89908c1414208f11d42a60944f8089075821678",
+        },
+    },
+    "currentSources": {
+        "g2Verifier": {
+            "relativePath": "tools/omega_nnue/king_state_v3.py",
+            "bytes": 362_242,
+            "sha256": "ffe8625903269567eee083b96dbf38b18f1be6c1a0d94b8fabcb98bdba12e2db",
+        },
+        "g2Trainer": {
+            "relativePath": "tools/omega_nnue/king_state_train_generation3.py",
+            "bytes": 214_271,
+            "sha256": "cdae1319d2880207b2ff4a632df90fc9dc26662ec4eb785694afddaa8b533de1",
+        },
+        "g2Deep": {
+            "relativePath": "tools/omega_nnue/deep_hce_v2.py",
+            "bytes": 148_725,
+            "sha256": "9e9911b0a56191e5209d6276c004cf36a94fe1530eb915baf1ad5a72d32f7702",
+        },
+        "g2Incidence": {
+            "relativePath": "tools/omega_nnue/phase_incidence_preflight.py",
+            "bytes": 31_219,
+            "sha256": "d58f1cb9150c79910c460dea7e95aefd2153e9ce3c8866cd2da3f5a953d591b9",
+        },
+        "g2BaseTrainer": {
+            "relativePath": "tools/omega_nnue/train.py",
+            "bytes": 124_508,
+            "sha256": "ac64a0941c176c0d0b2a9024e31955739635d4e958d5f9fda06394d239e3f1a3",
+        },
+        "omegaNnue": {
+            "relativePath": "tools/omega_nnue/omega_nnue.py",
+            "bytes": 53_900,
+            "sha256": "efc55715895f32e948db35428372393c711f701f2e84c69256bdf689065422aa",
+        },
+        "selectScreen": {
+            "relativePath": "tools/omega_nnue/select_screen.py",
+            "bytes": 39_442,
+            "sha256": "304172e583b4c963718191017b4f8d2426aea325dd42337c197496ee738677ee",
+        },
+        "rootSamplerSource": {
+            "relativePath": "tools/omega_nnue/OmegaRootSampler/Program.cs",
+            "bytes": 17_898,
+            "sha256": "3e6fc7efc4a54ad4ca8b000dba2d40bae021e3d1a91c768d061f533f5462c012",
+        },
+    },
+    "frozenDependencies": {
+        "rootSamplerSource": {
+            "relativePath": "tools/omega_nnue/OmegaRootSampler/Program.cs",
+            "bytes": 13_271,
+            "sha256": "289d2452fdb63c2737c72b4b3634e8d1b2023126346f3fb1a662f752e64df3d2",
+        },
+        "omegaNnue": {
+            "relativePath": "tools/omega_nnue/omega_nnue.py",
+            "bytes": 44_266,
+            "sha256": "bbab323356cb1f7194852af13c0ea632d7262f90d14d94032a1bcf88da2c0eb2",
+        },
+    },
+    "requiredFreshFailures": {
+        "fullSeal": "rootSampler source identity changed",
+        "deepFreeze": "omega_nnue.py changed after freeze",
+    },
+    "resultInformationRead": False,
+}
 UPSTREAM_REQUIRED_PRIOR_SOURCE_IDS = ("G3", "G4", "G5")
+UPSTREAM_ROUTING_QUOTAS_PER_PHASE_SIDE: Mapping[str, int] = {
+    "train": 512,
+    "validation": 128,
+    "heldOut": 128,
+}
 INITIALIZER_FALLBACK_PROTOCOL = {
     "architecture": "king-state-v6-move-decision-initializer-v1",
-    "generator": "pinned upstream initializer verifier",
+    "omegaNnueArchitectureId": 4,
+    "omegaNnueArchitecture": "omega-interaction-residual",
+    "generator": "exact-pinned omega_decision_v3_initializer.py",
     "seed": 2026072400,
-    "selectionRule": "use only when no catalog entry is independently promoted",
+    "prng": "numpy.random.default_rng-PCG64",
+    "drawOrder": [
+        "ftWeights",
+        "denseWeights",
+        "outputWeights",
+    ],
+    "floatInitialization": {
+        "ftBias": {"fill": 24.0, "dtype": "float32"},
+        "ftWeights": {
+            "distribution": "normal",
+            "mean": 0.0,
+            "standardDeviation": 0.5,
+            "shape": ["OMEGA_INTERACTION_FEATURE_COUNT", "ACCUMULATOR_SIZE"],
+            "cast": "float32-after-draw",
+        },
+        "denseBias": {"fill": 24.0, "dtype": "float32"},
+        "denseWeights": {
+            "distribution": "normal",
+            "mean": 0.0,
+            "standardDeviation": 0.025,
+            "shape": ["HIDDEN_SIZE", "2*ACCUMULATOR_SIZE"],
+            "cast": "float32-after-draw",
+        },
+        "outputBias": {"fill": 0.0, "dtype": "float32"},
+        "outputWeights": {
+            "distribution": "normal",
+            "mean": 0.0,
+            "standardDeviation": 0.1,
+            "shape": ["HIDDEN_SIZE"],
+            "cast": "float32-after-draw",
+        },
+    },
+    "quantization": {
+        "rounding": "numpy.rint",
+        "clipping": "destination integer range before cast",
+        "ftScale": 1,
+        "denseScale": 64,
+        "outputScale": 64,
+        "serialization": "OMNNUE1 exact-pinned omega_nnue.py architecture 4",
+    },
+    "selectionRule": (
+        "use only after authenticated terminal G5 failure or abort and exact "
+        "authenticated G2-K2 unavailability"
+    ),
     "g6TargetRowsDecoded": 0,
     "gameResultsRead": False,
 }
@@ -141,12 +280,18 @@ HELDOUT_CLOSURE_KIND = "omega-nnue-king-state-v6-heldout-closure"
 
 OPTIMIZER_PROTOCOL = {
     "optimizer": "Adam",
+    "beta1": 0.9,
+    "beta2": 0.999,
+    "epsilon": 1e-8,
+    "weightDecay": 0.0,
+    "parameterLearningRateScale": 1.0,
     "epochs": 48,
     "qatEpochs": 12,
     "firstQatEpoch": 37,
     "rootsPerBatch": 64,
     "learningRate": 0.003,
     "qatLearningRateScale": 0.1,
+    "qatLearningRateScaleScope": "global learning rate only",
     "checkpointRule": (
         "final epoch only; deployment health and frozen validation are external"
     ),
@@ -306,11 +451,13 @@ UPSTREAM_VERIFIER_OPTIONS = {
         "fallbackProtocol": dict(INITIALIZER_FALLBACK_PROTOCOL),
         "requireFirstIndependentlyPromotedEntry": True,
         "requireFreshHealthForPromotedEntry": True,
-        "requireFailureOrAbortClosureForSkippedEntry": True,
+        "g5OnlyPromotableSource": True,
+        "requireTerminalFailureOrAbortClosureForSkippedG5": True,
+        "g2UnavailableProtocol": dict(INITIALIZER_G2_UNAVAILABLE_PROTOCOL),
     },
     "requiredPriorForbiddenSourceIds": list(UPSTREAM_REQUIRED_PRIOR_SOURCE_IDS),
     "requiredSemanticReplays": [
-        "initializer selection, embedded health, source closure, and model cross-links",
+        "G5-only initializer promotion, embedded health, source closure, exact G2 unavailability, and model cross-links",
         "terminal rules manifest/transcript/completion and pre-teacher exclusions",
         "every prior-forbidden manifest/catalog and zero current overlap",
         "component-map coverage and whole-component split assignment",
@@ -2414,10 +2561,15 @@ def _verify_initializer_manifest(path: Path, model: Path) -> dict[str, Any]:
             INITIALIZER_CATALOG_ENTRY_FIELDS,
             f"initializer catalog entry {index}",
         )
+        permitted_statuses = (
+            ("promoted", "failed", "aborted")
+            if source_id == "G5"
+            else ("unavailable",)
+        )
         if (
             entry["sourceId"] != source_id
-            or entry["promotionStatus"]
-            not in ("promoted", "failed", "aborted", "unavailable")
+            or entry["promotionStatus"] not in permitted_statuses
+            or (source_id == "G2-K2" and entry["model"] is not None)
         ):
             raise ValueError("initializer ordered catalog changed")
         _verify_identity_record(
@@ -2454,11 +2606,19 @@ def _verify_initializer_manifest(path: Path, model: Path) -> dict[str, Any]:
             )
         ):
             raise ValueError("promoted initializer catalog cross-links changed")
-    elif selected_index is not None or any(
-        entry["promotionStatus"] == "promoted"
-        for entry in document["orderedCatalog"]
+    elif (
+        selected_index is not None
+        or any(
+            entry["promotionStatus"] == "promoted"
+            for entry in document["orderedCatalog"]
+        )
+        or document["orderedCatalog"][0]["promotionStatus"]
+        not in ("failed", "aborted")
+        or document["orderedCatalog"][1]["promotionStatus"] != "unavailable"
     ):
-        raise ValueError("fallback initializer is not the no-promoted-entry case")
+        raise ValueError(
+            "fallback initializer lacks terminal G5 closure or exact G2 unavailability"
+        )
     return document
 
 
@@ -3346,6 +3506,102 @@ def _target_free_hce_order(
     return rows
 
 
+def _canonical_planned_transcript_path(
+    path: Path, *, state: str
+) -> Path:
+    if state not in {"absent", "materialized"}:
+        raise ValueError("pre-target HCE planned-transcript state changed")
+    supplied = Path(path)
+    absolute = _lexical_absolute(supplied)
+    if os.fspath(supplied) != os.fspath(absolute):
+        raise ValueError("pre-target HCE planned transcript path is not canonical")
+    return (
+        _safe_new_file(absolute)
+        if state == "absent"
+        else _safe_existing_file(absolute)
+    )
+
+
+def _distinct_hce_claim_roles(
+    existing: Sequence[Path], planned_transcript: Path
+) -> None:
+    lexical = [
+        os.path.normcase(os.path.normpath(str(path)))
+        for path in (*existing, planned_transcript)
+    ]
+    if len(set(lexical)) != len(lexical):
+        raise ValueError("pre-target HCE claim roles share a path")
+    inode_paths = [*existing]
+    if os.path.lexists(planned_transcript):
+        inode_paths.append(planned_transcript)
+    inodes = [
+        (os.lstat(path).st_dev, os.lstat(path).st_ino) for path in inode_paths
+    ]
+    if len(set(inodes)) != len(inodes):
+        raise ValueError("pre-target HCE claim roles share an inode")
+
+
+def expected_upstream_hce_claim(
+    *,
+    prelabel_seal: Path,
+    target_free_routing: Path,
+    engine: Path,
+    runner: Path,
+    options: Path,
+    planned_transcript: Path,
+    created_utc: str,
+) -> dict[str, Any]:
+    """Build a claim without decoding a routing row or target-bearing value."""
+
+    dependencies = tuple(
+        _safe_existing_file(path)
+        for path in (prelabel_seal, target_free_routing, engine, runner, options)
+    )
+    planned = _canonical_planned_transcript_path(
+        planned_transcript, state="absent"
+    )
+    _distinct_hce_claim_roles(dependencies, planned)
+    _verify_hce_options(dependencies[-1])
+    _parse_timestamp(created_utc, "pre-target HCE claim createdUtc")
+    return {
+        "schemaVersion": SCHEMA_VERSION,
+        "kind": UPSTREAM_HCE_CLAIM_KIND,
+        "profileId": PROFILE_ID,
+        "status": "claimed-before-teacher-and-target-decode",
+        "createdUtc": created_utc,
+        "prelabelSeal": _identity(dependencies[0]),
+        "targetFreeRouting": _identity(dependencies[1]),
+        "engine": _identity(dependencies[2]),
+        "runner": _identity(dependencies[3]),
+        "options": _identity(dependencies[4]),
+        "plannedTranscriptPath": str(planned),
+        "targetRowsDecodedAtClaim": 0,
+        "targetFieldsDecodedAtClaim": 0,
+        "resultInformationRead": False,
+    }
+
+
+def publish_upstream_hce_claim(path: Path, **kwargs: Any) -> dict[str, Any]:
+    output = _safe_new_file(path)
+    document = expected_upstream_hce_claim(**kwargs)
+    planned = Path(document["plannedTranscriptPath"])
+    dependencies = tuple(
+        Path(document[field]["path"])
+        for field in ("prelabelSeal", "targetFreeRouting", "engine", "runner", "options")
+    )
+    lexical = [
+        os.path.normcase(os.path.normpath(str(value)))
+        for value in (*dependencies, output, planned)
+    ]
+    if len(set(lexical)) != len(lexical):
+        raise ValueError("pre-target HCE claim/output roles share a path")
+    result = _exclusive_json(output, document)
+    # A detectable create race poisons the append-only namespace rather than
+    # authenticating a claim whose planned target already existed.
+    _canonical_planned_transcript_path(planned, state="absent")
+    return result
+
+
 def _verify_upstream_hce_claim(
     path: Path,
     *,
@@ -3355,24 +3611,34 @@ def _verify_upstream_hce_claim(
     runner: Path,
     options: Path,
     planned_transcript: Path,
+    planned_transcript_state: str,
 ) -> dict[str, Any]:
-    document = _load_json(path, "pre-target HCE claim")
+    claim_path = _safe_existing_file(path)
+    document = _load_json(claim_path, "pre-target HCE claim")
     _exact_keys(document, UPSTREAM_HCE_CLAIM_FIELDS, "pre-target HCE claim")
+    dependencies = tuple(
+        _safe_existing_file(value)
+        for value in (prelabel_seal, target_free_routing, engine, runner, options)
+    )
+    planned = _canonical_planned_transcript_path(
+        planned_transcript, state=planned_transcript_state
+    )
+    _distinct_hce_claim_roles((claim_path, *dependencies), planned)
     expected_links = {
-        "prelabelSeal": _identity(prelabel_seal),
-        "targetFreeRouting": _identity(target_free_routing),
-        "engine": _identity(engine),
-        "runner": _identity(runner),
-        "options": _identity(options),
+        "prelabelSeal": _identity(dependencies[0]),
+        "targetFreeRouting": _identity(dependencies[1]),
+        "engine": _identity(dependencies[2]),
+        "runner": _identity(dependencies[3]),
+        "options": _identity(dependencies[4]),
     }
-    _verify_hce_options(options)
+    _verify_hce_options(dependencies[-1])
     if (
         type(document["schemaVersion"]) is not int
         or document["schemaVersion"] != SCHEMA_VERSION
         or document["kind"] != UPSTREAM_HCE_CLAIM_KIND
         or document["profileId"] != PROFILE_ID
         or document["status"] != "claimed-before-teacher-and-target-decode"
-        or document["plannedTranscriptPath"] != str(_safe_existing_file(planned_transcript))
+        or document["plannedTranscriptPath"] != str(planned)
         or type(document["targetRowsDecodedAtClaim"]) is not int
         or document["targetRowsDecodedAtClaim"] != 0
         or type(document["targetFieldsDecodedAtClaim"]) is not int
@@ -3439,6 +3705,7 @@ def expected_upstream_hce_completion(
         runner=runner,
         options=options,
         planned_transcript=transcript,
+        planned_transcript_state="materialized",
     )
     created = _parse_timestamp(created_utc, "pre-target HCE completion createdUtc")
     if created <= _parse_timestamp(
@@ -4213,6 +4480,7 @@ def _verify_upstream_capsule(
         runner=Path(identities["staticHceRunner"]["path"]),
         options=Path(identities["staticHceOptions"]["path"]),
         planned_transcript=Path(identities["staticHceTranscript"]["path"]),
+        planned_transcript_state="materialized",
     )
     prelabel_created = _parse_timestamp(prelabel["createdUtc"], "prelabel createdUtc")
     hce_claim_created = _parse_timestamp(
@@ -8027,6 +8295,14 @@ def protocol_document() -> dict[str, Any]:
             "teacherCompletionKind": UPSTREAM_TEACHER_COMPLETION_KIND,
             "preTargetHceClaimKind": UPSTREAM_HCE_CLAIM_KIND,
             "preTargetHceCompletionKind": UPSTREAM_HCE_COMPLETION_KIND,
+            "preTargetHcePlannedTranscriptProtocol": {
+                "stateAtClaim": "canonical safe distinct path is absent",
+                "stateAtCompletion": (
+                    "same canonical path is materialized and identity-bound"
+                ),
+                "routingTargetRowsDecodedAtClaim": 0,
+                "routingTargetFieldsDecodedAtClaim": 0,
+            },
             "priorForbiddenRegistryKind": UPSTREAM_FORBIDDEN_REGISTRY_KIND,
             "freshVerifier": {
                 "canonicalRelativePath": "tools/omega_nnue/verify_omega_decision_v3_upstream.py",
@@ -8034,9 +8310,13 @@ def protocol_document() -> dict[str, Any]:
                 "receiptMaterializedInAuthority": True,
             },
             "teacherBudgets": dict(UPSTREAM_TEACHER_BUDGETS),
+            "routingQuotasPerPhaseSide": dict(
+                UPSTREAM_ROUTING_QUOTAS_PER_PHASE_SIDE
+            ),
             "closureDeclaration": dict(UPSTREAM_CAPSULE_DECLARATION),
             "requiredCrossChecks": [
                 "source root/group, child id/OFEN, phase, side",
+                "exact routing-module quota totals and every phase-by-root-side cell",
                 "independent component and whole-component split projection",
                 "fresh terminal rules manifest/transcript/completion coverage replay",
                 "complete required-source registry and fresh semantic replay of every prior-forbidden catalog with zero overlap",
@@ -8124,8 +8404,12 @@ def protocol_document() -> dict[str, Any]:
                 "orderedCatalog": list(INITIALIZER_ORDERED_CATALOG),
                 "selectionModes": list(INITIALIZER_SELECTION_MODES),
                 "fallbackProtocol": dict(INITIALIZER_FALLBACK_PROTOCOL),
-                "rule": "first semantically verified independently promoted healthy compatible model; otherwise exact fallback",
+                "rule": "use a semantically verified healthy promoted G5 model; otherwise require terminal G5 closure, exact G2 unavailability, and exact fallback",
                 "g5FailureAbortIsVerifiedButNotFatal": True,
+                "g5OnlyPromotableSource": True,
+                "g2UnavailableProtocol": dict(
+                    INITIALIZER_G2_UNAVAILABLE_PROTOCOL
+                ),
             },
             "runtimeManifestRequired": True,
             "batchOrderDigestRequired": True,

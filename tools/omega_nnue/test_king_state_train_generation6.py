@@ -465,6 +465,10 @@ class CanonicalFixture:
         g2_closure = self.data / "g2-k2-closure.json"
         promoted = self.initializer_mode == "promoted-prior"
         g5_promoted = promoted and not self.first_prior_initializer_ineligible
+        g2_promoted = promoted and (
+            self.force_second_promoted_initializer
+            or self.first_prior_initializer_ineligible
+        )
         _write_json(g5_selection, {
             "kind": "generation5-selection-seal",
             "status": "selected-validation-winner" if g5_promoted else "closed-no-eligible-candidate",
@@ -480,16 +484,16 @@ class CanonicalFixture:
         })
         _write_json(g2_selection, {
             "kind": "generation2-k2-selection-seal",
-            "status": "selected-validation-winner" if promoted else "failed",
-            "selectedModel": self._identity(initializer) if promoted else None,
-            "healthPassed": True if promoted else None,
+            "status": "selected-validation-winner" if g2_promoted else "forensically-unavailable",
+            "selectedModel": self._identity(initializer) if g2_promoted else None,
+            "healthPassed": True if g2_promoted else None,
         })
         _write_json(g2_closure, {
             "kind": "generation2-k2-terminal-closure",
-            "outcome": "promoted" if promoted else "aborted",
+            "outcome": "promoted" if g2_promoted else "unavailable",
             "selection": self._identity(g2_selection),
-            "winnerModel": self._identity(initializer) if promoted else None,
-            "winnerHealthPassed": True if promoted else None,
+            "winnerModel": self._identity(initializer) if g2_promoted else None,
+            "winnerHealthPassed": True if g2_promoted else None,
         })
         ordered_catalog = [
             {
@@ -503,8 +507,8 @@ class CanonicalFixture:
                 "sourceId": "G2-K2",
                 "selectionSeal": self._identity(g2_selection),
                 "closure": self._identity(g2_closure),
-                "model": self._identity(initializer) if promoted else None,
-                "promotionStatus": "promoted" if promoted else "aborted",
+                "model": self._identity(initializer) if g2_promoted else None,
+                "promotionStatus": "promoted" if g2_promoted else "unavailable",
             },
         ]
         selected_catalog_index = (
@@ -761,22 +765,16 @@ class CanonicalFixture:
         hce_projection = self.data / "hce.jsonl"
         _write_json(hce_options, g6.static_hce_options_document())
         hce_claim = self.data / "hce.claim.json"
-        _write_json(hce_claim, {
-            "schemaVersion": 1,
-            "kind": g6.UPSTREAM_HCE_CLAIM_KIND,
-            "profileId": g6.PROFILE_ID,
-            "status": "claimed-before-teacher-and-target-decode",
-            "createdUtc": "2026-07-24T00:00:00.000003Z",
-            "prelabelSeal": self._identity(prelabel_path),
-            "targetFreeRouting": self._identity(routing_path),
-            "engine": self._identity(Path(sys.executable)),
-            "runner": self._identity(self.runner),
-            "options": self._identity(hce_options),
-            "plannedTranscriptPath": str(hce_projection.resolve()),
-            "targetRowsDecodedAtClaim": 0,
-            "targetFieldsDecodedAtClaim": 0,
-            "resultInformationRead": False,
-        })
+        g6.publish_upstream_hce_claim(
+            hce_claim,
+            prelabel_seal=prelabel_path,
+            target_free_routing=routing_path,
+            engine=Path(sys.executable),
+            runner=self.runner,
+            options=hce_options,
+            planned_transcript=hce_projection.resolve(),
+            created_utc="2026-07-24T00:00:00.000003Z",
+        )
         _write_jsonl(hce_projection, [
             {
                 "schemaVersion": 1,
@@ -1226,7 +1224,6 @@ class Generation6Tests(unittest.TestCase):
             fixture = CanonicalFixture(
                 Path(directory),
                 boolean_initializer_index=True,
-                first_prior_initializer_ineligible=True,
             )
             with self.assertRaisesRegex(
                 ValueError, "upstream initializer semantic replay changed"
@@ -1357,6 +1354,79 @@ class Generation6Tests(unittest.TestCase):
                 ValueError, "upstream pre-target/teacher chronology changed"
             ):
                 fixture.g6.verify_canonical_namespace()
+
+    def test_hce_claim_requires_one_canonical_absent_distinct_transcript(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            prelabel = root / "prelabel.json"
+            routing = root / "target-free-routing.opaque"
+            runner = root / "runner.py"
+            options = root / "hce-options.json"
+            _write_json(prelabel, {"opaque": True})
+            # A valid claim hashes this artifact but must not decode even its
+            # first row; deliberately invalid JSON makes that boundary visible.
+            routing.write_bytes(b"target-bearing-values-must-remain-opaque\n")
+            runner.write_text("# exact fixture runner\n", encoding="utf-8")
+            _write_json(options, host_g6.static_hce_options_document())
+            common = {
+                "prelabel_seal": prelabel,
+                "target_free_routing": routing,
+                "engine": Path(sys.executable),
+                "runner": runner,
+                "options": options,
+                "created_utc": "2026-07-24T00:00:00.000003Z",
+            }
+
+            planned = root / "hce.jsonl"
+            claim = root / "hce.claim.json"
+            identity = host_g6.publish_upstream_hce_claim(
+                claim, planned_transcript=planned, **common
+            )
+            self.assertEqual(identity, host_g6._identity(claim))
+            self.assertFalse(planned.exists())
+            document = host_g6._verify_upstream_hce_claim(
+                claim,
+                planned_transcript=planned,
+                planned_transcript_state="absent",
+                **{
+                    key: value
+                    for key, value in common.items()
+                    if key != "created_utc"
+                },
+            )
+            self.assertEqual(document["targetRowsDecodedAtClaim"], 0)
+            self.assertEqual(document["targetFieldsDecodedAtClaim"], 0)
+
+            existing = root / "already-exists.hce.jsonl"
+            existing.write_text("", encoding="utf-8")
+            with self.assertRaises(FileExistsError):
+                host_g6.publish_upstream_hce_claim(
+                    root / "existing.claim.json",
+                    planned_transcript=existing,
+                    **common,
+                )
+
+            (root / "subdirectory").mkdir()
+            noncanonical = root / "subdirectory" / ".." / "noncanonical.hce.jsonl"
+            with self.assertRaisesRegex(ValueError, "not canonical"):
+                host_g6.publish_upstream_hce_claim(
+                    root / "noncanonical.claim.json",
+                    planned_transcript=noncanonical,
+                    **common,
+                )
+
+            substituted = root / "substituted.hce.jsonl"
+            with self.assertRaisesRegex(ValueError, "claim changed"):
+                host_g6._verify_upstream_hce_claim(
+                    claim,
+                    planned_transcript=substituted,
+                    planned_transcript_state="absent",
+                    **{
+                        key: value
+                        for key, value in common.items()
+                        if key != "created_utc"
+                    },
+                )
 
     def test_hce_completion_rejects_reordered_or_forged_transcript(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

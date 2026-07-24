@@ -150,18 +150,167 @@
     "initializerAuthority": {
       "fallbackProtocol": {
         "architecture": "king-state-v6-move-decision-initializer-v1",
+        "drawOrder": [
+          "ftWeights",
+          "denseWeights",
+          "outputWeights"
+        ],
+        "floatInitialization": {
+          "denseBias": {
+            "dtype": "float32",
+            "fill": 24.0
+          },
+          "denseWeights": {
+            "cast": "float32-after-draw",
+            "distribution": "normal",
+            "mean": 0.0,
+            "shape": [
+              "HIDDEN_SIZE",
+              "2*ACCUMULATOR_SIZE"
+            ],
+            "standardDeviation": 0.025
+          },
+          "ftBias": {
+            "dtype": "float32",
+            "fill": 24.0
+          },
+          "ftWeights": {
+            "cast": "float32-after-draw",
+            "distribution": "normal",
+            "mean": 0.0,
+            "shape": [
+              "OMEGA_INTERACTION_FEATURE_COUNT",
+              "ACCUMULATOR_SIZE"
+            ],
+            "standardDeviation": 0.5
+          },
+          "outputBias": {
+            "dtype": "float32",
+            "fill": 0.0
+          },
+          "outputWeights": {
+            "cast": "float32-after-draw",
+            "distribution": "normal",
+            "mean": 0.0,
+            "shape": [
+              "HIDDEN_SIZE"
+            ],
+            "standardDeviation": 0.1
+          }
+        },
         "g6TargetRowsDecoded": 0,
         "gameResultsRead": false,
-        "generator": "pinned upstream initializer verifier",
+        "generator": "exact-pinned omega_decision_v3_initializer.py",
+        "omegaNnueArchitecture": "omega-interaction-residual",
+        "omegaNnueArchitectureId": 4,
+        "prng": "numpy.random.default_rng-PCG64",
+        "quantization": {
+          "clipping": "destination integer range before cast",
+          "denseScale": 64,
+          "ftScale": 1,
+          "outputScale": 64,
+          "rounding": "numpy.rint",
+          "serialization": "OMNNUE1 exact-pinned omega_nnue.py architecture 4"
+        },
         "seed": 2026072400,
-        "selectionRule": "use only when no catalog entry is independently promoted"
+        "selectionRule": "use only after authenticated terminal G5 failure or abort and exact authenticated G2-K2 unavailability"
+      },
+      "g2UnavailableProtocol": {
+        "artifacts": {
+          "closure": {
+            "bytes": 42342,
+            "relativePath": "build-msvc/data-generation/deep-hce-v4/king-state-v1-prelabel.seal.json",
+            "sha256": "14bf17732ac78bd96c4e093e6e983e3c4ca704c7eaca1075f0634bc90d037735"
+          },
+          "deepFreeze": {
+            "bytes": 38940062,
+            "relativePath": "build-msvc/data-generation/deep-hce-v4/deep-hce-v2.freeze.json",
+            "sha256": "a1f01135c8ee45950cd92a586ad74d02ea2d46ad9a6f9edd5744d266ea0ba53f"
+          },
+          "generation2Incident": {
+            "bytes": 22747,
+            "relativePath": "validation/omega-nnue-king-state-v2-offline-incident.json",
+            "sha256": "df4b440ec625e3beb33735f3e89908c1414208f11d42a60944f8089075821678"
+          },
+          "selectionSeal": {
+            "bytes": 5286,
+            "relativePath": "build-msvc/data-generation/deep-hce-v4/generation3-initializer-resolution.seal.json",
+            "sha256": "ec3c53c6bd2093e1f48d06852440436226ee492beef5b7171829ce774097517c"
+          }
+        },
+        "catalogStatus": "unavailable",
+        "compatibilityPatchesApplied": false,
+        "currentSources": {
+          "g2BaseTrainer": {
+            "bytes": 124508,
+            "relativePath": "tools/omega_nnue/train.py",
+            "sha256": "ac64a0941c176c0d0b2a9024e31955739635d4e958d5f9fda06394d239e3f1a3"
+          },
+          "g2Deep": {
+            "bytes": 148725,
+            "relativePath": "tools/omega_nnue/deep_hce_v2.py",
+            "sha256": "9e9911b0a56191e5209d6276c004cf36a94fe1530eb915baf1ad5a72d32f7702"
+          },
+          "g2Incidence": {
+            "bytes": 31219,
+            "relativePath": "tools/omega_nnue/phase_incidence_preflight.py",
+            "sha256": "d58f1cb9150c79910c460dea7e95aefd2153e9ce3c8866cd2da3f5a953d591b9"
+          },
+          "g2Trainer": {
+            "bytes": 214271,
+            "relativePath": "tools/omega_nnue/king_state_train_generation3.py",
+            "sha256": "cdae1319d2880207b2ff4a632df90fc9dc26662ec4eb785694afddaa8b533de1"
+          },
+          "g2Verifier": {
+            "bytes": 362242,
+            "relativePath": "tools/omega_nnue/king_state_v3.py",
+            "sha256": "ffe8625903269567eee083b96dbf38b18f1be6c1a0d94b8fabcb98bdba12e2db"
+          },
+          "omegaNnue": {
+            "bytes": 53900,
+            "relativePath": "tools/omega_nnue/omega_nnue.py",
+            "sha256": "efc55715895f32e948db35428372393c711f701f2e84c69256bdf689065422aa"
+          },
+          "rootSamplerSource": {
+            "bytes": 17898,
+            "relativePath": "tools/omega_nnue/OmegaRootSampler/Program.cs",
+            "sha256": "3e6fc7efc4a54ad4ca8b000dba2d40bae021e3d1a91c768d061f533f5462c012"
+          },
+          "selectScreen": {
+            "bytes": 39442,
+            "relativePath": "tools/omega_nnue/select_screen.py",
+            "sha256": "304172e583b4c963718191017b4f8d2426aea325dd42337c197496ee738677ee"
+          }
+        },
+        "freshReplayRequired": true,
+        "frozenDependencies": {
+          "omegaNnue": {
+            "bytes": 44266,
+            "relativePath": "tools/omega_nnue/omega_nnue.py",
+            "sha256": "bbab323356cb1f7194852af13c0ea632d7262f90d14d94032a1bcf88da2c0eb2"
+          },
+          "rootSamplerSource": {
+            "bytes": 13271,
+            "relativePath": "tools/omega_nnue/OmegaRootSampler/Program.cs",
+            "sha256": "289d2452fdb63c2737c72b4b3634e8d1b2023126346f3fb1a662f752e64df3d2"
+          }
+        },
+        "model": null,
+        "reason": "untouched frozen-source replays reject current dependency identities",
+        "requiredFreshFailures": {
+          "deepFreeze": "omega_nnue.py changed after freeze",
+          "fullSeal": "rootSampler source identity changed"
+        },
+        "resultInformationRead": false,
+        "sourceId": "G2-K2"
       },
       "g5FailureAbortIsVerifiedButNotFatal": true,
+      "g5OnlyPromotableSource": true,
       "orderedCatalog": [
         "G5",
         "G2-K2"
       ],
-      "rule": "first semantically verified independently promoted healthy compatible model; otherwise exact fallback",
+      "rule": "use a semantically verified healthy promoted G5 model; otherwise require terminal G5 closure, exact G2 unavailability, and exact fallback",
       "selectionModes": [
         "promoted-prior",
         "deterministic-fallback"
@@ -185,19 +334,25 @@
     },
     "optimizerProtocol": {
       "batchOrderDerivation": "per epoch SHA-256(seed|epoch|index), first 8 bytes little-endian, NumPy PCG64 permutation of ascending rootId",
+      "beta1": 0.9,
+      "beta2": 0.999,
       "checkpointRule": "final epoch only; deployment health and frozen validation are external",
       "completeRootDivisibilityRequired": true,
       "epochs": 48,
+      "epsilon": 1e-08,
       "firstQatEpoch": 37,
       "learningRate": 0.003,
       "optimizer": "Adam",
+      "parameterLearningRateScale": 1.0,
       "qatEpochs": 12,
       "qatLearningRateScale": 0.1,
-      "rootsPerBatch": 64
+      "qatLearningRateScaleScope": "global learning rate only",
+      "rootsPerBatch": 64,
+      "weightDecay": 0.0
     },
     "primarySeedBase": 2026072401,
-    "robustnessSeedBase": 2026072402,
     "resultBlindnessTrustBoundary": "exact hash-pinned separately reviewed trainer runner; formal command and prelaunch claim provide no validation/held-out targets or precomputed expected batch digest",
+    "robustnessSeedBase": 2026072402,
     "runtimeManifestRequired": true,
     "seedDerivation": "SHA-256 of UTF-8 '<base-seed>|<purpose>|<candidate-id>'; first eight digest bytes as unsigned little-endian",
     "trainerFilesystemIsolationProvidedByOrchestrator": false,
@@ -224,19 +379,168 @@
         "initializerPolicy": {
           "fallbackProtocol": {
             "architecture": "king-state-v6-move-decision-initializer-v1",
+            "drawOrder": [
+              "ftWeights",
+              "denseWeights",
+              "outputWeights"
+            ],
+            "floatInitialization": {
+              "denseBias": {
+                "dtype": "float32",
+                "fill": 24.0
+              },
+              "denseWeights": {
+                "cast": "float32-after-draw",
+                "distribution": "normal",
+                "mean": 0.0,
+                "shape": [
+                  "HIDDEN_SIZE",
+                  "2*ACCUMULATOR_SIZE"
+                ],
+                "standardDeviation": 0.025
+              },
+              "ftBias": {
+                "dtype": "float32",
+                "fill": 24.0
+              },
+              "ftWeights": {
+                "cast": "float32-after-draw",
+                "distribution": "normal",
+                "mean": 0.0,
+                "shape": [
+                  "OMEGA_INTERACTION_FEATURE_COUNT",
+                  "ACCUMULATOR_SIZE"
+                ],
+                "standardDeviation": 0.5
+              },
+              "outputBias": {
+                "dtype": "float32",
+                "fill": 0.0
+              },
+              "outputWeights": {
+                "cast": "float32-after-draw",
+                "distribution": "normal",
+                "mean": 0.0,
+                "shape": [
+                  "HIDDEN_SIZE"
+                ],
+                "standardDeviation": 0.1
+              }
+            },
             "g6TargetRowsDecoded": 0,
             "gameResultsRead": false,
-            "generator": "pinned upstream initializer verifier",
+            "generator": "exact-pinned omega_decision_v3_initializer.py",
+            "omegaNnueArchitecture": "omega-interaction-residual",
+            "omegaNnueArchitectureId": 4,
+            "prng": "numpy.random.default_rng-PCG64",
+            "quantization": {
+              "clipping": "destination integer range before cast",
+              "denseScale": 64,
+              "ftScale": 1,
+              "outputScale": 64,
+              "rounding": "numpy.rint",
+              "serialization": "OMNNUE1 exact-pinned omega_nnue.py architecture 4"
+            },
             "seed": 2026072400,
-            "selectionRule": "use only when no catalog entry is independently promoted"
+            "selectionRule": "use only after authenticated terminal G5 failure or abort and exact authenticated G2-K2 unavailability"
           },
+          "g2UnavailableProtocol": {
+            "artifacts": {
+              "closure": {
+                "bytes": 42342,
+                "relativePath": "build-msvc/data-generation/deep-hce-v4/king-state-v1-prelabel.seal.json",
+                "sha256": "14bf17732ac78bd96c4e093e6e983e3c4ca704c7eaca1075f0634bc90d037735"
+              },
+              "deepFreeze": {
+                "bytes": 38940062,
+                "relativePath": "build-msvc/data-generation/deep-hce-v4/deep-hce-v2.freeze.json",
+                "sha256": "a1f01135c8ee45950cd92a586ad74d02ea2d46ad9a6f9edd5744d266ea0ba53f"
+              },
+              "generation2Incident": {
+                "bytes": 22747,
+                "relativePath": "validation/omega-nnue-king-state-v2-offline-incident.json",
+                "sha256": "df4b440ec625e3beb33735f3e89908c1414208f11d42a60944f8089075821678"
+              },
+              "selectionSeal": {
+                "bytes": 5286,
+                "relativePath": "build-msvc/data-generation/deep-hce-v4/generation3-initializer-resolution.seal.json",
+                "sha256": "ec3c53c6bd2093e1f48d06852440436226ee492beef5b7171829ce774097517c"
+              }
+            },
+            "catalogStatus": "unavailable",
+            "compatibilityPatchesApplied": false,
+            "currentSources": {
+              "g2BaseTrainer": {
+                "bytes": 124508,
+                "relativePath": "tools/omega_nnue/train.py",
+                "sha256": "ac64a0941c176c0d0b2a9024e31955739635d4e958d5f9fda06394d239e3f1a3"
+              },
+              "g2Deep": {
+                "bytes": 148725,
+                "relativePath": "tools/omega_nnue/deep_hce_v2.py",
+                "sha256": "9e9911b0a56191e5209d6276c004cf36a94fe1530eb915baf1ad5a72d32f7702"
+              },
+              "g2Incidence": {
+                "bytes": 31219,
+                "relativePath": "tools/omega_nnue/phase_incidence_preflight.py",
+                "sha256": "d58f1cb9150c79910c460dea7e95aefd2153e9ce3c8866cd2da3f5a953d591b9"
+              },
+              "g2Trainer": {
+                "bytes": 214271,
+                "relativePath": "tools/omega_nnue/king_state_train_generation3.py",
+                "sha256": "cdae1319d2880207b2ff4a632df90fc9dc26662ec4eb785694afddaa8b533de1"
+              },
+              "g2Verifier": {
+                "bytes": 362242,
+                "relativePath": "tools/omega_nnue/king_state_v3.py",
+                "sha256": "ffe8625903269567eee083b96dbf38b18f1be6c1a0d94b8fabcb98bdba12e2db"
+              },
+              "omegaNnue": {
+                "bytes": 53900,
+                "relativePath": "tools/omega_nnue/omega_nnue.py",
+                "sha256": "efc55715895f32e948db35428372393c711f701f2e84c69256bdf689065422aa"
+              },
+              "rootSamplerSource": {
+                "bytes": 17898,
+                "relativePath": "tools/omega_nnue/OmegaRootSampler/Program.cs",
+                "sha256": "3e6fc7efc4a54ad4ca8b000dba2d40bae021e3d1a91c768d061f533f5462c012"
+              },
+              "selectScreen": {
+                "bytes": 39442,
+                "relativePath": "tools/omega_nnue/select_screen.py",
+                "sha256": "304172e583b4c963718191017b4f8d2426aea325dd42337c197496ee738677ee"
+              }
+            },
+            "freshReplayRequired": true,
+            "frozenDependencies": {
+              "omegaNnue": {
+                "bytes": 44266,
+                "relativePath": "tools/omega_nnue/omega_nnue.py",
+                "sha256": "bbab323356cb1f7194852af13c0ea632d7262f90d14d94032a1bcf88da2c0eb2"
+              },
+              "rootSamplerSource": {
+                "bytes": 13271,
+                "relativePath": "tools/omega_nnue/OmegaRootSampler/Program.cs",
+                "sha256": "289d2452fdb63c2737c72b4b3634e8d1b2023126346f3fb1a662f752e64df3d2"
+              }
+            },
+            "model": null,
+            "reason": "untouched frozen-source replays reject current dependency identities",
+            "requiredFreshFailures": {
+              "deepFreeze": "omega_nnue.py changed after freeze",
+              "fullSeal": "rootSampler source identity changed"
+            },
+            "resultInformationRead": false,
+            "sourceId": "G2-K2"
+          },
+          "g5OnlyPromotableSource": true,
           "orderedCatalog": [
             "G5",
             "G2-K2"
           ],
-          "requireFailureOrAbortClosureForSkippedEntry": true,
           "requireFirstIndependentlyPromotedEntry": true,
           "requireFreshHealthForPromotedEntry": true,
+          "requireTerminalFailureOrAbortClosureForSkippedG5": true,
           "selectionModes": [
             "promoted-prior",
             "deterministic-fallback"
@@ -251,7 +555,7 @@
           "G5"
         ],
         "requiredSemanticReplays": [
-          "initializer selection, embedded health, source closure, and model cross-links",
+          "G5-only initializer promotion, embedded health, source closure, exact G2 unavailability, and model cross-links",
           "terminal rules manifest/transcript/completion and pre-teacher exclusions",
           "every prior-forbidden manifest/catalog and zero current overlap",
           "component-map coverage and whole-component split assignment",
@@ -267,10 +571,17 @@
     },
     "preTargetHceClaimKind": "omega-decision-v3-pretarget-hce-claim",
     "preTargetHceCompletionKind": "omega-decision-v3-pretarget-hce-completion",
+    "preTargetHcePlannedTranscriptProtocol": {
+      "routingTargetFieldsDecodedAtClaim": 0,
+      "routingTargetRowsDecodedAtClaim": 0,
+      "stateAtClaim": "canonical safe distinct path is absent",
+      "stateAtCompletion": "same canonical path is materialized and identity-bound"
+    },
     "priorForbiddenRegistryKind": "omega-decision-v3-prior-forbidden-registry",
     "requiredCapsuleKind": "omega-decision-v3-capsule-closure",
     "requiredCrossChecks": [
       "source root/group, child id/OFEN, phase, side",
+      "exact routing-module quota totals and every phase-by-root-side cell",
       "independent component and whole-component split projection",
       "fresh terminal rules manifest/transcript/completion coverage replay",
       "complete required-source registry and fresh semantic replay of every prior-forbidden catalog with zero overlap",
@@ -281,6 +592,11 @@
       "semantic G5 success/failure/abort closure without requiring G5 success",
       "exact projection and closure identities"
     ],
+    "routingQuotasPerPhaseSide": {
+      "heldOut": 128,
+      "train": 512,
+      "validation": 128
+    },
     "targetFreeRoutingKind": "omega-decision-v3-target-free-routing",
     "teacherBudgets": {
       "childrenPerRoot": 4,
