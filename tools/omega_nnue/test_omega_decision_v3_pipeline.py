@@ -962,11 +962,11 @@ class PipelinePlanTests(unittest.TestCase):
                 ),
                 "verifierImplementation": (
                     181_433,
-                    "a45f9b771d4f7fab3c6b7f7c9a14a54ffaf3e192329929ca6c87c8420c005dfd",
+                    "62426e1836a770fe77e76815f44a341048865833241880d9993231f1138f7840",
                 ),
                 "verifierRunner": (
                     5_356,
-                    "4d7ffc2becade214f8db6f5d171809ed423d3d879754de84abcc0144d9e9c232",
+                    "94bbf1162256605658234d0e7132803519b678674fd6d422245cf6748225971c",
                 ),
                 "priorCatalog": (
                     56_580,

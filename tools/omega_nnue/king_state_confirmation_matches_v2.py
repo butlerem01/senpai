@@ -43,11 +43,11 @@ from typing import Any, Mapping, Sequence
 # substitution route before any dependency code or callable is trusted.
 _PREAUTH_REPO = Path(__file__).resolve().parents[2]
 _PROTOCOL_RELATIVE = "tools/omega_nnue/king_state_confirmation_protocol_v2.py"
-_PROTOCOL_SIZE = 126_759
-_PROTOCOL_SHA256 = "5509ee3a7525e5bef28f79be2930ae6a9b05197fe3cfbd319c143af3f0439a79"
+_PROTOCOL_SIZE = 126_760
+_PROTOCOL_SHA256 = "c1e1549cb6d7c8de208753411d1c143480f567d32cb25781e371b9df4a131671"
 _READINESS_RELATIVE = "tools/omega_nnue/king_state_confirmation_readiness_v2.py"
 _READINESS_SIZE = 359_123
-_READINESS_SHA256 = "b8b3716910665f626b61e2f247df95e12f382408a5b7d23daa66f18ab22bf81e"
+_READINESS_SHA256 = "8ed4092e340fb7f34ce0435d6cfa1913580cc94c49d151972affbc1088793a36"
 
 for _preloaded_name in (
     "king_state_confirmation_protocol_v2",

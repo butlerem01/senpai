@@ -55,8 +55,8 @@ from typing import Any, Iterator, Mapping, Sequence
 # object that it installed on that module before this source is executed.
 _REPO = Path(__file__).resolve().parents[2]
 _PROTOCOL_RELATIVE = "tools/omega_nnue/king_state_confirmation_protocol_v2.py"
-_PROTOCOL_SIZE = 126_759
-_PROTOCOL_SHA256 = "5509ee3a7525e5bef28f79be2930ae6a9b05197fe3cfbd319c143af3f0439a79"
+_PROTOCOL_SIZE = 126_760
+_PROTOCOL_SHA256 = "c1e1549cb6d7c8de208753411d1c143480f567d32cb25781e371b9df4a131671"
 _PROTOCOL_SOURCE = (_REPO / _PROTOCOL_RELATIVE).read_bytes()
 if (
     len(_PROTOCOL_SOURCE) != _PROTOCOL_SIZE

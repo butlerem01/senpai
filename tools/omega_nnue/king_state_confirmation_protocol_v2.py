@@ -225,12 +225,12 @@ PINNED_FILES: dict[str, tuple[int, str]] = {
         "03ff3fefc9ef4eff553f9aebdaed4f5827eeff29ef613b22ecd5b613f1a435a1",
     ),
     "validation/omega-nnue-king-state-v5-color-compat-preregistration.template.json": (
-        8_168,
-        "0dacf0853a37d959e24c05567a974a8d85311fc1709502f1b5fb6c346b396219",
+        8_831,
+        "c2f53efd4957dccf5428f043d5eea5d74669e0b79e8bcf01639ac770a7239e1e",
     ),
     "validation/omega-nnue-king-state-v5-color-compat-protocol.json": (
-        9_543,
-        "756dcbb817faa205f51073273b1749001f3acac4321b7d2c5cc9c4e35807bca4",
+        11_050,
+        "47518625404ca6a3a3d1ce4fd7ee1e30d2e3600e3cc2d42adfeeac52f6599daf",
     ),
     "validation/omega-nnue-king-state-v5-preregistration.template.json": (
         40_603,
@@ -253,8 +253,8 @@ PINNED_FILES: dict[str, tuple[int, str]] = {
         "6765bc5adbb24b4ba9c3557db84565c0417869c997cb0311558996a723bc4f1f",
     ),
     "tools/omega_nnue/king_state_match_readiness_generation5_compat_v2.py": (
-        123_792,
-        "fca7346bd95bc312c4832af354e9db4abd427013dcc791cfe5c43083fa4e132a",
+        143_024,
+        "84e1b67683ac75c2b34802d4ba1c960c6173f9437f52a1af1574188863b8bb10",
     ),
     "tools/omega_nnue/king_state_matches_generation5_compat_v2.py": (
         202_522,

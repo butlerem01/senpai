@@ -1,0 +1,227 @@
+{
+  "alphaSpending": {
+    "attemptShare": "beta_k = 0.01 / 2**k for global attempt k",
+    "conjunctionUsesNoAlphaResetOrBonferroni": true,
+    "exhaustedIndexIsRejectedNotAdvertisedAsASuccessor": true,
+    "familywiseAlpha": 0.01,
+    "firstStatisticallyExhaustedGlobalAttemptIndex": 378,
+    "maximumAdmissibleGlobalAttemptIndex": 377,
+    "promotionLogThreshold": "log(100) + k*log(2)"
+  },
+  "entropy": {
+    "bytes": 32,
+    "claimSuiteAndHandoffContainOnlyCommitments": true,
+    "derivation": "HMAC-SHA256 with protocol/domain/attempt/stage separation",
+    "drawsPerAttempt": 1,
+    "launchAdapterMayDiscloseOnlyDerivedInt32SeedsAfterReservation": true,
+    "rawEntropyAndHmacKeysRemainPrivate": true,
+    "rerollPermitted": false,
+    "reservationPrecedesDraw": true,
+    "source": "secrets.token_bytes / OS CSPRNG"
+  },
+  "formalHceHandoff": {
+    "allThreePromotionsRequired": true,
+    "engineOptions": {
+      "candidate": {
+        "OmegaNNUEFile": "exact selected G6 network path",
+        "UseOmegaNNUE": "true"
+      },
+      "common": {
+        "Hash": "128",
+        "OwnBook": "false",
+        "Ponder": "false",
+        "Threads": "1",
+        "UCI_Chess960": "false",
+        "UCI_Variant": "omega"
+      },
+      "hceControl": {
+        "OmegaNNUEFile": "<empty>",
+        "UseOmegaNNUE": "false"
+      }
+    },
+    "gates": [
+      "equal-node",
+      "equal-time",
+      "normal-start-clock"
+    ],
+    "implementations": {
+      "v2Matches": {
+        "bytes": 251272,
+        "relativePath": "tools/omega_nnue/king_state_confirmation_matches_v2.py",
+        "sha256": "e6593acdedaeff38244279f72b7f8dd866aef86001b2ee7e4b6d5a22edcb54cc"
+      },
+      "v2Practical": {
+        "bytes": 82703,
+        "relativePath": "tools/omega_nnue/king_state_confirmation_practical_v2.py",
+        "sha256": "7b96851522bd73d5ffbe21fa10f0a7d39864b1be1c18877a9f3e0a0a4116264d"
+      },
+      "v2ProtocolJson": {
+        "bytes": 47861,
+        "relativePath": "validation/omega-nnue-open-confirmation-v2-protocol.json",
+        "sha256": "9b2a558893806af89b60f9c3a96f36934cc7023b192758e436bfcb715e4cdc49"
+      },
+      "v2ProtocolTool": {
+        "bytes": 126760,
+        "relativePath": "tools/omega_nnue/king_state_confirmation_protocol_v2.py",
+        "sha256": "c1e1549cb6d7c8de208753411d1c143480f567d32cb25781e371b9df4a131671"
+      },
+      "v2Readiness": {
+        "bytes": 359123,
+        "relativePath": "tools/omega_nnue/king_state_confirmation_readiness_v2.py",
+        "sha256": "8ed4092e340fb7f34ce0435d6cfa1913580cc94c49d151972affbc1088793a36"
+      }
+    },
+    "launchAdapter": {
+      "candidateBlindV2SelectorWorker": true,
+      "bridgeRequiresTerminalDecisionAndSafetyReplay": true,
+      "consumesAuthenticatedHandoff": true,
+      "developmentGateSatisfiedOnlyByAuthenticatedPracticalPromotion": true,
+      "formalGateOrderStrict": true,
+      "formalGateImplementationsRemainUnmodified": true,
+      "frozenV2AuthoritiesRemainByteExact": true,
+      "implementation": {
+        "bytes": 91619,
+        "relativePath": "tools/omega_nnue/king_state_confirmation_generation6_hce_adapter.py",
+        "sha256": "9ad7ad3dd3ec758958ae87e19058c353e498fcc1f7b7fd02cde41487234fadc2"
+      },
+      "rawEntropyOrHmacKeysPublished": false,
+      "staticSelectorBaseInitializedExplicitlyBeforeAdapterReservation": true,
+      "stageSeedsDerivedFromPrecommittedHmacKeys": true,
+      "stageSeedsDisclosedOnlyAfterDurableReservation": true,
+      "terminalClosureBridgesBackToThisGlobalAttempt": true
+    },
+    "nullEloSeparatelyForEveryGate": 15.0,
+    "sameAttemptAlphaShare": true,
+    "sameGlobalAttemptIndex": true
+  },
+  "heldoutRule": {
+    "cellMaximumRegression": {
+      "meanChosenMoveRegretCp": 5.0,
+      "topSetAccuracy": 0.01
+    },
+    "comparisonTolerance": 1e-12,
+    "decisionMetrics": [
+      "topSetAccuracy",
+      "meanChosenMoveRegretCp"
+    ],
+    "macroMaximumRegression": {
+      "listwiseCrossEntropy": 0.0,
+      "meanChosenMoveRegretCp": 0.0,
+      "pointwiseHuber": 0.0,
+      "topSetAccuracy": 0.0
+    },
+    "minimumStrictMacroImprovements": 2,
+    "nominationOnly": true,
+    "requireStrictDecisionMetricImprovement": true
+  },
+  "kind": "omega-nnue-generation6-promotion-confirmation-v1-protocol",
+  "practicalExecutionAuthority": {
+    "adapterId": "omega-nnue-generation6-practical-match-adapter-v1",
+    "decisionPublisherApi": "publish_practical_decision_from_execution_transcript",
+    "decisionVerifierApi": "verify_practical_decision_from_execution_transcript",
+    "eventKind": "omega-nnue-generation6-promotion-confirmation-v1-practical-pair-event",
+    "executionPolicy": {
+      "absoluteMaxPlies": 400,
+      "freshProcessPerGame": true,
+      "harnessPairTimeoutMs": 48120000,
+      "hiddenSelectorSeedReadOrPublished": false,
+      "maxPlies": 300,
+      "maximumConcurrentGames": 1,
+      "maximumLaunchAttemptsPerPair": 3,
+      "mode": "nodes",
+      "nodesPerMove": 30000,
+      "oneGameAtATime": true,
+      "openingExecutionSeed": 0,
+      "openingExecutionSeedIsStatisticallyInertForSingletonSuite": true,
+      "pairsPerLaunchCheckpoint": 8,
+      "repeats": 1,
+      "searchTimeoutMs": 60000,
+      "stopGraceMs": 2000,
+      "threadsPerEngine": 1
+    },
+    "executionSealKind": "omega-nnue-generation6-practical-match-adapter-v1-execution-seal",
+    "executionTranscriptKind": "omega-nnue-generation6-practical-match-adapter-v1-execution-transcript",
+    "finalStageSeal": true,
+    "historicalAttemptScannerReplaysAdapterEvidence": true,
+    "implementation": {
+      "bytes": 123071,
+      "path": "C:\\Users\\whate\\Documents\\Codex\\2026-07-11\\let-s-adapt-some-engines-and\\senpai-omega-nnue-g6-data\\tools\\omega_nnue\\king_state_confirmation_generation6_practical_adapter.py",
+      "sha256": "f19d3b4f8c868566ba57915ce1cc278f69454673dfd3f8fe9305d5dc3b59f1c8"
+    },
+    "incidentKind": "omega-nnue-generation6-practical-match-adapter-v1-incident",
+    "incidentPublisherApi": "publish_practical_incident_failure",
+    "incidentTerminalHandoffKind": "omega-nnue-generation6-practical-match-adapter-v1-incident-terminal-handoff",
+    "incidentVerifierApi": "verify_practical_incident_failure",
+    "resultInformationRead": false,
+    "schemaVersion": 1,
+    "successorPinnedAuthoritiesKey": "practicalMatchAdapter"
+  },
+  "practicalGate": {
+    "betFractions": [
+      0.0078125,
+      0.015625,
+      0.03125,
+      0.0625,
+      0.125,
+      0.25,
+      0.5,
+      0.75
+    ],
+    "candidate": "selected G6 primary deployment",
+    "cells": [
+      "opening:w",
+      "opening:b",
+      "middlegame:w",
+      "middlegame:b",
+      "late:w",
+      "late:b",
+      "endgame:w",
+      "endgame:b"
+    ],
+    "checkpointEveryPairs": 8,
+    "colors": "each selected opening is one AB color-swapped pair",
+    "control": "exact previously promoted G5 incumbent deployment",
+    "futilityEValue": 20.0,
+    "maximumPairs": 512,
+    "minimumPairs": 128,
+    "nullElo": 0.0,
+    "pairsPerCell": 64,
+    "safetyCounters": [
+      "illegalMoves",
+      "engineCrashes",
+      "searchTimeouts",
+      "timeForfeits",
+      "malformedResults",
+      "assetMismatches",
+      "diagnosticMismatches",
+      "orphanProcesses"
+    ],
+    "source": "candidate-blind phase-by-side balanced opening pool",
+    "zeroSafetyFailuresRequired": true
+  },
+  "prerequisiteOrder": [
+    "G6 capsule and fresh-verification receipt",
+    "G6 validation selection",
+    "G6 robustness seal",
+    "merged Senpai executable/network deployment bundle and startup probe",
+    "successor preregistration",
+    "G6 heldout access, claim, aggregate report, and closure",
+    "fixed heldout decision",
+    "paired G6-vs-G5 practical attempt",
+    "three frozen HCE formal gates"
+  ],
+  "protocolId": "omega-nnue-generation6-promotion-confirmation-v1",
+  "publication": {
+    "consumedClaimOrSuitePublicationFailureUsesTerminalClosure": true,
+    "formalHceMatchLaunchProvided": true,
+    "heldoutResultReadBeforePreregistration": false,
+    "historicalSuccessorClosuresReplayEveryCitedAuthority": true,
+    "mode": "final-name O_EXCL; no overwrite, repair, or alternate output",
+    "practicalMatchLaunchProvided": true,
+    "thresholdMutationAfterResults": false,
+    "unknownArtifactsAccepted": false
+  },
+  "purpose": "nominate one exact G6 deployment, prove practical superiority to the G5 incumbent, then preserve the same global attempt and alpha share through all three >+15 Elo HCE gates",
+  "schemaVersion": 1,
+  "status": "frozen-before-heldout-access"
+}

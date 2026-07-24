@@ -440,7 +440,7 @@ DEPENDENCY_PINS: dict[str, tuple[str, int | None, str | None]] = {
     "g5Readiness": (
         "king_state_confirmation_readiness_v2.py",
         359_123,
-        "b8b3716910665f626b61e2f247df95e12f382408a5b7d23daa66f18ab22bf81e",
+        "8ed4092e340fb7f34ce0435d6cfa1913580cc94c49d151972affbc1088793a36",
     ),
     "g5Matches": (
         "king_state_matches_generation5_compat_v2.py",
